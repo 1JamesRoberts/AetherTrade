@@ -459,18 +459,18 @@ async function loadStockDataAndRender(ticker) {
     // Set fallback active references
     state.stocks[ticker].liveCloses = state.stocks[ticker].history[state.selectedTimeframe];
     state.stocks[ticker].liveLabels = getTimeframeLabels(state.selectedTimeframe);
-    
+
     // Calculate actual mock walk change relative to the start of the timeframe walk
     const closes = state.stocks[ticker].liveCloses || [];
-    
+
     // Ensure the last element of the mock walk is exactly equal to the authoritative stock price
     if (closes.length > 0 && state.stocks[ticker].price !== undefined) {
       closes[closes.length - 1] = state.stocks[ticker].price;
     }
-    
+
     const baseWalkPrice = closes[0] || state.stocks[ticker].price || 150.00;
     const currentWalkPrice = state.stocks[ticker].price || (closes.length > 0 ? closes[closes.length - 1] : baseWalkPrice);
-    
+
     // 1-Day change (daily change) for watchlist sidebar: today's close relative to yesterday's close
     // We retrieve yesterday's close from the daily mock series (history['M']) to ensure it is always a true 1-day change
     const mCloses = state.stocks[ticker].history ? state.stocks[ticker].history['M'] : [];
@@ -528,7 +528,7 @@ const horizontalLinesPlugin = {
       ctx.fillStyle = 'rgba(10, 15, 30, 0.85)';
       ctx.fillRect(right + 5, currentPriceY - 10, 75, 20);
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.87)';
       ctx.font = '700 10px var(--font-display)';
       ctx.fillText(`NOW: $${currentPrice.toFixed(2)}`, right + 10, currentPriceY + 4);
     }
@@ -803,8 +803,8 @@ function renderStockChartDirect() {
           x: {
             grid: { display: false },
             ticks: {
-              color: '#6b7280',
-              font: { family: 'Plus Jakarta Sans', size: 10 },
+              color: '#b6bfd0ff',
+              font: { family: 'Plus Jakarta Sans', size: 12 },
               maxTicksLimit: 8
             }
           },
@@ -814,8 +814,8 @@ function renderStockChartDirect() {
               color: 'rgba(255, 255, 255, 0.03)'
             },
             ticks: {
-              color: '#6b7280',
-              font: { family: 'Outfit', size: 11 },
+              color: '#b6bfd0ff',
+              font: { family: 'Outfit', size: 13 },
               callback: function (value) {
                 return '$' + value;
               }
@@ -1347,6 +1347,9 @@ window.addEventListener('DOMContentLoaded', () => {
 // 10. PORTFOLIO MANAGEMENT ENGINE (LIVE SYNC & LOCALSTORAGE PERSISTED)
 // ==========================================================================
 
+let portfoliosList = []; // Array of { id, name, holdings, transactions, realizedPL }
+let activePortfolioId = 'default';
+
 const portfolioState = {
   holdings: {}, // Ticker -> { shares: X, avgCost: Y }
   transactions: [],
@@ -1354,28 +1357,162 @@ const portfolioState = {
   realizedPL: 0
 };
 
-// Load Portfolio from LocalStorage
+// Load Portfolios from LocalStorage (with backward-compatible migration for existing portfolios!)
 function loadPortfolioFromStorage() {
-  const stored = localStorage.getItem('aethertrade_portfolio');
-  if (stored) {
-    try {
-      const data = JSON.parse(stored);
-      portfolioState.holdings = data.holdings || {};
-      portfolioState.transactions = data.transactions || [];
-      portfolioState.realizedPL = data.realizedPL || 0;
-    } catch (e) {
-      console.error("Failed to parse stored portfolio", e);
+  const storedList = localStorage.getItem('aethertrade_portfolios_list');
+  const storedActiveId = localStorage.getItem('aethertrade_active_portfolio_id');
+  const storedOldSingle = localStorage.getItem('aethertrade_portfolio');
+
+  try {
+    if (storedList) {
+      portfoliosList = JSON.parse(storedList);
+    } else {
+      // Migrate old single portfolio if present, otherwise initialize empty Primary Portfolio
+      let oldHoldings = {};
+      let oldTransactions = [];
+      let oldRealizedPL = 0;
+
+      if (storedOldSingle) {
+        const oldData = JSON.parse(storedOldSingle);
+        oldHoldings = oldData.holdings || {};
+        oldTransactions = oldData.transactions || [];
+        oldRealizedPL = oldData.realizedPL || 0;
+      }
+
+      portfoliosList = [{
+        id: 'default',
+        name: 'Primary Portfolio',
+        holdings: oldHoldings,
+        transactions: oldTransactions,
+        realizedPL: oldRealizedPL
+      }];
+      
+      localStorage.setItem('aethertrade_portfolios_list', JSON.stringify(portfoliosList));
     }
+
+    activePortfolioId = storedActiveId || 'default';
+    
+    // Ensure active ID exists in the loaded list
+    let active = portfoliosList.find(p => p.id === activePortfolioId);
+    if (!active) {
+      active = portfoliosList[0] || { id: 'default', name: 'Primary Portfolio', holdings: {}, transactions: [], realizedPL: 0 };
+      activePortfolioId = active.id;
+    }
+
+    // Sync active portfolio details to the global portfolioState
+    portfolioState.holdings = active.holdings || {};
+    portfolioState.transactions = active.transactions || [];
+    portfolioState.realizedPL = active.realizedPL || 0;
+    portfolioState.selectedTicker = null;
+
+  } catch (e) {
+    console.error("Failed to load portfolios from storage", e);
+    // Safe fallbacks
+    portfoliosList = [{ id: 'default', name: 'Primary Portfolio', holdings: {}, transactions: [], realizedPL: 0 }];
+    activePortfolioId = 'default';
+    portfolioState.holdings = {};
+    portfolioState.transactions = [];
+    portfolioState.realizedPL = 0;
   }
 }
 
-// Save Portfolio to LocalStorage
+// Save active state into portfoliosList and write to LocalStorage
 function savePortfolioToStorage() {
-  localStorage.setItem('aethertrade_portfolio', JSON.stringify({
-    holdings: portfolioState.holdings,
-    transactions: portfolioState.transactions,
-    realizedPL: portfolioState.realizedPL
-  }));
+  const active = portfoliosList.find(p => p.id === activePortfolioId);
+  if (active) {
+    active.holdings = portfolioState.holdings;
+    active.transactions = portfolioState.transactions;
+    active.realizedPL = portfolioState.realizedPL;
+  }
+  
+  localStorage.setItem('aethertrade_portfolios_list', JSON.stringify(portfoliosList));
+  localStorage.setItem('aethertrade_active_portfolio_id', activePortfolioId);
+}
+
+// Create a new named portfolio
+function createNewPortfolio(name) {
+  if (!name || name.trim() === '') return;
+  const cleanName = name.trim();
+  
+  // Check if name already exists to prevent duplicate names
+  if (portfoliosList.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
+    showNotification(`A portfolio named "${cleanName}" already exists!`, 'error');
+    return;
+  }
+
+  const newId = 'portfolio_' + Date.now();
+  const newPortfolio = {
+    id: newId,
+    name: cleanName,
+    holdings: {},
+    transactions: [],
+    realizedPL: 0
+  };
+
+  portfoliosList.push(newPortfolio);
+  activePortfolioId = newId;
+
+  // Sync to active state
+  portfolioState.holdings = {};
+  portfolioState.transactions = [];
+  portfolioState.realizedPL = 0;
+  portfolioState.selectedTicker = null;
+
+  savePortfolioToStorage();
+  
+  // Re-render UI
+  updatePortfolioSelectorDropdown();
+  updatePortfolioDashboard();
+  showNotification(`Created portfolio "${cleanName}" successfully!`, 'success');
+}
+
+// Delete the currently active portfolio
+function deleteCurrentPortfolio() {
+  if (portfoliosList.length <= 1) {
+    showNotification("You must keep at least one portfolio!", "error");
+    return;
+  }
+
+  const active = portfoliosList.find(p => p.id === activePortfolioId);
+  const activeName = active ? active.name : "this portfolio";
+
+  const confirmDelete = confirm(`Are you sure you want to permanently delete the portfolio "${activeName}"?\nThis will erase all its holdings and transaction logs.`);
+  if (!confirmDelete) return;
+
+  // Filter out the active portfolio
+  portfoliosList = portfoliosList.filter(p => p.id !== activePortfolioId);
+
+  // Set the new active portfolio to the first remaining one
+  activePortfolioId = portfoliosList[0].id;
+  const newActive = portfoliosList[0];
+
+  // Sync to active state
+  portfolioState.holdings = newActive.holdings || {};
+  portfolioState.transactions = newActive.transactions || [];
+  portfolioState.realizedPL = newActive.realizedPL || 0;
+  portfolioState.selectedTicker = null;
+
+  savePortfolioToStorage();
+
+  // Re-render UI
+  updatePortfolioSelectorDropdown();
+  updatePortfolioDashboard();
+  showNotification(`Deleted portfolio "${activeName}" successfully.`, "success");
+}
+
+// Populate the portfolio dropdown selector dynamically
+function updatePortfolioSelectorDropdown() {
+  const selector = document.getElementById('portfolioSelector');
+  if (!selector) return;
+
+  selector.innerHTML = '';
+  portfoliosList.forEach(p => {
+    const option = document.createElement('option');
+    option.value = p.id;
+    option.textContent = p.name;
+    option.selected = (p.id === activePortfolioId);
+    selector.appendChild(option);
+  });
 }
 
 // Format currency helper
@@ -1730,7 +1867,7 @@ function renderPerformanceChart() {
 
     // Determine startDate and endDate (Today is always the rightmost boundary!)
     const startDate = new Date(earliestActiveTimestamp);
-    const endDate = new Date(); 
+    const endDate = new Date();
 
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(0, 0, 0, 0);
@@ -1755,7 +1892,7 @@ function renderPerformanceChart() {
       timelineDates.push(new Date(currentSimDate.getTime()));
       currentSimDate.setTime(currentSimDate.getTime() + stepMs);
     }
-    
+
     // Ensure today (endDate) is always exactly the last date in the timeline
     if (timelineDates.length === 0 || timelineDates[timelineDates.length - 1].getTime() !== endDate.getTime()) {
       timelineDates.push(new Date(endDate.getTime()));
@@ -1770,7 +1907,7 @@ function renderPerformanceChart() {
       if (stock && stock.liveCloses && stock.liveCloses.length > 0) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const compareDate = new Date(targetDate.getTime());
         compareDate.setHours(0, 0, 0, 0);
 
@@ -1824,7 +1961,7 @@ function renderPerformanceChart() {
           const ticker = tx.ticker;
           const txPrice = parseFloat(tx.price) || 0;
           const txShares = parseInt(tx.shares) || 0;
-          
+
           lastPriceOnDate[ticker] = txPrice;
 
           if (tx.type === 'BUY') {
@@ -1887,7 +2024,7 @@ function renderPerformanceChart() {
     }
 
     const ctx = canvas.getContext('2d');
-    
+
     // Custom glowing line gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, 150);
     gradient.addColorStop(0, 'rgba(0, 240, 255, 0.2)');
@@ -1947,13 +2084,13 @@ function renderPerformanceChart() {
             position: 'right',
             beginAtZero: true,
             grid: {
-              color: function(context) {
+              color: function (context) {
                 if (context.tick && context.tick.value === 0) {
                   return 'rgba(0, 240, 255, 0.4)'; // Cyan zero baseline
                 }
                 return 'rgba(255, 255, 255, 0.05)';
               },
-              borderDash: function(context) {
+              borderDash: function (context) {
                 if (context.tick && context.tick.value === 0) {
                   return [5, 5]; // Dashed zero line
                 }
@@ -1964,7 +2101,7 @@ function renderPerformanceChart() {
             ticks: {
               color: 'rgba(255, 255, 255, 0.5)',
               font: { family: 'Outfit', size: 10 },
-              callback: function(value) {
+              callback: function (value) {
                 if (value >= 0) {
                   return '+$' + value.toLocaleString();
                 } else {
@@ -2012,7 +2149,7 @@ function renderPerformanceChart() {
         afterDraw: (chart) => {
           const { ctx, scales: { y }, chartArea: { left, right, top, bottom } } = chart;
           if (!y) return;
-          
+
           // 1. Draw Zero Baseline
           const zeroY = y.getPixelForValue(0);
           if (zeroY >= top && zeroY <= bottom) {
@@ -2032,10 +2169,10 @@ function renderPerformanceChart() {
           if (dataset && dataset.data && dataset.data.length > 0) {
             const currentPL = dataset.data[dataset.data.length - 1];
             const currentPLY = y.getPixelForValue(currentPL);
-            
+
             if (currentPLY >= top && currentPLY <= bottom) {
               ctx.save();
-              
+
               // Draw reference dashed line
               ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
               ctx.lineWidth = 1;
@@ -2057,7 +2194,7 @@ function renderPerformanceChart() {
               ctx.font = '700 9px var(--font-display)';
               const formattedPL = `${isGain ? '+' : '-'}$${Math.abs(currentPL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
               ctx.fillText(`NOW: ${formattedPL}`, right + 10, currentPLY + 4);
-              
+
               ctx.restore();
             }
           }
@@ -2130,7 +2267,7 @@ function rebuildPortfolioFromTransactions() {
 // Proactively load history (Twelve Data or generated mock walks) for all tickers in the transactions list
 function loadPortfolioHistory() {
   const tickersInPortfolio = [...new Set(portfolioState.transactions.map(tx => tx.ticker))];
-  
+
   tickersInPortfolio.forEach(ticker => {
     // If we already have the history loaded, skip!
     if (state.stocks[ticker] && state.stocks[ticker].liveCloses && state.stocks[ticker].liveCloses.length > 0) {
@@ -2154,7 +2291,7 @@ async function fetchPortfolioStockHistory(ticker) {
 
     const closes = [];
     const labels = [];
-    
+
     values.forEach(v => {
       closes.push(parseFloat(v.close));
       const parts = v.datetime.split(' ');
@@ -2172,12 +2309,12 @@ async function fetchPortfolioStockHistory(ticker) {
     state.stocks[ticker].isLive = true;
 
     saveCachedStocks();
-    
+
     // Trigger dashboard update once history is loaded
     updatePortfolioDashboard();
   } catch (err) {
     console.warn(`Background Twelve Data load failed for ${ticker}, using mock walk fallback:`, err);
-    
+
     // Mock walk fallback
     if (!state.stocks[ticker]) {
       state.stocks[ticker] = {};
@@ -2186,7 +2323,7 @@ async function fetchPortfolioStockHistory(ticker) {
     state.stocks[ticker].ticker = ticker;
     state.stocks[ticker].name = state.stocks[ticker].name || (ticker + ' Stock');
     state.stocks[ticker].price = basePrice;
-    
+
     if (!state.stocks[ticker].history) {
       state.stocks[ticker].history = {
         D: generateWalk(basePrice, 24, 'up', 0.005),
@@ -2195,7 +2332,7 @@ async function fetchPortfolioStockHistory(ticker) {
         Y: generateWalk(basePrice, 52, 'up', 0.025)
       };
     }
-    
+
     state.stocks[ticker].liveCloses = state.stocks[ticker].history['M'];
     state.stocks[ticker].liveLabels = getTimeframeLabels('M');
     state.stocks[ticker].isLive = true;
@@ -2237,7 +2374,7 @@ function executeTransaction(ticker, type, shares, price, dateStr = '') {
     const txDate = new Date(dateStr + 'T00:00:00');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     if (txDate > today) {
       alert(`Invalid Transaction Date: The selected date (${dateStr}) is in the future. Transactions cannot be recorded with a future date.`);
       return false;
@@ -2489,11 +2626,14 @@ function setupPortfolioEventListeners() {
     };
   }
 
-  // Reset Portfolio Button Action
+  // Reset Portfolio Button Action (resets active portfolio)
   const resetPortBtn = document.getElementById('btnResetPortfolio');
   if (resetPortBtn) {
     resetPortBtn.onclick = () => {
-      const confirmReset = confirm("Are you absolutely sure you want to reset your portfolio? This will liquidate all holdings and delete all transaction audit history.");
+      const active = portfoliosList.find(p => p.id === activePortfolioId);
+      const activeName = active ? active.name : "this portfolio";
+      
+      const confirmReset = confirm(`Are you absolutely sure you want to reset "${activeName}"?\nThis will liquidate all holdings and delete all transaction audit history for this portfolio.`);
       if (!confirmReset) return;
 
       portfolioState.holdings = {};
@@ -2509,7 +2649,47 @@ function setupPortfolioEventListeners() {
 
       savePortfolioToStorage();
       updatePortfolioDashboard();
-      alert("Portfolio has been successfully reset!");
+      showNotification(`Portfolio "${activeName}" has been successfully reset!`, 'success');
+    };
+  }
+
+  // Multi-Portfolio Selector change handler
+  const portfolioSelector = document.getElementById('portfolioSelector');
+  if (portfolioSelector) {
+    portfolioSelector.onchange = (e) => {
+      activePortfolioId = e.target.value;
+      const active = portfoliosList.find(p => p.id === activePortfolioId);
+      if (active) {
+        portfolioState.holdings = active.holdings || {};
+        portfolioState.transactions = active.transactions || [];
+        portfolioState.realizedPL = active.realizedPL || 0;
+        portfolioState.selectedTicker = null;
+      }
+      savePortfolioToStorage();
+      
+      // Load price histories for the newly active portfolio tickers
+      loadPortfolioHistory();
+      updatePortfolioDashboard();
+      showNotification(`Switched to portfolio "${active ? active.name : ''}"`, 'success');
+    };
+  }
+
+  // Create Portfolio Button Click Handler
+  const btnCreatePortfolio = document.getElementById('btnCreatePortfolio');
+  if (btnCreatePortfolio) {
+    btnCreatePortfolio.onclick = () => {
+      const name = prompt("Enter a unique name for the new portfolio:");
+      if (name !== null) {
+        createNewPortfolio(name);
+      }
+    };
+  }
+
+  // Delete Portfolio Button Click Handler
+  const btnDeletePortfolio = document.getElementById('btnDeletePortfolio');
+  if (btnDeletePortfolio) {
+    btnDeletePortfolio.onclick = () => {
+      deleteCurrentPortfolio();
     };
   }
 }
@@ -2517,6 +2697,7 @@ function setupPortfolioEventListeners() {
 // Initialize Portfolio Engine
 function initPortfolio() {
   loadPortfolioFromStorage();
+  updatePortfolioSelectorDropdown(); // Populate dropdown selector!
   setupPortfolioSearch();
   setupPortfolioEventListeners();
 
