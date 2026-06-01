@@ -1918,6 +1918,10 @@ function renderPerformanceChart() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
         scales: {
           x: {
             display: true, // Show the date on the x-axis!
