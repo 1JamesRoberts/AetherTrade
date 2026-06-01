@@ -2372,8 +2372,8 @@ async function fetchPortfolioStockHistory(ticker) {
 
 // Execute transaction
 function executeTransaction(ticker, type, shares, price, dateStr = '') {
-  shares = parseFloat(shares);
-  price = parseFloat(price);
+  shares = parseFloat(String(shares).replace(/,/g, '').trim());
+  price = parseFloat(String(price).replace(/,/g, '').trim());
 
   if (!ticker) {
     alert("Please select a stock asset first.");
@@ -2664,13 +2664,13 @@ function importTransactionsFromCSV(csvText) {
       }
 
       // 3. Parse Quantity
-      const shares = parseFloat(qtyVal);
+      const shares = parseFloat(String(qtyVal).replace(/,/g, '').trim());
       if (isNaN(shares) || shares <= 0) {
         throw new Error(`Row ${rowNum}: Quantity of Units must be a positive number. Found: "${qtyVal}"`);
       }
 
       // 4. Parse Price
-      const price = parseFloat(priceVal);
+      const price = parseFloat(String(priceVal).replace(/,/g, '').trim());
       if (isNaN(price) || price <= 0) {
         throw new Error(`Row ${rowNum}: Amount per unit must be a positive number. Found: "${priceVal}"`);
       }
