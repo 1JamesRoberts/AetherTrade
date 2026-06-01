@@ -535,7 +535,10 @@ export function executeTransaction(ticker, type, shares, price, dateStr = '', fe
   if (txFeesInput) txFeesInput.value = '0.00';
   
   const txAccountInput = document.getElementById('txAccount');
-  if (txAccountInput) txAccountInput.value = 'Default';
+  if (txAccountInput) {
+    const active = portfoliosList.find(p => p.id === activePortfolioId);
+    txAccountInput.value = active ? active.name : 'Default';
+  }
 
   // Reset date picker to today
   const dateInput = document.getElementById('txDate');

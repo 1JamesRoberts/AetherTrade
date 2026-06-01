@@ -792,6 +792,10 @@ function setupPortfolioEventListeners() {
         portfolioState.transactions = active.transactions || [];
         portfolioState.realizedPL = active.realizedPL || 0;
         portfolioState.selectedTicker = null;
+        
+        // Dynamically update the investment account input to match!
+        const txAccountInput = document.getElementById('txAccount');
+        if (txAccountInput) txAccountInput.value = active.name;
       }
       savePortfolioToStorage();
       
@@ -905,6 +909,13 @@ function initPortfolio() {
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
     dateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Default Investment Account input to the active portfolio's name
+  const txAccountInput = document.getElementById('txAccount');
+  if (txAccountInput) {
+    const active = portfoliosList.find(p => p.id === activePortfolioId);
+    txAccountInput.value = active ? active.name : 'Default';
   }
 
   // Load price histories for all stocks present in the portfolio
