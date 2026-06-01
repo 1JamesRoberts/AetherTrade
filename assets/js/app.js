@@ -534,10 +534,10 @@ function setupPortfolioSearch() {
 
     dropdown.innerHTML = '';
 
-    // Filter STOCKS_METADATA & state.stocks
+    // Filter STOCKS_METADATA & state.stocks safely preventing TypeError crashes when stock.name is undefined
     const matches = Object.values(state.stocks).filter(stock =>
-      stock.ticker.toLowerCase().includes(val) ||
-      stock.name.toLowerCase().includes(val)
+      (stock.ticker && stock.ticker.toLowerCase().includes(val)) ||
+      (stock.name && stock.name.toLowerCase().includes(val))
     );
 
     if (matches.length === 0) {
@@ -574,7 +574,7 @@ function setupPortfolioSearch() {
       div.innerHTML = `
         <div>
           <span class="ticker">${stock.ticker}</span>
-          <span class="name">${stock.name}</span>
+          <span class="name">${stock.name || (stock.ticker + ' Stock')}</span>
         </div>
         <span class="price">${formatCurrency(stock.price)}</span>
       `;

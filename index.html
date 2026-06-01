@@ -380,7 +380,7 @@
 
         <!-- Asset Allocation distribution -->
         <div class="analysis-section"
-          style="flex: 1.2; display: flex; flex-direction: column; overflow: hidden; min-height: 420px;">
+          style="flex: 1.2; display: flex; flex-direction: column; overflow: hidden; min-height: 550px;">
           <div class="section-subtitle">Asset Allocations</div>
           <div
             style="position: relative; height: 180px; width: 100%; display: flex; align-items: center; justify-content: center; margin: 4px 0 10px 0;"
@@ -390,7 +390,7 @@
               style="position: absolute; text-align: center; display: none;">No holdings active yet.</div>
           </div>
           <div class="levels-scroller" id="portfolioAllocationContainer"
-            style="flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px; max-height: 220px;">
+            style="flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px; max-height: 350px;">
             <!-- Allocation progress bars will be rendered here dynamically -->
             <div class="empty-pill-msg" style="text-align: center; margin-top: 20px;">No holdings active yet. Record a
               transaction to view allocation distribution.</div>
@@ -480,14 +480,14 @@
 
         <!-- Active Holdings Table -->
         <div class="analysis-section"
-          style="flex: 2; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 10px; min-height: 300px;">
+          style="flex: 2; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 10px; min-height: 450px;">
           <div class="section-subtitle" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <span>Active Assets Portfolio</span>
             <button class="btn-refresh" id="btnRefreshPortfolioStock" title="Refresh portfolio stock prices" aria-label="Refresh portfolio stock prices" style="width: 24px; height: 24px; font-size: 11px;">
               <i class="fa-solid fa-arrows-rotate"></i>
             </button>
           </div>
-          <div class="projection-table-wrapper" style="flex: 1; overflow-y: auto; max-height: 400px;">
+          <div class="projection-table-wrapper" style="flex: 1; overflow-y: auto; max-height: 550px;">
             <table class="projection-table" id="portfolioTable" style="margin: 0; width: 100%;">
               <thead>
                 <tr>
@@ -517,7 +517,7 @@
 
         <!-- Transactions History log -->
         <div class="analysis-section"
-          style="flex: 1.2; display: flex; flex-direction: column; border-top: 1px solid var(--border-color); overflow: hidden; max-height: 350px; min-height: 250px;">
+          style="flex: 1.2; display: flex; flex-direction: column; border-top: 1px solid var(--border-color); overflow: hidden; max-height: 500px; min-height: 350px;">
           <div class="section-subtitle">Transaction Audit Log</div>
           <div style="flex: 1; overflow-y: auto;" id="portfolioHistoryLog">
             <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;"
