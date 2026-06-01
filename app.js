@@ -2289,15 +2289,14 @@ function reconstructHoldingsFromTx(removeIndex) {
   rebuildPortfolioFromTransactions();
 }
 
-// Complete chronological reconstruction of holdings and realized P&L based on transactions
-function rebuildPortfolioFromTransactions() {
-  // Sort transactions chronologically
-  portfolioState.transactions.sort((a, b) => a.timestamp - b.timestamp);
+// Chronological reconstruction of holdings and realized P&L for a specific portfolio object
+function rebuildSpecificPortfolio(port) {
+  port.transactions.sort((a, b) => a.timestamp - b.timestamp);
 
   const newHoldings = {};
   let newRealizedPL = 0;
 
-  portfolioState.transactions.forEach(tx => {
+  port.transactions.forEach(tx => {
     const ticker = tx.ticker;
     const txFees = parseFloat(tx.fees) || 0;
 
@@ -2311,7 +2310,6 @@ function rebuildPortfolioFromTransactions() {
       existing.avgCost = existing.shares > 0 ? (newPureTotalCost / existing.shares) : 0;
       existing.totalFees = (existing.totalFees || 0) + txFees;
     } else {
-      // SELL
       if (newHoldings[ticker]) {
         const existing = newHoldings[ticker];
         const txRealized = tx.shares * (tx.price - existing.avgCost) - txFees;
@@ -2333,8 +2331,19 @@ function rebuildPortfolioFromTransactions() {
     }
   });
 
-  portfolioState.holdings = newHoldings;
-  portfolioState.realizedPL = newRealizedPL;
+  port.holdings = newHoldings;
+  port.realizedPL = newRealizedPL;
+}
+
+// Complete chronological reconstruction of holdings and realized P&L based on transactions
+function rebuildPortfolioFromTransactions() {
+  const active = portfoliosList.find(p => p.id === activePortfolioId);
+  if (active) {
+    active.transactions = portfolioState.transactions;
+    rebuildSpecificPortfolio(active);
+    portfolioState.holdings = active.holdings;
+    portfolioState.realizedPL = active.realizedPL;
+  }
 
   savePortfolioToStorage();
   updatePortfolioDashboard();
@@ -2799,62 +2808,92 @@ function importTransactionsFromCSV(csvText) {
 
     // Ask the user to Append or Replace
     const active = portfoliosList.find(p => p.id === activePortfolioId);
-    const activeName = active ? active.name : "active portfolio";
+    const activeName = active ? active.name : "Primary Portfolio";
     
     const choice = confirm(
       `Found ${importedTxs.length} valid transactions in CSV.\n\n` +
-      `Click OK (or Yes) to APPEND these transactions to your "${activeName}" portfolio.\n` +
-      `Click CANCEL (or No) to REPLACE all existing transactions in "${activeName}" with these new ones.`
+      `Click OK to APPEND the transactions to their matched portfolios (or "${activeName}" if unmatched).\n` +
+      `Click CANCEL to REPLACE all existing transactions in the matched portfolios (or "${activeName}" if unmatched) with the new ones.`
     );
     
-    let combinedTxs = [];
-    if (choice) {
-      // Append
-      combinedTxs = [...portfolioState.transactions, ...importedTxs];
-    } else {
-      // Replace
-      combinedTxs = [...importedTxs];
-    }
+    // Group imported transactions by target portfolio ID based on Investment Account name
+    const txsByPortfolio = {};
+    importedTxs.forEach(tx => {
+      const account = tx.account || '';
+      const matchingPort = portfoliosList.find(p => p.name.toLowerCase() === account.toLowerCase());
+      const targetPort = matchingPort || active;
+      const portId = targetPort.id;
+      
+      if (!txsByPortfolio[portId]) {
+        txsByPortfolio[portId] = [];
+      }
+      txsByPortfolio[portId].push(tx);
+    });
 
-    // Chronologically sort test transactions
-    combinedTxs.sort((a, b) => a.timestamp - b.timestamp);
+    // Validate chronological holdings simulation for each affected portfolio
+    const affectedPortIds = Object.keys(txsByPortfolio);
+    for (let pIdx = 0; pIdx < affectedPortIds.length; pIdx++) {
+      const portId = affectedPortIds[pIdx];
+      const port = portfoliosList.find(p => p.id === portId);
+      if (!port) continue;
 
-    // Validate chronological holdings simulation (no negative shares allowed at any point!)
-    const simulatedHoldings = {};
-    for (let i = 0; i < combinedTxs.length; i++) {
-      const tx = combinedTxs[i];
-      const ticker = tx.ticker;
-      if (tx.type === 'BUY') {
-        simulatedHoldings[ticker] = (simulatedHoldings[ticker] || 0) + tx.shares;
-      } else {
-        // SELL
-        const currentShares = simulatedHoldings[ticker] || 0;
-        if (currentShares + 1e-9 < tx.shares) {
-          const dateStr = new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          alert(
-            `CSV Import Aborted (Insufficiency Error):\n\n` +
-            `On ${dateStr}, you have a transaction selling ${tx.shares} shares of ${tx.ticker}, ` +
-            `but you only own ${currentShares} shares at that point in time.\n\n` +
-            `Please ensure your buy dates precede your sell dates in the CSV.`
-          );
-          return;
-        }
-        const newShares = currentShares - tx.shares;
-        if (newShares < 1e-9) {
-          delete simulatedHoldings[ticker];
+      const importedTxsForThisPortfolio = txsByPortfolio[portId];
+      const existingTxs = (portId === activePortfolioId) ? portfolioState.transactions : (port.transactions || []);
+      const combinedTxs = choice ? [...existingTxs, ...importedTxsForThisPortfolio] : [...importedTxsForThisPortfolio];
+      combinedTxs.sort((a, b) => a.timestamp - b.timestamp);
+
+      // Validate simulation
+      const simulatedHoldings = {};
+      for (let i = 0; i < combinedTxs.length; i++) {
+        const tx = combinedTxs[i];
+        const ticker = tx.ticker;
+        if (tx.type === 'BUY') {
+          simulatedHoldings[ticker] = (simulatedHoldings[ticker] || 0) + tx.shares;
         } else {
-          simulatedHoldings[ticker] = newShares;
+          // SELL
+          const currentShares = simulatedHoldings[ticker] || 0;
+          if (currentShares + 1e-9 < tx.shares) {
+            const dateStr = new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            alert(
+              `CSV Import Aborted (Insufficiency Error in portfolio "${port.name}"):\n\n` +
+              `On ${dateStr}, you have a transaction selling ${tx.shares} shares of ${tx.ticker}, ` +
+              `but you only own ${currentShares} shares at that point in time.\n\n` +
+              `Please ensure your buy dates precede your sell dates in the CSV.`
+            );
+            return;
+          }
+          const newShares = currentShares - tx.shares;
+          if (newShares < 1e-9) {
+            delete simulatedHoldings[ticker];
+          } else {
+            simulatedHoldings[ticker] = newShares;
+          }
         }
       }
     }
 
-    // Update actual portfolioState transactions
-    portfolioState.transactions = combinedTxs;
+    // All validations succeeded! Update each affected portfolio's transactions list and rebuild
+    affectedPortIds.forEach(portId => {
+      const port = portfoliosList.find(p => p.id === portId);
+      if (!port) return;
 
-    // Chronologically rebuild actual holdings & realized P&L
-    rebuildPortfolioFromTransactions();
+      const importedTxsForThisPortfolio = txsByPortfolio[portId];
+      const existingTxs = (portId === activePortfolioId) ? portfolioState.transactions : (port.transactions || []);
+      let combinedTxs = choice ? [...existingTxs, ...importedTxsForThisPortfolio] : [...importedTxsForThisPortfolio];
+      combinedTxs.sort((a, b) => a.timestamp - b.timestamp);
 
-    // Persist changes
+      port.transactions = combinedTxs;
+      rebuildSpecificPortfolio(port);
+
+      // If it is the active portfolio, sync the in-memory global state!
+      if (portId === activePortfolioId) {
+        portfolioState.transactions = combinedTxs;
+        portfolioState.holdings = port.holdings;
+        portfolioState.realizedPL = port.realizedPL;
+      }
+    });
+
+    // Persist all changes to storage and update dashboard rendering
     savePortfolioToStorage();
 
     // Trigger price histories loads for any new tickers
