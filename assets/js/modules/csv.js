@@ -274,3 +274,55 @@ export function importTransactionsFromCSV(csvText) {
     alert(`CSV Import Failed:\n\n${err.message}`);
   }
 }
+
+// Export transactions as CSV format
+export function exportTransactionsAsCSV() {
+  const txs = portfolioState.transactions;
+  if (!txs || txs.length === 0) {
+    showNotification("No transactions recorded in the current portfolio to export.", "warning");
+    return;
+  }
+
+  // Header row
+  let csvContent = "Date,Type,Symbol,Quantity,Price,Fee,Account\r\n";
+
+  // Data rows
+  txs.forEach(tx => {
+    const txDate = new Date(tx.timestamp);
+    const dd = String(txDate.getDate()).padStart(2, '0');
+    const mm = String(txDate.getMonth() + 1).padStart(2, '0');
+    const yyyy = txDate.getFullYear();
+    const dateStr = `${dd}-${mm}-${yyyy}`;
+
+    const type = tx.type;
+    const ticker = tx.ticker;
+    const shares = tx.shares;
+    const price = tx.price;
+    const fees = tx.fees || 0;
+    const account = tx.account || "Default";
+
+    // Escape any quotes in account name if present
+    const escapedAccount = account.replace(/"/g, '""');
+
+    csvContent += `${dateStr},${type},${ticker},${shares},${price},${fees},"${escapedAccount}"\r\n`;
+  });
+
+  // Create a blob and trigger browser download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  
+  // Find current active portfolio name for filename
+  const active = portfoliosList.find(p => p.id === activePortfolioId);
+  const activeName = active ? active.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : "portfolio";
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${activeName}_transactions_export.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  showNotification("Transactions successfully exported as CSV!", "success");
+}
+

@@ -46,7 +46,8 @@ import {
 } from './modules/portfolio.js';
 
 import {
-  importTransactionsFromCSV
+  importTransactionsFromCSV,
+  exportTransactionsAsCSV
 } from './modules/csv.js';
 
 // --------------------------------------------------------------------------
@@ -856,6 +857,14 @@ function setupPortfolioEventListeners() {
         importTransactionsFromCSV(text);
       };
       reader.readAsText(file);
+    };
+  }
+
+  // CSV Export Button Click Trigger
+  const btnExportTransactions = document.getElementById('btnExportTransactions');
+  if (btnExportTransactions) {
+    btnExportTransactions.onclick = () => {
+      exportTransactionsAsCSV();
     };
   }
 
