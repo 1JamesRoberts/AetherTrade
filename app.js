@@ -809,6 +809,7 @@ function renderStockChartDirect() {
             }
           },
           y: {
+            position: 'right',
             grid: {
               color: 'rgba(255, 255, 255, 0.03)'
             },
@@ -1938,6 +1939,7 @@ function renderPerformanceChart() {
             }
           },
           y: {
+            position: 'right',
             beginAtZero: true,
             grid: {
               color: function(context) {
