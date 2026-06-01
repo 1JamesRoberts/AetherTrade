@@ -332,11 +332,17 @@
 
       <!-- Right Panel: Performance & Holdings table -->
       <section class="panel panel-portfolio-right" aria-label="Portfolio Performance" style="height: 100%;">
-        <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between;">
-          <h2 class="panel-title"><i class="fa-solid fa-wallet"></i> Performance & Holdings</h2>
-          <button class="btn btn-clear-lines" id="btnResetPortfolio" style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto;">
-            <i class="fa-solid fa-rotate-left"></i> Reset Portfolio
-          </button>
+        <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+          <h2 class="panel-title" style="margin: 0;"><i class="fa-solid fa-wallet"></i> Performance & Holdings</h2>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn" id="btnImportTransactions" title="Import transactions from CSV" style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(0, 240, 255, 0.1); border: 1px solid rgba(0, 240, 255, 0.3); color: var(--cyan); box-shadow: 0 0 8px rgba(0, 240, 255, 0.05); transition: all var(--transition-fast) ease; align-items: center; justify-content: center; gap: 6px;">
+              <i class="fa-solid fa-file-import"></i> Import CSV
+            </button>
+            <button class="btn btn-clear-lines" id="btnResetPortfolio" style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; gap: 6px;">
+              <i class="fa-solid fa-rotate-left"></i> Reset Portfolio
+            </button>
+            <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
+          </div>
         </div>
 
         <!-- Performance Summary Cards -->
