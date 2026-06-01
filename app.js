@@ -90,6 +90,30 @@ function loadCachedStocks() {
   return false;
 }
 
+// Save all drawn horizontal support and resistance lines to local storage
+function saveSupportResistanceLines() {
+  try {
+    localStorage.setItem('aethertrade_support_resistance', JSON.stringify(state.linesMap));
+  } catch (e) {
+    console.error('Failed to save support/resistance lines to localStorage', e);
+  }
+}
+
+// Load custom drawn support/resistance lines to restore on load
+function loadSupportResistanceLines() {
+  try {
+    const saved = localStorage.getItem('aethertrade_support_resistance');
+    if (saved) {
+      state.linesMap = JSON.parse(saved);
+      return true;
+    }
+  } catch (e) {
+    console.error('Failed to load support/resistance lines from localStorage', e);
+  }
+  state.linesMap = {};
+  return false;
+}
+
 // 2. Generate Fallback Mock Database (in case live requests fail)
 function seedMockDatabase() {
   const watchlistTickers = state.watchlist || ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOG', 'AMZN'];
@@ -280,10 +304,52 @@ async function loadStockDataAndRender(ticker) {
       throw new Error("No values returned in time series");
     }
 
-    // Since we queried order=asc, values are sorted oldest-to-newest
-    const currentPrice = parseFloat(values[values.length - 1].close);
-    const prevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : currentPrice;
-    const change = prevPrice ? ((currentPrice - prevPrice) / prevPrice) * 100 : 0;
+    const fetchedPrice = parseFloat(values[values.length - 1].close);
+    if (!state.stocks[ticker]) {
+      state.stocks[ticker] = {};
+    }
+
+    // Only update the authoritative real-time price from the timeframe M (daily series),
+    // or if no price is cached yet, to keep the price unified and prevent it from shifting
+    // when toggling timeframe views (like D, W, or Y).
+    if (state.selectedTimeframe === 'M' || !state.stocks[ticker].price) {
+      state.stocks[ticker].price = fetchedPrice;
+    }
+
+    const currentPrice = state.stocks[ticker].price || fetchedPrice;
+
+    // Ensure the last candle close is exactly equal to the currentPrice
+    if (values.length > 0) {
+      values[values.length - 1].close = currentPrice.toString();
+      const currentHigh = parseFloat(values[values.length - 1].high || 0);
+      const currentLow = parseFloat(values[values.length - 1].low || 0);
+      if (currentPrice > currentHigh) {
+        values[values.length - 1].high = currentPrice.toString();
+      }
+      if (currentPrice < currentLow) {
+        values[values.length - 1].low = currentPrice.toString();
+      }
+    }
+
+    // Determine the true previous day's close price for the 1-Day change percentage
+    let dailyPrevPrice = currentPrice;
+    if (state.selectedTimeframe === 'M') {
+      dailyPrevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : currentPrice;
+      state.stocks[ticker].prevClose = dailyPrevPrice;
+    } else if (state.stocks[ticker].prevClose !== undefined && state.stocks[ticker].prevClose !== null) {
+      dailyPrevPrice = state.stocks[ticker].prevClose;
+    } else {
+      // Fallback for non-daily timeframes when prevClose is not yet cached:
+      // use the second-to-latest close from the timeframe data as a temp value,
+      // and trigger background daily fetch to calculate the correct prevClose.
+      dailyPrevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : currentPrice;
+      fetchStockPriceInBackground(ticker);
+    }
+    const dailyChange = dailyPrevPrice ? ((currentPrice - dailyPrevPrice) / dailyPrevPrice) * 100 : 0;
+
+    // Timeframe-specific change for chart header: latest close relative to the start of the selected timeframe
+    const prevPrice = values[0] ? parseFloat(values[0].close) : currentPrice;
+    const timeframeChange = prevPrice ? ((currentPrice - prevPrice) / prevPrice) * 100 : 0;
 
     const closes = [];
     const labels = [];
@@ -306,11 +372,12 @@ async function loadStockDataAndRender(ticker) {
           labels.push(dateObj.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }));
         }
       } else {
-        const dateObj = new Date(datetime + 'T00:00:00');
+        const datePart = datetime.split(' ')[0];
+        const dateObj = new Date(datePart + 'T00:00:00');
         if (state.selectedTimeframe === 'M') {
-          labels.push(dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' }));
+          labels.push(dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
         } else {
-          labels.push(dateObj.toLocaleDateString([], { month: 'short', year: '2-digit' }));
+          labels.push(dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }));
         }
       }
     });
@@ -322,7 +389,8 @@ async function loadStockDataAndRender(ticker) {
     state.stocks[ticker].ticker = ticker;
     state.stocks[ticker].name = state.stocks[ticker].name || (ticker + ' Stock');
     state.stocks[ticker].price = currentPrice;
-    state.stocks[ticker].change = change;
+    state.stocks[ticker].change = dailyChange; // 1-day change for watchlist
+    state.stocks[ticker].timeframeChange = timeframeChange; // period change for chart header
     state.stocks[ticker].liveCloses = closes;
     state.stocks[ticker].liveLabels = labels;
     state.stocks[ticker].liveRawValues = values; // Save real Twelve Data values!
@@ -380,7 +448,6 @@ async function loadStockDataAndRender(ticker) {
       state.stocks[ticker].ticker = ticker;
       state.stocks[ticker].name = state.stocks[ticker].name || (ticker + ' Stock');
       state.stocks[ticker].price = basePrice;
-      state.stocks[ticker].change = 1.25;
       state.stocks[ticker].history = {
         D: generateWalk(basePrice, 24, 'up', 0.005),
         W: generateWalk(basePrice, 7, 'up', 0.012),
@@ -392,6 +459,30 @@ async function loadStockDataAndRender(ticker) {
     // Set fallback active references
     state.stocks[ticker].liveCloses = state.stocks[ticker].history[state.selectedTimeframe];
     state.stocks[ticker].liveLabels = getTimeframeLabels(state.selectedTimeframe);
+    
+    // Calculate actual mock walk change relative to the start of the timeframe walk
+    const closes = state.stocks[ticker].liveCloses || [];
+    
+    // Ensure the last element of the mock walk is exactly equal to the authoritative stock price
+    if (closes.length > 0 && state.stocks[ticker].price !== undefined) {
+      closes[closes.length - 1] = state.stocks[ticker].price;
+    }
+    
+    const baseWalkPrice = closes[0] || state.stocks[ticker].price || 150.00;
+    const currentWalkPrice = state.stocks[ticker].price || (closes.length > 0 ? closes[closes.length - 1] : baseWalkPrice);
+    
+    // 1-Day change (daily change) for watchlist sidebar: today's close relative to yesterday's close
+    // We retrieve yesterday's close from the daily mock series (history['M']) to ensure it is always a true 1-day change
+    const mCloses = state.stocks[ticker].history ? state.stocks[ticker].history['M'] : [];
+    const yesterdayClose = mCloses && mCloses.length > 1 ? mCloses[mCloses.length - 2] : baseWalkPrice;
+    const dailyChange = yesterdayClose ? ((currentWalkPrice - yesterdayClose) / yesterdayClose) * 100 : 0.35;
+
+    // Timeframe-specific change for chart header: today's close relative to the start of the timeframe walk
+    const timeframeChange = baseWalkPrice ? ((currentWalkPrice - baseWalkPrice) / baseWalkPrice) * 100 : 0;
+
+    state.stocks[ticker].change = dailyChange; // 1-day change for watchlist
+    state.stocks[ticker].timeframeChange = timeframeChange; // period change for chart header
+
     state.stocks[ticker].liveRawValues = null; // force regeneration of mock wicks in chart draw
     state.stocks[ticker].isLive = true;
     saveCachedStocks();
@@ -433,13 +524,13 @@ const horizontalLinesPlugin = {
       ctx.lineTo(right, currentPriceY);
       ctx.stroke();
 
-      // Current Price Label Background
+      // Current Price Label Background (outside to the right of the chart area)
       ctx.fillStyle = 'rgba(10, 15, 30, 0.85)';
-      ctx.fillRect(right - 75, currentPriceY - 10, 75, 20);
+      ctx.fillRect(right + 5, currentPriceY - 10, 75, 20);
 
       ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
       ctx.font = '700 10px var(--font-display)';
-      ctx.fillText(`NOW: $${currentPrice.toFixed(2)}`, right - 70, currentPriceY + 4);
+      ctx.fillText(`NOW: $${currentPrice.toFixed(2)}`, right + 10, currentPriceY + 4);
     }
 
     // Draw Support & Resistance User Lines
@@ -645,11 +736,12 @@ function renderStockChartDirect() {
       backgroundColor: gradient,
       fill: true,
       tension: 0.35,
-      pointRadius: labels.length > 30 ? 0 : 3,
-      pointHoverRadius: 6,
+      pointRadius: 0, // Invisible by default
+      pointHoverRadius: 8, // Enlarged glowing hover dot
       pointHoverBackgroundColor: color,
-      pointHoverBorderColor: '#fff',
-      pointHoverBorderWidth: 2
+      pointHoverBorderColor: '#fff', // White glow border on hover
+      pointHoverBorderWidth: 2.5, // Thick hover border
+      pointHitRadius: 10 // Easily trigger hover dot visibility
     };
   }
 
@@ -669,6 +761,11 @@ function renderStockChartDirect() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: {
+            right: 85
+          }
+        },
         interaction: {
           mode: 'index',
           intersect: false,
@@ -754,6 +851,7 @@ function renderStockChartDirect() {
         if (!isDuplicate) {
           existingLines.push(clickedPrice);
           state.linesMap[state.activeTicker] = existingLines;
+          saveSupportResistanceLines();
           updateDashboard();
         }
       }
@@ -782,8 +880,9 @@ function updateDashboard() {
   document.getElementById('activePrice').innerText = `$${activeStock.price.toFixed(2)}`;
 
   const trendEl = document.getElementById('activeChange');
-  trendEl.innerText = `${activeStock.change >= 0 ? '+' : ''}${activeStock.change.toFixed(2)}%`;
-  trendEl.className = `stock-trend ${activeStock.change >= 0 ? 'positive' : 'negative'}`;
+  const displayChange = activeStock.timeframeChange !== undefined ? activeStock.timeframeChange : activeStock.change;
+  trendEl.innerText = `${displayChange >= 0 ? '+' : ''}${displayChange.toFixed(2)}%`;
+  trendEl.className = `stock-trend ${displayChange >= 0 ? 'positive' : 'negative'}`;
 
   // Segregate supports vs resistances (only factor them if S&R overlay is toggled on)
   const lines = state.showLevels ? (state.linesMap[state.activeTicker] || []) : [];
@@ -842,6 +941,7 @@ function renderPills(levels, type, containerId) {
       const deletePrice = parseFloat(e.currentTarget.getAttribute('data-price'));
       const activeLines = state.linesMap[state.activeTicker] || [];
       state.linesMap[state.activeTicker] = activeLines.filter(p => p !== deletePrice);
+      saveSupportResistanceLines();
       updateDashboard();
     };
 
@@ -974,6 +1074,7 @@ function setupCoreEventListeners() {
 
   document.getElementById('clearAllLines').onclick = () => {
     state.linesMap[state.activeTicker] = [];
+    saveSupportResistanceLines();
     updateDashboard();
   };
 
@@ -1181,9 +1282,12 @@ async function fetchStockPriceInBackground(ticker) {
     if (!state.stocks[ticker]) {
       state.stocks[ticker] = {};
     }
+    state.stocks[ticker].ticker = ticker;
     state.stocks[ticker].price = currentPrice;
+    state.stocks[ticker].prevClose = prevPrice;
     state.stocks[ticker].change = change;
     state.stocks[ticker].isLive = true;
+    saveCachedStocks();
 
     // Refresh sidebar list
     const searchInput = document.getElementById('stockSearch');
@@ -1204,6 +1308,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadWatchlist();
   seedMockDatabase();
   loadCachedStocks(); // Overwrite mock seeds with cached live records!
+  loadSupportResistanceLines(); // Restore all cached Support & Resistance lines!
   renderTickerTape();
   renderStockList();
   setupCoreEventListeners();
@@ -1445,6 +1550,9 @@ function updatePortfolioDashboard() {
   // Trigger Pie/Donut Chart Allocation Rendering
   renderAllocationChart(holdingTickers, totalAssetValue);
 
+  // Trigger Unrealized Performance Chart Rendering
+  renderPerformanceChart();
+
   // Render Transaction Logs
   if (portfolioState.transactions.length === 0) {
     logList.innerHTML = `<li class="empty-pill-msg" style="text-align: center; padding-top: 15px;">No transactions recorded.</li>`;
@@ -1455,7 +1563,11 @@ function updatePortfolioDashboard() {
       const li = document.createElement('li');
       li.className = 'tx-log-item';
 
-      const dateStr = new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + new Date(tx.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+      const txDate = new Date(tx.timestamp);
+      const isMidnight = txDate.getHours() === 0 && txDate.getMinutes() === 0 && txDate.getSeconds() === 0 && txDate.getMilliseconds() === 0;
+      const dateStr = isMidnight
+        ? txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+        : txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
       li.innerHTML = `
         <div>
@@ -1559,7 +1671,7 @@ function renderAllocationChart(holdingTickers, totalAssetValue) {
           cornerRadius: 6,
           displayColors: false,
           callbacks: {
-            label: function(context) {
+            label: function (context) {
               const val = context.parsed;
               const pct = (val / totalAssetValue) * 100;
               return ` ${context.label}: $${val.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${pct.toFixed(1)}%)`;
@@ -1570,6 +1682,344 @@ function renderAllocationChart(holdingTickers, totalAssetValue) {
       cutout: '70%' // modern slim donut cutout
     }
   });
+}
+
+// Dynamic Stock Unrealized Performance Line Chart instance
+let portfolioPerformanceChartInstance = null;
+
+function renderPerformanceChart() {
+  try {
+    const canvas = document.getElementById('portfolioPerformanceChart');
+    const container = document.getElementById('performanceChartContainer');
+    const emptyMsg = document.getElementById('performanceEmptyMsg');
+
+    if (!canvas || !container || !emptyMsg) return;
+
+    const txs = [...portfolioState.transactions];
+    const activeTickers = Object.keys(portfolioState.holdings).filter(t => portfolioState.holdings[t].shares > 0);
+
+    if (activeTickers.length === 0) {
+      canvas.style.visibility = 'hidden';
+      canvas.style.opacity = 0;
+      emptyMsg.style.display = 'block';
+      if (portfolioPerformanceChartInstance) {
+        portfolioPerformanceChartInstance.destroy();
+        portfolioPerformanceChartInstance = null;
+      }
+      return;
+    }
+
+    canvas.style.visibility = 'visible';
+    canvas.style.opacity = 1;
+    emptyMsg.style.display = 'none';
+
+    // Find the earliest BUY transaction for any currently active ticker
+    let earliestActiveTimestamp = Infinity;
+    txs.forEach(tx => {
+      if (tx.type === 'BUY' && activeTickers.includes(tx.ticker)) {
+        if (tx.timestamp < earliestActiveTimestamp) {
+          earliestActiveTimestamp = tx.timestamp;
+        }
+      }
+    });
+
+    if (earliestActiveTimestamp === Infinity) {
+      earliestActiveTimestamp = txs[0] ? txs[0].timestamp : Date.now();
+    }
+
+    // Determine startDate and endDate (Today is always the rightmost boundary!)
+    const startDate = new Date(earliestActiveTimestamp);
+    const endDate = new Date(); 
+
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
+
+    // If startDate is in the future relative to today, cap it at today
+    if (startDate > endDate) {
+      startDate.setTime(endDate.getTime());
+    }
+
+    // Calculate the difference in days
+    const diffTime = Math.abs(endDate - startDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Determine interval: daily step (diffDays <= 30) or weekly step (diffDays > 30)
+    const stepDays = (diffDays <= 30) ? 1 : 7;
+    const stepMs = stepDays * 24 * 60 * 60 * 1000;
+
+    // Generate simulated timeline dates from startDate to endDate
+    const timelineDates = [];
+    let currentSimDate = new Date(startDate.getTime());
+    while (currentSimDate <= endDate) {
+      timelineDates.push(new Date(currentSimDate.getTime()));
+      currentSimDate.setTime(currentSimDate.getTime() + stepMs);
+    }
+    
+    // Ensure today (endDate) is always exactly the last date in the timeline
+    if (timelineDates.length === 0 || timelineDates[timelineDates.length - 1].getTime() !== endDate.getTime()) {
+      timelineDates.push(new Date(endDate.getTime()));
+    }
+
+    // Performance points array
+    const points = [];
+
+    // Helper to get historical closing price of a stock on a specific date from cache
+    function getPriceOnDate(ticker, targetDate, fallbackPrice) {
+      const stock = state.stocks[ticker];
+      if (stock && stock.liveCloses && stock.liveCloses.length > 0) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const compareDate = new Date(targetDate.getTime());
+        compareDate.setHours(0, 0, 0, 0);
+
+        if (compareDate.getTime() === today.getTime()) {
+          return parseFloat(stock.price) || parseFloat(stock.liveCloses[stock.liveCloses.length - 1]) || fallbackPrice;
+        }
+
+        // Try exact match in labels first (works for real Twelve Data dates)
+        if (stock.liveLabels && stock.liveLabels.length === stock.liveCloses.length) {
+          let exactIndex = -1;
+          stock.liveLabels.forEach((label, idx) => {
+            const labelDate = new Date(label);
+            if (!isNaN(labelDate.getTime())) {
+              labelDate.setHours(0, 0, 0, 0);
+              if (labelDate.getTime() === compareDate.getTime()) {
+                exactIndex = idx;
+              }
+            }
+          });
+          if (exactIndex !== -1) {
+            return parseFloat(stock.liveCloses[exactIndex]) || fallbackPrice;
+          }
+        }
+
+        // Fallback for mock walks and missing labels: map calendar offset days backwards from today
+        const msDiff = today.getTime() - compareDate.getTime();
+        const daysDiff = Math.max(0, Math.floor(msDiff / (24 * 60 * 60 * 1000)));
+
+        // Adjust calendar days to trading days index: 5 trading days out of 7 calendar days
+        const tradingDaysDiff = Math.floor(daysDiff * 5 / 7);
+        const index = stock.liveCloses.length - 1 - tradingDaysDiff;
+
+        if (index >= 0 && index < stock.liveCloses.length) {
+          return parseFloat(stock.liveCloses[index]) || fallbackPrice;
+        } else if (index < 0) {
+          // If the date is older than our loaded history, return the oldest available historical price
+          return parseFloat(stock.liveCloses[0]) || fallbackPrice;
+        }
+      }
+      return fallbackPrice;
+    }
+
+    // For each date in the timeline, simulate holdings and calculate unrealized P&L
+    timelineDates.forEach(D => {
+      const holdingsOnDate = {};
+      const lastPriceOnDate = {};
+
+      txs.forEach(tx => {
+        // Accumulate transactions that happened before or on this day
+        if (tx.timestamp <= D.getTime() + 86399999) {
+          const ticker = tx.ticker;
+          const txPrice = parseFloat(tx.price) || 0;
+          const txShares = parseInt(tx.shares) || 0;
+          
+          lastPriceOnDate[ticker] = txPrice;
+
+          if (tx.type === 'BUY') {
+            if (!holdingsOnDate[ticker]) {
+              holdingsOnDate[ticker] = { shares: 0, avgCost: 0 };
+            }
+            const h = holdingsOnDate[ticker];
+            const newTotalCost = (h.shares * h.avgCost) + (txShares * txPrice);
+            h.shares += txShares;
+            h.avgCost = h.shares > 0 ? (newTotalCost / h.shares) : 0;
+          } else {
+            // SELL
+            if (holdingsOnDate[ticker]) {
+              const h = holdingsOnDate[ticker];
+              h.shares = Math.max(0, h.shares - txShares);
+              if (h.shares === 0) {
+                delete holdingsOnDate[ticker];
+              }
+            }
+          }
+        }
+      });
+
+      // Compute total unrealized profit on this simulation date
+      let unrealizedPLOnDate = 0;
+      Object.keys(holdingsOnDate).forEach(t => {
+        const h = holdingsOnDate[t];
+        if (h.shares > 0) {
+          const price = getPriceOnDate(t, D, lastPriceOnDate[t] || h.avgCost || 0);
+          unrealizedPLOnDate += h.shares * (price - h.avgCost);
+        }
+      });
+
+      points.push({
+        x: D,
+        y: unrealizedPLOnDate
+      });
+    });
+
+    // Safeguard: if there is only one simulation date (today), add a yesterday baseline to display a clean line
+    if (points.length === 1) {
+      const prevDate = new Date(points[0].x.getTime() - 24 * 60 * 60 * 1000);
+      points.unshift({
+        x: prevDate,
+        y: 0
+      });
+    }
+
+    // Sort data points chronologically to be absolutely certain they display left-to-right
+    points.sort((a, b) => a.x.getTime() - b.x.getTime());
+
+    // Labels represent clean short date formatting (e.g. "May 28")
+    const labels = points.map(p => {
+      return p.x.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    });
+    const data = points.map(p => parseFloat(p.y.toFixed(2)) || 0);
+
+    if (portfolioPerformanceChartInstance) {
+      portfolioPerformanceChartInstance.destroy();
+    }
+
+    const ctx = canvas.getContext('2d');
+    
+    // Custom glowing line gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, 150);
+    gradient.addColorStop(0, 'rgba(0, 240, 255, 0.2)');
+    gradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+    portfolioPerformanceChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Unrealized P&L',
+          data: data,
+          borderColor: '#00f0ff',
+          borderWidth: 2,
+          pointBackgroundColor: '#00f0ff',
+          pointBorderColor: 'rgba(6, 9, 19, 0.8)',
+          pointBorderWidth: 1.5,
+          pointRadius: 0, // Invisible by default
+          pointHoverRadius: 8, // Prominent hover dot
+          pointHoverBackgroundColor: '#00f0ff',
+          pointHoverBorderColor: '#fff', // White glow border on hover
+          pointHoverBorderWidth: 2.5, // Thick hover border
+          pointHitRadius: 10, // Easily trigger hover dot visibility
+          fill: true,
+          backgroundColor: gradient,
+          tension: 0.2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            display: true, // Show the date on the x-axis!
+            grid: {
+              display: false,
+              drawBorder: false
+            },
+            ticks: {
+              color: 'rgba(255, 255, 255, 0.4)',
+              font: { family: 'Outfit', size: 9 },
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 5
+            }
+          },
+          y: {
+            beginAtZero: true,
+            grid: {
+              color: function(context) {
+                if (context.tick && context.tick.value === 0) {
+                  return 'rgba(0, 240, 255, 0.4)'; // Cyan zero baseline
+                }
+                return 'rgba(255, 255, 255, 0.05)';
+              },
+              borderDash: function(context) {
+                if (context.tick && context.tick.value === 0) {
+                  return [5, 5]; // Dashed zero line
+                }
+                return [];
+              },
+              drawBorder: false
+            },
+            ticks: {
+              color: 'rgba(255, 255, 255, 0.5)',
+              font: { family: 'Outfit', size: 10 },
+              callback: function(value) {
+                if (value >= 0) {
+                  return '+$' + value.toLocaleString();
+                } else {
+                  return '-$' + Math.abs(value).toLocaleString();
+                }
+              }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: 'rgba(13, 20, 38, 0.95)',
+            titleColor: '#00f0ff',
+            bodyColor: '#fff',
+            borderColor: 'rgba(0, 240, 255, 0.2)',
+            borderWidth: 1,
+            titleFont: { family: 'Outfit', weight: '700', size: 11 },
+            bodyFont: { family: 'Outfit', size: 11 },
+            padding: 8,
+            cornerRadius: 6,
+            displayColors: false,
+            callbacks: {
+              title: function (context) {
+                const idx = context[0].dataIndex;
+                const d = points[idx].x;
+                return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+              },
+              label: function (context) {
+                const val = context.parsed.y;
+                if (val >= 0) {
+                  return ` Unrealized P&L: +$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                } else {
+                  return ` Unrealized P&L: -$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                }
+              }
+            }
+          }
+        }
+      },
+      plugins: [{
+        id: 'zeroLinePlugin',
+        afterDraw: (chart) => {
+          const { ctx, scales: { y } } = chart;
+          if (!y) return;
+          const zeroY = y.getPixelForValue(0);
+          
+          if (zeroY >= y.top && zeroY <= y.bottom) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)'; // Cyan zero baseline
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]); // Dashed line
+            ctx.moveTo(chart.chartArea.left, zeroY);
+            ctx.lineTo(chart.chartArea.right, zeroY);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }]
+    });
+  } catch (error) {
+    console.error("Error drawing unrealized performance chart:", error);
+  }
 }
 
 // Delete transaction log entry and recalculate (reverts transaction)
@@ -1586,8 +2036,14 @@ function deleteTransactionEntry(index) {
 
 function reconstructHoldingsFromTx(removeIndex) {
   portfolioState.transactions.splice(removeIndex, 1);
+  rebuildPortfolioFromTransactions();
+}
 
-  // Re-build holdings object & realized P&L from scratch
+// Complete chronological reconstruction of holdings and realized P&L based on transactions
+function rebuildPortfolioFromTransactions() {
+  // Sort transactions chronologically
+  portfolioState.transactions.sort((a, b) => a.timestamp - b.timestamp);
+
   const newHoldings = {};
   let newRealizedPL = 0;
 
@@ -1624,8 +2080,86 @@ function reconstructHoldingsFromTx(removeIndex) {
   updatePortfolioDashboard();
 }
 
+// Proactively load history (Twelve Data or generated mock walks) for all tickers in the transactions list
+function loadPortfolioHistory() {
+  const tickersInPortfolio = [...new Set(portfolioState.transactions.map(tx => tx.ticker))];
+  
+  tickersInPortfolio.forEach(ticker => {
+    // If we already have the history loaded, skip!
+    if (state.stocks[ticker] && state.stocks[ticker].liveCloses && state.stocks[ticker].liveCloses.length > 0) {
+      return;
+    }
+
+    // Call async background fetcher
+    fetchPortfolioStockHistory(ticker);
+  });
+}
+
+async function fetchPortfolioStockHistory(ticker) {
+  try {
+    const response = await fetch(`/api/stock?ticker=${ticker}&timeframe=M`);
+    if (!response.ok) throw new Error("Server error");
+    const json = await response.json();
+    if (json.status !== 'ok') throw new Error(json.message || "Twelve Data error");
+
+    const values = json.values || [];
+    if (values.length === 0) throw new Error("Empty values");
+
+    const closes = [];
+    const labels = [];
+    
+    values.forEach(v => {
+      closes.push(parseFloat(v.close));
+      const parts = v.datetime.split(' ');
+      const dateObj = new Date(parts[0] + 'T00:00:00');
+      labels.push(dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    });
+
+    if (!state.stocks[ticker]) {
+      state.stocks[ticker] = {};
+    }
+    state.stocks[ticker].ticker = ticker;
+    state.stocks[ticker].price = parseFloat(values[values.length - 1].close);
+    state.stocks[ticker].liveCloses = closes;
+    state.stocks[ticker].liveLabels = labels;
+    state.stocks[ticker].isLive = true;
+
+    saveCachedStocks();
+    
+    // Trigger dashboard update once history is loaded
+    updatePortfolioDashboard();
+  } catch (err) {
+    console.warn(`Background Twelve Data load failed for ${ticker}, using mock walk fallback:`, err);
+    
+    // Mock walk fallback
+    if (!state.stocks[ticker]) {
+      state.stocks[ticker] = {};
+    }
+    const basePrice = STOCKS_METADATA.find(s => s.ticker === ticker)?.price || 150.00;
+    state.stocks[ticker].ticker = ticker;
+    state.stocks[ticker].name = state.stocks[ticker].name || (ticker + ' Stock');
+    state.stocks[ticker].price = basePrice;
+    
+    if (!state.stocks[ticker].history) {
+      state.stocks[ticker].history = {
+        D: generateWalk(basePrice, 24, 'up', 0.005),
+        W: generateWalk(basePrice, 7, 'up', 0.012),
+        M: generateWalk(basePrice, 30, 'up', 0.015),
+        Y: generateWalk(basePrice, 52, 'up', 0.025)
+      };
+    }
+    
+    state.stocks[ticker].liveCloses = state.stocks[ticker].history['M'];
+    state.stocks[ticker].liveLabels = getTimeframeLabels('M');
+    state.stocks[ticker].isLive = true;
+
+    saveCachedStocks();
+    updatePortfolioDashboard();
+  }
+}
+
 // Execute transaction
-function executeTransaction(ticker, type, shares, price) {
+function executeTransaction(ticker, type, shares, price, dateStr = '') {
   shares = parseInt(shares);
   price = parseFloat(price);
 
@@ -1642,50 +2176,57 @@ function executeTransaction(ticker, type, shares, price) {
     return false;
   }
 
-  const totalValue = shares * price;
-
-  if (type === 'BUY') {
-    if (!portfolioState.holdings[ticker]) {
-      portfolioState.holdings[ticker] = { shares: 0, avgCost: 0 };
-    }
-    const holding = portfolioState.holdings[ticker];
-    const newTotalCost = (holding.shares * holding.avgCost) + totalValue;
-    holding.shares += shares;
-    holding.avgCost = newTotalCost / holding.shares;
-
-  } else {
-    // SELL
+  // Pre-validate for sell sufficiency if we're selling
+  if (type === 'SELL') {
     const holding = portfolioState.holdings[ticker];
     if (!holding || holding.shares < shares) {
       alert(`Insufficient shares. You are attempting to sell ${shares} shares of ${ticker}, but you only own ${holding ? holding.shares : 0} shares.`);
       return false;
     }
+  }
 
-    // Realized P&L = shares sold * (sell price - average cost basis)
-    const txRealizedPL = shares * (price - holding.avgCost);
-    portfolioState.realizedPL = (portfolioState.realizedPL || 0) + txRealizedPL;
-
-    holding.shares -= shares;
-
-    if (holding.shares === 0) {
-      delete portfolioState.holdings[ticker];
+  // Pre-validate transaction date (must not be in the future relative to today)
+  if (dateStr) {
+    const txDate = new Date(dateStr + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (txDate > today) {
+      alert(`Invalid Transaction Date: The selected date (${dateStr}) is in the future. Transactions cannot be recorded with a future date.`);
+      return false;
     }
   }
 
+  // Backdate support: if dateStr is provided, use T00:00:00 local-safe boundary, otherwise use Date.now()
+  const timestamp = dateStr ? new Date(dateStr + 'T00:00:00').getTime() : Date.now();
+
   // Add Transaction entry
   portfolioState.transactions.push({
-    timestamp: Date.now(),
+    timestamp: timestamp,
     ticker: ticker,
     type: type,
     shares: shares,
     price: price
   });
 
-  savePortfolioToStorage();
-  updatePortfolioDashboard();
+  // Re-build holdings & realized P&L chronologically
+  rebuildPortfolioFromTransactions();
+
+  // Proactively fetch background history if this is a newly traded stock in the portfolio
+  loadPortfolioHistory();
 
   // Reset transaction form input values
   document.getElementById('txShares').value = 10;
+
+  // Reset date picker to today
+  const dateInput = document.getElementById('txDate');
+  if (dateInput) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
 
   alert(`Successfully recorded transaction: ${type} ${shares} ${ticker} @ ${formatCurrency(price)}!`);
   return true;
@@ -1894,8 +2435,10 @@ function setupPortfolioEventListeners() {
       const ticker = portfolioState.selectedTicker;
       const shares = parseInt(txSharesInput.value);
       const price = parseFloat(txPriceInput.value);
+      const dateInput = document.getElementById('txDate');
+      const dateStr = dateInput ? dateInput.value : '';
 
-      executeTransaction(ticker, type, shares, price);
+      executeTransaction(ticker, type, shares, price, dateStr);
     };
   }
 
@@ -1929,5 +2472,19 @@ function initPortfolio() {
   loadPortfolioFromStorage();
   setupPortfolioSearch();
   setupPortfolioEventListeners();
+
+  // Default date input to local today's date YYYY-MM-DD
+  const dateInput = document.getElementById('txDate');
+  if (dateInput) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Load price histories for all stocks present in the portfolio
+  loadPortfolioHistory();
+
   updatePortfolioDashboard();
 }

@@ -1463,4 +1463,20 @@ input[type="number"] {
   }
 }
 
+/* Custom Date Input Styling to match deep-dark glassmorphism theme */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(0.85);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity var(--transition-fast), filter var(--transition-fast);
+}
 
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(1) brightness(1) drop-shadow(0 0 2px var(--cyan-glow));
+}
+
+input[type="date"]:focus {
+  border-color: var(--cyan) !important;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
+}
