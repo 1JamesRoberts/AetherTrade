@@ -1919,6 +1919,11 @@ function renderPerformanceChart() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: {
+            right: 90
+          }
+        },
         interaction: {
           mode: 'index',
           intersect: false,
@@ -2005,20 +2010,56 @@ function renderPerformanceChart() {
       plugins: [{
         id: 'zeroLinePlugin',
         afterDraw: (chart) => {
-          const { ctx, scales: { y } } = chart;
+          const { ctx, scales: { y }, chartArea: { left, right, top, bottom } } = chart;
           if (!y) return;
-          const zeroY = y.getPixelForValue(0);
           
-          if (zeroY >= y.top && zeroY <= y.bottom) {
+          // 1. Draw Zero Baseline
+          const zeroY = y.getPixelForValue(0);
+          if (zeroY >= top && zeroY <= bottom) {
             ctx.save();
             ctx.beginPath();
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)'; // Cyan zero baseline
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)'; // Cyan zero baseline
             ctx.lineWidth = 1.5;
-            ctx.setLineDash([5, 5]); // Dashed line
-            ctx.moveTo(chart.chartArea.left, zeroY);
-            ctx.lineTo(chart.chartArea.right, zeroY);
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(left, zeroY);
+            ctx.lineTo(right, zeroY);
             ctx.stroke();
             ctx.restore();
+          }
+
+          // 2. Draw Current P&L Level (Reference line and right-side Tag)
+          const dataset = chart.data.datasets[0];
+          if (dataset && dataset.data && dataset.data.length > 0) {
+            const currentPL = dataset.data[dataset.data.length - 1];
+            const currentPLY = y.getPixelForValue(currentPL);
+            
+            if (currentPLY >= top && currentPLY <= bottom) {
+              ctx.save();
+              
+              // Draw reference dashed line
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+              ctx.lineWidth = 1;
+              ctx.setLineDash([3, 3]);
+              ctx.beginPath();
+              ctx.moveTo(left, currentPLY);
+              ctx.lineTo(right, currentPLY);
+              ctx.stroke();
+
+              // Draw tag box on the right Y-axis price scale
+              const isGain = currentPL >= 0;
+              ctx.fillStyle = isGain ? 'rgba(16, 185, 129, 0.9)' : 'rgba(244, 63, 94, 0.9)'; // Green or red background
+              ctx.beginPath();
+              ctx.roundRect(right + 5, currentPLY - 10, 80, 20, 4);
+              ctx.fill();
+
+              // Draw text inside tag
+              ctx.fillStyle = '#ffffff';
+              ctx.font = '700 9px var(--font-display)';
+              const formattedPL = `${isGain ? '+' : '-'}$${Math.abs(currentPL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+              ctx.fillText(`NOW: ${formattedPL}`, right + 10, currentPLY + 4);
+              
+              ctx.restore();
+            }
           }
         }
       }]
