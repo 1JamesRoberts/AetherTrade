@@ -341,6 +341,22 @@
                 style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
             </div>
 
+            <!-- Trading Fees & Investment Account Inputs -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label for="txFees"
+                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Trading Fees</label>
+                <input type="number" id="txFees" min="0" step="0.01" value="0.00"
+                  style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label for="txAccount"
+                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Investment Account</label>
+                <input type="text" id="txAccount" placeholder="e.g. Roth IRA, Taxable" value="Default"
+                  style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
+              </div>
+            </div>
+
             <!-- Total Preview -->
             <div
               style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 240, 255, 0.03); border: 1px dashed rgba(0, 240, 255, 0.2); padding: 10px 14px; border-radius: var(--radius-md); margin-top: 4px;">

@@ -1591,7 +1591,7 @@ function updatePortfolioDashboard() {
       const metadata = state.stocks[ticker] || STOCKS_METADATA.find(s => s.ticker === ticker) || { price: holding.avgCost, change: 0, name: ticker + ' Stock' };
       const currentPrice = metadata.price || holding.avgCost; // Fallback to avgCost if not loaded yet
 
-      const totalCost = holding.shares * holding.avgCost;
+      const totalCost = (holding.shares * holding.avgCost) + (holding.totalFees || 0);
       const marketValue = holding.shares * currentPrice;
       const pnlVal = marketValue - totalCost;
       const pnlPct = totalCost > 0 ? (pnlVal / totalCost) * 100 : 0;
@@ -1747,11 +1747,18 @@ function updatePortfolioDashboard() {
         ? txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
         : txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+      const txFees = parseFloat(tx.fees) || 0;
+      const txAccount = tx.account || 'Default';
+      const feesStr = txFees > 0 ? ` | Fee: ${formatCurrency(txFees)}` : '';
+      const accountStr = txAccount !== 'Default' ? ` | Account: ${txAccount}` : '';
+
       li.innerHTML = `
         <div>
           <span class="type-badge ${tx.type.toLowerCase()}">${tx.type}</span>
           <strong>${parseFloat(Number(tx.shares).toFixed(6))} ${tx.ticker}</strong> @ ${formatCurrency(tx.price)}
-          <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">Value: ${formatCurrency(tx.shares * tx.price)}</span>
+          <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">
+            Gross: ${formatCurrency(tx.shares * tx.price)}${feesStr}${accountStr}
+          </span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <span class="tx-time">${dateStr}</span>
@@ -2008,22 +2015,32 @@ function renderPerformanceChart() {
           const ticker = tx.ticker;
           const txPrice = parseFloat(tx.price) || 0;
           const txShares = parseFloat(tx.shares) || 0;
+          const txFees = parseFloat(tx.fees) || 0;
 
           lastPriceOnDate[ticker] = txPrice;
 
           if (tx.type === 'BUY') {
             if (!holdingsOnDate[ticker]) {
-              holdingsOnDate[ticker] = { shares: 0, avgCost: 0 };
+              holdingsOnDate[ticker] = { shares: 0, avgCost: 0, totalFees: 0 };
             }
             const h = holdingsOnDate[ticker];
-            const newTotalCost = (h.shares * h.avgCost) + (txShares * txPrice);
+            const newPureTotalCost = (h.shares * h.avgCost) + (txShares * txPrice);
             h.shares += txShares;
-            h.avgCost = h.shares > 0 ? (newTotalCost / h.shares) : 0;
+            h.avgCost = h.shares > 0 ? (newPureTotalCost / h.shares) : 0;
+            h.totalFees = (h.totalFees || 0) + txFees;
           } else {
             // SELL
             if (holdingsOnDate[ticker]) {
               const h = holdingsOnDate[ticker];
+              const originalShares = h.shares;
               h.shares = Math.max(0, h.shares - txShares);
+              
+              if (originalShares > 0) {
+                h.totalFees = h.shares * ((h.totalFees || 0) / originalShares);
+              } else {
+                h.totalFees = 0;
+              }
+
               if (h.shares < 1e-9) {
                 delete holdingsOnDate[ticker];
               }
@@ -2038,7 +2055,9 @@ function renderPerformanceChart() {
         const h = holdingsOnDate[t];
         if (h.shares > 0) {
           const price = getPriceOnDate(t, D, lastPriceOnDate[t] || h.avgCost || 0);
-          unrealizedPLOnDate += h.shares * (price - h.avgCost);
+          const totalCostOnDate = (h.shares * h.avgCost) + (h.totalFees || 0);
+          const marketValueOnDate = h.shares * price;
+          unrealizedPLOnDate += marketValueOnDate - totalCostOnDate;
         }
       });
 
@@ -2280,23 +2299,33 @@ function rebuildPortfolioFromTransactions() {
 
   portfolioState.transactions.forEach(tx => {
     const ticker = tx.ticker;
+    const txFees = parseFloat(tx.fees) || 0;
+
     if (tx.type === 'BUY') {
       if (!newHoldings[ticker]) {
-        newHoldings[ticker] = { shares: 0, avgCost: 0 };
+        newHoldings[ticker] = { shares: 0, avgCost: 0, totalFees: 0 };
       }
       const existing = newHoldings[ticker];
-      const newTotalCost = (existing.shares * existing.avgCost) + (tx.shares * tx.price);
+      const newPureTotalCost = (existing.shares * existing.avgCost) + (tx.shares * tx.price);
       existing.shares += tx.shares;
-      existing.avgCost = existing.shares > 0 ? (newTotalCost / existing.shares) : 0;
+      existing.avgCost = existing.shares > 0 ? (newPureTotalCost / existing.shares) : 0;
+      existing.totalFees = (existing.totalFees || 0) + txFees;
     } else {
       // SELL
       if (newHoldings[ticker]) {
         const existing = newHoldings[ticker];
-        // Calculate realized profit from this sale using the existing cost basis
-        const txRealized = tx.shares * (tx.price - existing.avgCost);
+        const txRealized = tx.shares * (tx.price - existing.avgCost) - txFees;
         newRealizedPL += txRealized;
 
+        const originalShares = existing.shares;
         existing.shares = Math.max(0, existing.shares - tx.shares);
+        
+        if (originalShares > 0) {
+          existing.totalFees = existing.shares * ((existing.totalFees || 0) / originalShares);
+        } else {
+          existing.totalFees = 0;
+        }
+
         if (existing.shares < 1e-9) {
           delete newHoldings[ticker];
         }
@@ -2405,9 +2434,11 @@ async function fetchPortfolioStockHistory(ticker) {
 }
 
 // Execute transaction
-function executeTransaction(ticker, type, shares, price, dateStr = '') {
+function executeTransaction(ticker, type, shares, price, dateStr = '', fees = 0, account = 'Default') {
   shares = parseFloat(String(shares).replace(/,/g, '').trim());
   price = parseFloat(String(price).replace(/,/g, '').trim());
+  fees = parseFloat(String(fees).replace(/,/g, '').trim()) || 0;
+  account = String(account).trim() || 'Default';
 
   if (!ticker) {
     alert("Please select a stock asset first.");
@@ -2419,6 +2450,10 @@ function executeTransaction(ticker, type, shares, price, dateStr = '') {
   }
   if (isNaN(price) || price <= 0) {
     alert("Please enter a valid price per share.");
+    return false;
+  }
+  if (isNaN(fees) || fees < 0) {
+    alert("Please enter a valid non-negative trading fee.");
     return false;
   }
 
@@ -2452,7 +2487,9 @@ function executeTransaction(ticker, type, shares, price, dateStr = '') {
     ticker: ticker,
     type: type,
     shares: shares,
-    price: price
+    price: price,
+    fees: fees,
+    account: account
   });
 
   // Re-build holdings & realized P&L chronologically
@@ -2463,6 +2500,10 @@ function executeTransaction(ticker, type, shares, price, dateStr = '') {
 
   // Reset transaction form input values
   document.getElementById('txShares').value = 10;
+  const txFeesInput = document.getElementById('txFees');
+  if (txFeesInput) txFeesInput.value = '0.00';
+  const txAccountInput = document.getElementById('txAccount');
+  if (txAccountInput) txAccountInput.value = 'Default';
 
   // Reset date picker to today
   const dateInput = document.getElementById('txDate');
@@ -2660,6 +2701,8 @@ function importTransactionsFromCSV(csvText) {
     const symbolIdx = headers.findIndex(h => h.includes("symbol") || h.includes("ticker") || h.includes("stock") || h.includes("etf"));
     const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("units"));
     const priceIdx = headers.findIndex(h => h.includes("price") || h.includes("amount per unit") || h.includes("unit price"));
+    const feesIdx = headers.findIndex(h => h.includes("fee") || h.includes("commission") || h.includes("transaction fee") || h.includes("trading fee"));
+    const accountIdx = headers.findIndex(h => h.includes("account") || h.includes("investment account") || h.includes("portfolio account"));
 
     if (dateIdx === -1 || typeIdx === -1 || symbolIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
       alert("CSV Import Failed: Missing required columns.\n\nYour CSV must contain these columns:\n- Date (DD-MM-YYYY)\n- Transaction Type (BUY/SELL)\n- Stock / ETF Symbol\n- Quantity of Units\n- Amount per unit");
@@ -2723,6 +2766,17 @@ function importTransactionsFromCSV(csvText) {
       if (isNaN(txDate.getTime())) {
         throw new Error(`Row ${rowNum}: Date "${dateVal}" is invalid.`);
       }
+
+      // 6. Parse Fees
+      const feesVal = feesIdx !== -1 ? row[feesIdx] : "0";
+      const fees = parseFloat(String(feesVal).replace(/,/g, '').trim()) || 0;
+      if (isNaN(fees) || fees < 0) {
+        throw new Error(`Row ${rowNum}: Trading Fees must be a non-negative number. Found: "${feesVal}"`);
+      }
+
+      // 7. Parse Account
+      const accountVal = accountIdx !== -1 ? row[accountIdx] : "Default";
+      const account = String(accountVal).trim() || "Default";
       if (txDate > today) {
         throw new Error(`Row ${rowNum}: Transaction date "${dateVal}" is in the future.`);
       }
@@ -2732,7 +2786,9 @@ function importTransactionsFromCSV(csvText) {
         ticker: ticker,
         type: type,
         shares: shares,
-        price: price
+        price: price,
+        fees: fees,
+        account: account
       });
     }
 
@@ -2875,11 +2931,31 @@ function setupPortfolioEventListeners() {
     function recalculateEstimatedTxTotal() {
       const qty = parseFloat(txSharesInput.value) || 0;
       const price = parseFloat(txPriceInput.value) || 0;
-      document.getElementById('txTotalEst').innerText = formatCurrency(qty * price);
+      const txFeesInput = document.getElementById('txFees');
+      const fees = txFeesInput ? (parseFloat(txFeesInput.value) || 0) : 0;
+
+      const activeToggle = document.querySelector('.tx-toggle-btn.active');
+      const type = activeToggle ? activeToggle.getAttribute('data-tx') : 'BUY';
+
+      const gross = qty * price;
+      const net = type === 'BUY' ? (gross + fees) : Math.max(0, gross - fees);
+      document.getElementById('txTotalEst').innerText = `${formatCurrency(net)} (${type === 'BUY' ? 'Total Cost' : 'Net Proceeds'}, gross: ${formatCurrency(gross)})`;
     }
 
     txSharesInput.addEventListener('input', recalculateEstimatedTxTotal);
     txPriceInput.addEventListener('input', recalculateEstimatedTxTotal);
+    
+    const txFeesInput = document.getElementById('txFees');
+    if (txFeesInput) {
+      txFeesInput.addEventListener('input', recalculateEstimatedTxTotal);
+    }
+    
+    const txTypeToggleBtns = document.querySelectorAll('.tx-toggle-btn');
+    txTypeToggleBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        setTimeout(recalculateEstimatedTxTotal, 10);
+      });
+    });
   }
 
   // Record Transaction Action Trigger
@@ -2893,8 +2969,12 @@ function setupPortfolioEventListeners() {
       const price = parseFloat(txPriceInput.value);
       const dateInput = document.getElementById('txDate');
       const dateStr = dateInput ? dateInput.value : '';
+      const txFeesInput = document.getElementById('txFees');
+      const fees = txFeesInput ? (parseFloat(txFeesInput.value) || 0) : 0;
+      const txAccountInput = document.getElementById('txAccount');
+      const account = txAccountInput ? (txAccountInput.value.trim() || 'Default') : 'Default';
 
-      executeTransaction(ticker, type, shares, price, dateStr);
+      executeTransaction(ticker, type, shares, price, dateStr, fees, account);
     };
   }
 
