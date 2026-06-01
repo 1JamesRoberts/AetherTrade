@@ -1,26 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AetherTrade - Interactive Support & Resistance Terminal</title>
   <!-- SEO Tags -->
-  <meta name="description" content="AetherTrade is a premium interactive stock terminal for detecting and analyzing support and resistance lines with real-time profit projection and custom indicators.">
-  
+  <meta name="description"
+    content="AetherTrade is a premium interactive stock terminal for detecting and analyzing support and resistance lines with real-time profit projection and custom indicators.">
+
   <!-- Premium Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
+
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
+
   <!-- Stylesheets -->
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
   <!-- Background Glow Accents -->
   <div class="glow-sphere glow-sphere-1"></div>
@@ -61,185 +66,202 @@
     <div id="viewTerminal" class="workspace-view active">
       <!-- Left Sidebar: Search & Stock Selection -->
       <section class="panel panel-left" aria-label="Stock Selection">
-      <div class="panel-header">
-        <h2 class="panel-title"><i class="fa-solid fa-star"></i> Watchlist</h2>
-      </div>
-      
-      <div class="search-box">
-        <div class="search-input-container">
-          <i class="fa-solid fa-magnifying-glass search-icon"></i>
-          <input type="text" id="stockSearch" placeholder="Search ticker or company name...">
-          <button id="clearSearch" class="clear-btn" style="display: none;"><i class="fa-solid fa-xmark"></i></button>
+        <div class="panel-header">
+          <h2 class="panel-title"><i class="fa-solid fa-star"></i> Watchlist</h2>
         </div>
-      </div>
 
-      <div class="stock-list-container">
-        <div class="list-section-title">My Tracked Assets</div>
-        <ul class="stock-list" id="stockList">
-          <!-- Populated by JS -->
-        </ul>
-      </div>
-    </section>
+        <div class="search-box">
+          <div class="search-input-container">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="stockSearch" placeholder="Search ticker or company name...">
+            <button id="clearSearch" class="clear-btn" style="display: 1ne;"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
 
-    <!-- Center Workspace: Main Chart -->
-    <section class="panel panel-center" aria-label="Interactive Charting Terminal">
-      <div class="chart-header">
-        <div class="stock-info-block">
-          <div class="stock-badge" id="activeTicker">AAPL</div>
-          <div class="stock-details">
-            <h1 class="stock-name" id="activeName">Apple Inc.</h1>
-            <div class="stock-metrics">
-              <span class="stock-price" id="activePrice">$185.50</span>
-              <span class="stock-trend positive" id="activeChange">+2.45%</span>
+        <div class="stock-list-container">
+          <div class="list-section-title">My Tracked Assets</div>
+          <ul class="stock-list" id="stockList">
+            <!-- Populated by JS -->
+          </ul>
+        </div>
+      </section>
+
+      <!-- Center Workspace: Main Chart -->
+      <section class="panel panel-center" aria-label="Interactive Charting Terminal">
+        <div class="chart-header">
+          <div class="stock-info-block">
+            <div class="stock-badge" id="activeTicker">AAPL</div>
+            <div class="stock-details">
+              <h1 class="stock-name" id="activeName">Apple Inc.</h1>
+              <div class="stock-metrics">
+                <span class="stock-price" id="activePrice">$185.50</span>
+                <span class="stock-trend positive" id="activeChange">+2.45%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-controls">
+            <!-- Toggle S&R Overlay -->
+            <div class="toggle-container" style="display: flex; align-items: center; gap: 8px;">
+              <label class="switch">
+                <input type="checkbox" id="toggleSR" checked>
+                <span class="slider round"></span>
+              </label>
+              <span
+                style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">S&R
+                Overlay</span>
+            </div>
+
+            <!-- Zoom Slider -->
+            <div class="zoom-container"
+              style="display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: var(--radius-md);">
+              <i class="fa-solid fa-magnifying-glass" style="font-size: 11px; color: var(--text-muted);"></i>
+              <input type="range" id="zoomSlider" min="20" max="100" value="100"
+                style="width: 80px; accent-color: var(--cyan); cursor: pointer; background: transparent; border: none; outline: none; margin: 0;">
+              <span id="zoomLabel"
+                style="font-size: 11px; font-weight: 700; color: var(--text-secondary); width: 35px; text-align: right;">100%</span>
+            </div>
+
+            <div class="chart-style-selector">
+              <button class="style-btn active" data-style="line" title="Line Chart">
+                <i class="fa-solid fa-chart-line"></i> Line
+              </button>
+              <button class="style-btn" data-style="candle" title="Candlestick Chart">
+                <i class="fa-solid fa-chart-bar"></i> Candle
+              </button>
+            </div>
+            <div class="timeframe-selector">
+              <button class="tf-btn" data-tf="D">1D</button>
+              <button class="tf-btn" data-tf="W">1W</button>
+              <button class="tf-btn active" data-tf="M">1M</button>
+              <button class="tf-btn" data-tf="Y">1Y</button>
             </div>
           </div>
         </div>
 
-        <div class="chart-controls">
-          <!-- Toggle S&R Overlay -->
-          <div class="toggle-container" style="display: flex; align-items: center; gap: 8px;">
-            <label class="switch">
-              <input type="checkbox" id="toggleSR" checked>
-              <span class="slider round"></span>
-            </label>
-            <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">S&R Overlay</span>
+        <!-- Chart Container -->
+        <div class="chart-container">
+          <canvas id="mainChart"></canvas>
+          <div class="chart-instructions">
+            <i class="fa-solid fa-circle-info"></i> Click anywhere on the chart canvas to add a Support or Resistance
+            level
+          </div>
+        </div>
+
+        <!-- Quick Analysis Metric Cards -->
+        <div class="analysis-cards-grid">
+          <div class="metric-card card-cyan">
+            <div class="metric-card-header">
+              <span class="title">Active Price Levels</span>
+              <i class="fa-solid fa-layer-group text-cyan"></i>
+            </div>
+            <div class="metric-val" id="totalLevelsCount">0</div>
+            <div class="metric-subtext">Horizontal lines added to chart</div>
           </div>
 
-          <!-- Zoom Slider -->
-          <div class="zoom-container" style="display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: var(--radius-md);">
-            <i class="fa-solid fa-magnifying-glass" style="font-size: 11px; color: var(--text-muted);"></i>
-            <input type="range" id="zoomSlider" min="20" max="100" value="100" style="width: 80px; accent-color: var(--cyan); cursor: pointer; background: transparent; border: none; outline: none; margin: 0;">
-            <span id="zoomLabel" style="font-size: 11px; font-weight: 700; color: var(--text-secondary); width: 35px; text-align: right;">100%</span>
+          <div class="metric-card card-green">
+            <div class="metric-card-header">
+              <span class="title">Active Support (Buy)</span>
+              <i class="fa-solid fa-arrow-trend-up text-green"></i>
+            </div>
+            <div class="metric-val" id="supportLevelsCount">0</div>
+            <div class="metric-subtext">Prices below current market rate</div>
           </div>
 
-          <div class="chart-style-selector">
-            <button class="style-btn active" data-style="line" title="Line Chart">
-              <i class="fa-solid fa-chart-line"></i> Line
+          <div class="metric-card card-red">
+            <div class="metric-card-header">
+              <span class="title">Active Resistance (Sell)</span>
+              <i class="fa-solid fa-arrow-trend-down text-red"></i>
+            </div>
+            <div class="metric-val" id="resistanceLevelsCount">0</div>
+            <div class="metric-subtext">Prices above current market rate</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Sidebar: Analysis & Calculations -->
+      <section class="panel panel-right" aria-label="Trading Strategy & Analysis">
+        <div class="panel-header">
+          <h2 class="panel-title"><i class="fa-solid fa-layer-group"></i> Analysis Engine</h2>
+        </div>
+
+        <!-- Active Lines Tracker -->
+        <div class="analysis-section">
+          <div class="section-subtitle">
+            <span>Identified Price Levels</span>
+            <button class="btn btn-clear-lines" id="clearAllLines"
+              style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto;">
+              <i class="fa-solid fa-trash-can"></i> Clear All
             </button>
-            <button class="style-btn" data-style="candle" title="Candlestick Chart">
-              <i class="fa-solid fa-chart-bar"></i> Candle
-            </button>
           </div>
-          <div class="timeframe-selector">
-            <button class="tf-btn" data-tf="D">1D</button>
-            <button class="tf-btn" data-tf="W">1W</button>
-            <button class="tf-btn active" data-tf="M">1M</button>
-            <button class="tf-btn" data-tf="Y">1Y</button>
-          </div>
-        </div>
-      </div>
+          <div class="levels-scroller">
+            <div class="levels-sub-header text-green"><i class="fa-solid fa-circle-chevron-up"></i> Support Levels</div>
+            <ul class="level-pills-list" id="supportPills">
+              <!-- Populated dynamically -->
+              <li class="empty-pill-msg">No support lines set. Click on chart below current price.</li>
+            </ul>
 
-      <!-- Chart Container -->
-      <div class="chart-container">
-        <canvas id="mainChart"></canvas>
-        <div class="chart-instructions">
-          <i class="fa-solid fa-circle-info"></i> Click anywhere on the chart canvas to add a Support or Resistance level
-        </div>
-      </div>
-
-      <!-- Quick Analysis Metric Cards -->
-      <div class="analysis-cards-grid">
-        <div class="metric-card card-cyan">
-          <div class="metric-card-header">
-            <span class="title">Active Price Levels</span>
-            <i class="fa-solid fa-layer-group text-cyan"></i>
-          </div>
-          <div class="metric-val" id="totalLevelsCount">0</div>
-          <div class="metric-subtext">Horizontal lines added to chart</div>
-        </div>
-
-        <div class="metric-card card-green">
-          <div class="metric-card-header">
-            <span class="title">Active Support (Buy)</span>
-            <i class="fa-solid fa-arrow-trend-up text-green"></i>
-          </div>
-          <div class="metric-val" id="supportLevelsCount">0</div>
-          <div class="metric-subtext">Prices below current market rate</div>
-        </div>
-
-        <div class="metric-card card-red">
-          <div class="metric-card-header">
-            <span class="title">Active Resistance (Sell)</span>
-            <i class="fa-solid fa-arrow-trend-down text-red"></i>
-          </div>
-          <div class="metric-val" id="resistanceLevelsCount">0</div>
-          <div class="metric-subtext">Prices above current market rate</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Right Sidebar: Analysis & Calculations -->
-    <section class="panel panel-right" aria-label="Trading Strategy & Analysis">
-      <div class="panel-header">
-        <h2 class="panel-title"><i class="fa-solid fa-layer-group"></i> Analysis Engine</h2>
-      </div>
-
-      <!-- Active Lines Tracker -->
-      <div class="analysis-section">
-        <div class="section-subtitle">
-          <span>Identified Price Levels</span>
-          <button class="btn btn-clear-lines" id="clearAllLines" style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto;">
-            <i class="fa-solid fa-trash-can"></i> Clear All
-          </button>
-        </div>
-        <div class="levels-scroller">
-          <div class="levels-sub-header text-green"><i class="fa-solid fa-circle-chevron-up"></i> Support Levels</div>
-          <ul class="level-pills-list" id="supportPills">
-            <!-- Populated dynamically -->
-            <li class="empty-pill-msg">No support lines set. Click on chart below current price.</li>
-          </ul>
-
-          <div class="levels-sub-header text-red" style="margin-top: 15px;"><i class="fa-solid fa-circle-chevron-down"></i> Resistance Levels</div>
-          <ul class="level-pills-list" id="resistancePills">
-            <!-- Populated dynamically -->
-            <li class="empty-pill-msg">No resistance lines set. Click on chart above current price.</li>
-          </ul>
-        </div>
-      </div>
-
-      <!-- Trade Projections Matrix -->
-      <div class="analysis-section" style="flex: 1; display: flex; flex-direction: column;">
-        <div class="section-subtitle">
-          <span>Profit Projections Matrix</span>
-          <div class="capital-input-wrapper" style="display: flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 2px 8px; border-radius: 6px; margin: 0; box-shadow: none;">
-            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">$</span>
-            <input type="number" id="globalCapital" value="10000" min="100" step="100" style="background: transparent; border: none; color: var(--cyan); font-family: var(--font-display); font-weight: 700; font-size: 12px; outline: none; width: 85px; text-align: right; padding: 0; margin: 0; box-shadow: none;">
+            <div class="levels-sub-header text-red" style="margin-top: 15px;"><i
+                class="fa-solid fa-circle-chevron-down"></i> Resistance Levels</div>
+            <ul class="level-pills-list" id="resistancePills">
+              <!-- Populated dynamically -->
+              <li class="empty-pill-msg">No resistance lines set. Click on chart above current price.</li>
+            </ul>
           </div>
         </div>
-        <div class="projection-table-wrapper">
-          <table class="projection-table" id="projectionTable">
-            <!-- Populated dynamically including headers and rows -->
-          </table>
-          <div class="empty-table-state" id="emptyMatrixState">
-            <div class="empty-icon"><i class="fa-solid fa-cubes"></i></div>
-            <p class="empty-title">Formulate a Strategy</p>
-            <p class="empty-desc">Create at least one <strong>Support</strong> (below current price) and one <strong>Resistance</strong> (above current price) line to project potential trade returns.</p>
+
+        <!-- Trade Projections Matrix -->
+        <div class="analysis-section" style="flex: 1; display: flex; flex-direction: column;">
+          <div class="section-subtitle">
+            <span>Profit Projections Matrix</span>
+            <div class="capital-input-wrapper"
+              style="display: flex; align-items: center; gap: 4px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 2px 8px; border-radius: 6px; margin: 0; box-shadow: none;">
+              <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">$</span>
+              <input type="number" id="globalCapital" value="10000" min="100" step="100"
+                style="background: transparent; border: none; color: var(--cyan); font-family: var(--font-display); font-weight: 700; font-size: 12px; outline: none; width: 85px; text-align: right; padding: 0; margin: 0; box-shadow: none;">
+            </div>
+          </div>
+          <div class="projection-table-wrapper">
+            <table class="projection-table" id="projectionTable">
+              <!-- Populated dynamically including headers and rows -->
+            </table>
+            <div class="empty-table-state" id="emptyMatrixState">
+              <div class="empty-icon"><i class="fa-solid fa-cubes"></i></div>
+              <p class="empty-title">Formulate a Strategy</p>
+              <p class="empty-desc">Create at least one <strong>Support</strong> (below current price) and one
+                <strong>Resistance</strong> (above current price) line to project potential trade returns.</p>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
     </div>
 
     <!-- View 2: Portfolio Manager -->
     <div id="viewPortfolio" class="workspace-view">
       <!-- Left Panel: Transaction Manager & Asset Allocation -->
-      <section class="panel panel-portfolio-left" aria-label="Portfolio Allocations" style="height: 100%;">
-        <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+      <section class="panel panel-portfolio-left" aria-label="Portfolio Allocations" style="height: 100%; overflow-y: auto;">
+        <div class="panel-header"
+          style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
           <h2 class="panel-title" style="margin: 0;"><i class="fa-solid fa-briefcase"></i> Portfolio Manager</h2>
           <div style="display: flex; align-items: center; gap: 8px;">
             <div class="select-wrapper" style="position: relative;">
-              <select id="portfolioSelector" style="background: rgba(10, 15, 30, 0.6); border: 1px solid var(--border-color); color: #fff; padding: 6px 30px 6px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; font-size: 12px; outline: none; transition: all var(--transition-fast) ease; appearance: none; cursor: pointer; min-width: 140px; box-shadow: 0 0 10px rgba(0, 240, 255, 0.05);">
+              <select id="portfolioSelector"
+                style="background: rgba(10, 15, 30, 0.6); border: 1px solid var(--border-color); color: #fff; padding: 6px 30px 6px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; font-size: 12px; outline: none; transition: all var(--transition-fast) ease; appearance: none; cursor: pointer; min-width: 140px; box-shadow: 0 0 10px rgba(0, 240, 255, 0.05);">
                 <!-- Populated dynamically -->
               </select>
-              <i class="fa-solid fa-chevron-down" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--text-muted); pointer-events: none;"></i>
+              <i class="fa-solid fa-chevron-down"
+                style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10px; color: var(--text-muted); pointer-events: none;"></i>
             </div>
-            <button id="btnCreatePortfolio" class="btn" title="Create new portfolio" style="padding: 6px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(0, 240, 255, 0.1); border: 1px solid rgba(0, 240, 255, 0.3); color: var(--cyan); box-shadow: 0 0 8px rgba(0, 240, 255, 0.1); transition: all var(--transition-fast) ease; align-items: center; justify-content: center;">
+            <button id="btnCreatePortfolio" class="btn" title="Create new portfolio"
+              style="padding: 6px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(0, 240, 255, 0.1); border: 1px solid rgba(0, 240, 255, 0.3); color: var(--cyan); box-shadow: 0 0 8px rgba(0, 240, 255, 0.1); transition: all var(--transition-fast) ease; align-items: center; justify-content: center;">
               <i class="fa-solid fa-plus"></i>
             </button>
-            <button id="btnRenamePortfolio" class="btn" title="Rename current portfolio" style="padding: 6px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.1); transition: all var(--transition-fast) ease; align-items: center; justify-content: center;">
+            <button id="btnRenamePortfolio" class="btn" title="Rename current portfolio"
+              style="padding: 6px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.1); transition: all var(--transition-fast) ease; align-items: center; justify-content: center;">
               <i class="fa-solid fa-pen"></i>
             </button>
-            <button id="btnDeletePortfolio" class="btn" title="Delete current portfolio" style="padding: 6px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--red); box-shadow: 0 0 8px rgba(244, 63, 94, 0.1); transition: all var(--transition-fast) ease; align-items: center; justify-content: center;">
+            <button id="btnDeletePortfolio" class="btn" title="Delete current portfolio"
+              style="padding: 6px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); color: var(--red); box-shadow: 0 0 8px rgba(244, 63, 94, 0.1); transition: all var(--transition-fast) ease; align-items: center; justify-content: center;">
               <i class="fa-solid fa-trash-can"></i>
             </button>
           </div>
@@ -248,13 +270,15 @@
         <!-- Add Transaction Section -->
         <div class="analysis-section" style="position: relative;">
           <div class="section-subtitle">Record Transaction</div>
-          
+
           <!-- Search Stock for Portfolio -->
           <div class="search-box" style="padding: 0; margin-bottom: 12px; position: relative;">
             <div class="search-input-container">
               <i class="fa-solid fa-magnifying-glass search-icon"></i>
-              <input type="text" id="portfolioStockSearch" placeholder="Search ticker (e.g. AAPL, NVDA)..." autocomplete="off" style="width: 100%; box-sizing: border-box;">
-              <button id="clearPortfolioSearch" class="clear-btn" style="display: none;"><i class="fa-solid fa-xmark"></i></button>
+              <input type="text" id="portfolioStockSearch" placeholder="Search ticker (e.g. AAPL, NVDA)..."
+                autocomplete="off" style="width: 100%; box-sizing: border-box;">
+              <button id="clearPortfolioSearch" class="clear-btn" style="display: none;"><i
+                  class="fa-solid fa-xmark"></i></button>
             </div>
             <!-- Search Results Dropdown -->
             <div id="portfolioSearchDropdown" class="portfolio-search-dropdown" style="display: none;">
@@ -263,9 +287,11 @@
           </div>
 
           <!-- Live Stock Info Preview (hidden by default until a stock is selected) -->
-          <div id="portfolioStockPreview" class="portfolio-stock-preview" style="display: none; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); margin-bottom: 14px;">
+          <div id="portfolioStockPreview" class="portfolio-stock-preview"
+            style="display: none; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 10px 14px; border-radius: var(--radius-md); margin-bottom: 14px;">
             <div>
-              <span id="previewTicker" style="font-weight: 800; font-family: var(--font-display); color: var(--cyan); font-size: 14px; padding-right: 6px;">AAPL</span>
+              <span id="previewTicker"
+                style="font-weight: 800; font-family: var(--font-display); color: var(--cyan); font-size: 14px; padding-right: 6px;">AAPL</span>
               <span id="previewName" style="font-size: 11px; color: var(--text-muted);">Apple Inc.</span>
             </div>
             <div style="text-align: right;">
@@ -278,8 +304,11 @@
           <div class="transaction-form" style="display: flex; flex-direction: column; gap: 12px;">
             <!-- Action Toggle -->
             <div style="display: flex; flex-direction: column; gap: 6px;">
-              <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Transaction Type</label>
-              <div class="action-toggle-group" style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 3px; border-radius: var(--radius-md); gap: 2px;">
+              <label
+                style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Transaction
+                Type</label>
+              <div class="action-toggle-group"
+                style="display: flex; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); padding: 3px; border-radius: var(--radius-md); gap: 2px;">
                 <button class="tx-toggle-btn active" data-tx="BUY" style="flex: 1;">BUY</button>
                 <button class="tx-toggle-btn" data-tx="SELL" style="flex: 1;">SELL</button>
               </div>
@@ -288,57 +317,80 @@
             <!-- Shares & Price input rows -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label for="txShares" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Shares Quantity</label>
-                <input type="number" id="txShares" min="1" step="1" value="10" style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
+                <label for="txShares"
+                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Shares
+                  Quantity</label>
+                <input type="number" id="txShares" min="0.000001" step="any" value="10"
+                  style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
               </div>
               <div style="display: flex; flex-direction: column; gap: 6px;">
-                <label for="txPrice" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Price Per Share</label>
-                <input type="number" id="txPrice" min="0.01" step="0.01" value="185.50" style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
+                <label for="txPrice"
+                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Price
+                  Per Share</label>
+                <input type="number" id="txPrice" min="0.01" step="0.01" value="185.50"
+                  style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
               </div>
             </div>
 
             <!-- Transaction Date Picker -->
             <div style="display: flex; flex-direction: column; gap: 6px;">
-              <label for="txDate" style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Transaction Date</label>
-              <input type="date" id="txDate" style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
+              <label for="txDate"
+                style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Transaction
+                Date</label>
+              <input type="date" id="txDate"
+                style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
             </div>
 
             <!-- Total Preview -->
-            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 240, 255, 0.03); border: 1px dashed rgba(0, 240, 255, 0.2); padding: 10px 14px; border-radius: var(--radius-md); margin-top: 4px;">
-              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Estimated Value</span>
-              <span id="txTotalEst" style="font-weight: 700; font-family: var(--font-display); color: var(--cyan); font-size: 14px;">$1,855.00</span>
+            <div
+              style="display: flex; align-items: center; justify-content: space-between; background: rgba(0, 240, 255, 0.03); border: 1px dashed rgba(0, 240, 255, 0.2); padding: 10px 14px; border-radius: var(--radius-md); margin-top: 4px;">
+              <span
+                style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Estimated
+                Value</span>
+              <span id="txTotalEst"
+                style="font-weight: 700; font-family: var(--font-display); color: var(--cyan); font-size: 14px;">$1,855.00</span>
             </div>
 
             <!-- Submit transaction -->
-            <button class="btn" id="btnAddTransaction" style="background: linear-gradient(135deg, var(--cyan), var(--cyan-glow)); color: #000; border: none; padding: 10px 16px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; border-radius: var(--radius-md); justify-content: center; box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2); cursor: pointer; transition: all var(--transition-fast); margin-top: 6px;">
+            <button class="btn" id="btnAddTransaction"
+              style="background: linear-gradient(135deg, var(--cyan), var(--cyan-glow)); color: #000; border: none; padding: 10px 16px; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; border-radius: var(--radius-md); justify-content: center; box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2); cursor: pointer; transition: all var(--transition-fast); margin-top: 6px;">
               <i class="fa-solid fa-circle-plus"></i> Record Transaction
             </button>
           </div>
         </div>
 
         <!-- Asset Allocation distribution -->
-        <div class="analysis-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 280px;">
+        <div class="analysis-section"
+          style="flex: 1.2; display: flex; flex-direction: column; overflow: hidden; min-height: 420px;">
           <div class="section-subtitle">Asset Allocations</div>
-          <div style="position: relative; height: 140px; width: 100%; display: flex; align-items: center; justify-content: center; margin: 4px 0 10px 0;" id="allocationChartContainer">
-            <canvas id="portfolioAllocationChart" style="max-height: 130px; max-width: 130px;"></canvas>
-            <div id="allocationEmptyMsg" class="empty-pill-msg" style="position: absolute; text-align: center; display: none;">No holdings active yet.</div>
+          <div
+            style="position: relative; height: 180px; width: 100%; display: flex; align-items: center; justify-content: center; margin: 4px 0 10px 0;"
+            id="allocationChartContainer">
+            <canvas id="portfolioAllocationChart" style="max-height: 170px; max-width: 170px;"></canvas>
+            <div id="allocationEmptyMsg" class="empty-pill-msg"
+              style="position: absolute; text-align: center; display: none;">No holdings active yet.</div>
           </div>
-          <div class="levels-scroller" id="portfolioAllocationContainer" style="flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px;">
+          <div class="levels-scroller" id="portfolioAllocationContainer"
+            style="flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 4px; max-height: 220px;">
             <!-- Allocation progress bars will be rendered here dynamically -->
-            <div class="empty-pill-msg" style="text-align: center; margin-top: 20px;">No holdings active yet. Record a transaction to view allocation distribution.</div>
+            <div class="empty-pill-msg" style="text-align: center; margin-top: 20px;">No holdings active yet. Record a
+              transaction to view allocation distribution.</div>
           </div>
         </div>
       </section>
 
       <!-- Right Panel: Performance & Holdings table -->
-      <section class="panel panel-portfolio-right" aria-label="Portfolio Performance" style="height: 100%;">
-        <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+      <section class="panel panel-portfolio-right" aria-label="Portfolio Performance" style="height: 100%; overflow-y: auto;">
+        <div class="panel-header"
+          style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
           <h2 class="panel-title" style="margin: 0;"><i class="fa-solid fa-wallet"></i> Performance & Holdings</h2>
           <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="btn" id="btnImportTransactions" title="Import transactions from CSV" style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(0, 240, 255, 0.1); border: 1px solid rgba(0, 240, 255, 0.3); color: var(--cyan); box-shadow: 0 0 8px rgba(0, 240, 255, 0.05); transition: all var(--transition-fast) ease; align-items: center; justify-content: center; gap: 6px;">
+            <button class="btn" id="btnImportTransactions" title="Import transactions from CSV"
+              style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; background: rgba(0, 240, 255, 0.1); border: 1px solid rgba(0, 240, 255, 0.3); color: var(--cyan); box-shadow: 0 0 8px rgba(0, 240, 255, 0.05); transition: all var(--transition-fast) ease; align-items: center; justify-content: center; gap: 6px;">
               <i class="fa-solid fa-file-import"></i> Import CSV
             </button>
-            <button class="btn btn-clear-lines" id="btnResetPortfolio" style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; gap: 6px;">
+            <button class="btn btn-clear-lines" id="btnResetPortfolio"
+              style="padding: 4px 10px; font-size: 11px; margin: 0; display: inline-flex; height: auto; gap: 6px;">
               <i class="fa-solid fa-rotate-left"></i> Reset Portfolio
             </button>
             <input type="file" id="csvFileInput" accept=".csv" style="display: none;">
@@ -346,7 +398,8 @@
         </div>
 
         <!-- Performance Summary Cards -->
-        <div class="analysis-cards-grid" style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); gap: 16px;">
+        <div class="analysis-cards-grid"
+          style="padding: 20px 24px; border-bottom: 1px solid var(--border-color); gap: 16px;">
           <div class="metric-card card-cyan" id="portMarketCard">
             <div class="metric-card-header">
               <span class="title">Portfolio Market Value</span>
@@ -356,7 +409,8 @@
             <div class="metric-subtext">Current market value of active assets</div>
           </div>
 
-          <div class="metric-card card-green" id="portCostCard" style="border-color: rgba(255, 255, 255, 0.05); background: rgba(255, 255, 255, 0.01);">
+          <div class="metric-card card-green" id="portCostCard"
+            style="border-color: rgba(255, 255, 255, 0.05); background: rgba(255, 255, 255, 0.01);">
             <div class="metric-card-header">
               <span class="title">Invested Capital</span>
               <i class="fa-solid fa-vault text-secondary" style="color: var(--text-secondary) !important;"></i>
@@ -393,18 +447,23 @@
         </div>
 
         <!-- Unrealized Performance Over Time -->
-        <div class="analysis-section" style="flex: 1.5; display: flex; flex-direction: column; overflow: hidden; min-height: 200px; padding: 12px 24px; border-bottom: 1px solid var(--border-color);">
+        <div class="analysis-section"
+          style="flex: 1.5; display: flex; flex-direction: column; overflow: hidden; min-height: 320px; padding: 12px 24px; border-bottom: 1px solid var(--border-color);">
           <div class="section-subtitle" style="margin-bottom: 8px;">Unrealized Performance Over Time</div>
-          <div style="position: relative; height: 150px; width: 100%;" id="performanceChartContainer">
-            <canvas id="portfolioPerformanceChart" style="width: 100%; height: 100%; visibility: hidden; opacity: 0; transition: opacity var(--transition-fast);"></canvas>
-            <div id="performanceEmptyMsg" class="empty-pill-msg" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; width: 100%; box-sizing: border-box;">No performance history available yet. Record transactions to plot history.</div>
+          <div style="position: relative; height: 260px; width: 100%;" id="performanceChartContainer">
+            <canvas id="portfolioPerformanceChart"
+              style="width: 100%; height: 100%; visibility: hidden; opacity: 0; transition: opacity var(--transition-fast);"></canvas>
+            <div id="performanceEmptyMsg" class="empty-pill-msg"
+              style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; width: 100%; box-sizing: border-box;">
+              No performance history available yet. Record transactions to plot history.</div>
           </div>
         </div>
 
         <!-- Active Holdings Table -->
-        <div class="analysis-section" style="flex: 2; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 10px;">
+        <div class="analysis-section"
+          style="flex: 2; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 10px; min-height: 300px;">
           <div class="section-subtitle">Active Assets Portfolio</div>
-          <div class="projection-table-wrapper" style="flex: 1; overflow-y: auto; max-height: 250px;">
+          <div class="projection-table-wrapper" style="flex: 1; overflow-y: auto; max-height: 400px;">
             <table class="projection-table" id="portfolioTable" style="margin: 0; width: 100%;">
               <thead>
                 <tr>
@@ -422,19 +481,23 @@
                 <!-- Holdings filled dynamically -->
               </tbody>
             </table>
-            <div class="empty-table-state" id="emptyPortfolioState" style="display: flex; padding: 40px 0; position: relative; background: transparent; pointer-events: auto;">
+            <div class="empty-table-state" id="emptyPortfolioState"
+              style="display: flex; padding: 40px 0; position: relative; background: transparent; pointer-events: auto;">
               <div class="empty-icon"><i class="fa-solid fa-briefcase"></i></div>
               <p class="empty-title">Your Portfolio is Empty</p>
-              <p class="empty-desc">Search for a ticker and record a BUY transaction in the left panel to build your portfolio holdings.</p>
+              <p class="empty-desc">Search for a ticker and record a BUY transaction in the left panel to build your
+                portfolio holdings.</p>
             </div>
           </div>
         </div>
 
         <!-- Transactions History log -->
-        <div class="analysis-section" style="flex: 1; display: flex; flex-direction: column; border-top: 1px solid var(--border-color); overflow: hidden; max-height: 200px;">
+        <div class="analysis-section"
+          style="flex: 1.2; display: flex; flex-direction: column; border-top: 1px solid var(--border-color); overflow: hidden; max-height: 350px; min-height: 250px;">
           <div class="section-subtitle">Transaction Audit Log</div>
           <div style="flex: 1; overflow-y: auto;" id="portfolioHistoryLog">
-            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;" id="portfolioLogList">
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;"
+              id="portfolioLogList">
               <li class="empty-pill-msg" style="text-align: center; padding-top: 15px;">No transactions recorded.</li>
             </ul>
           </div>
@@ -446,4 +509,5 @@
 
   <script src="app.js"></script>
 </body>
+
 </html>
