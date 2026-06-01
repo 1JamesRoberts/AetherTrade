@@ -106,9 +106,10 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
 if __name__ == '__main__':
-    # Pin working directory to script location
+    # Pin working directory to project root (parent directory of server/)
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
+    project_root = os.path.abspath(os.path.join(script_dir, '..'))
+    os.chdir(project_root)
     
     port = 8080
     print(f"Starting AetherTrade on Twelve Data at http://localhost:{port}...")
