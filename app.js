@@ -1591,7 +1591,7 @@ function updatePortfolioDashboard() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="font-weight: 800; font-family: var(--font-display); color: var(--cyan);">${ticker} <span style="font-size: 10px; color: var(--text-muted); font-weight: 400; display: block;">${metadata.name || ''}</span></td>
-        <td style="font-weight: 700;">${holding.shares}</td>
+        <td style="font-weight: 700;">${parseFloat(Number(holding.shares).toFixed(6))}</td>
         <td>${formatCurrency(holding.avgCost)}</td>
         <td style="font-weight: 700; color: #fff;">${formatCurrency(currentPrice)}</td>
         <td>${formatCurrency(totalCost)}</td>
@@ -1702,7 +1702,7 @@ function updatePortfolioDashboard() {
       barWrapper.innerHTML = `
         <div class="allocation-bar-header">
           <span class="allocation-bar-ticker">${ticker}</span>
-          <span style="font-size: 11px; color: var(--text-muted);">${holding.shares} shares @ ${formatCurrency(currentPrice)}</span>
+          <span style="font-size: 11px; color: var(--text-muted);">${parseFloat(Number(holding.shares).toFixed(6))} shares @ ${formatCurrency(currentPrice)}</span>
           <span class="allocation-bar-pct">${allocationPct.toFixed(1)}%</span>
         </div>
         <div class="allocation-bar-track">
@@ -1738,7 +1738,7 @@ function updatePortfolioDashboard() {
       li.innerHTML = `
         <div>
           <span class="type-badge ${tx.type.toLowerCase()}">${tx.type}</span>
-          <strong>${tx.shares} ${tx.ticker}</strong> @ ${formatCurrency(tx.price)}
+          <strong>${parseFloat(Number(tx.shares).toFixed(6))} ${tx.ticker}</strong> @ ${formatCurrency(tx.price)}
           <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px;">Value: ${formatCurrency(tx.shares * tx.price)}</span>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1988,7 +1988,7 @@ function renderPerformanceChart() {
         if (tx.timestamp <= D.getTime() + 86399999) {
           const ticker = tx.ticker;
           const txPrice = parseFloat(tx.price) || 0;
-          const txShares = parseInt(tx.shares) || 0;
+          const txShares = parseFloat(tx.shares) || 0;
 
           lastPriceOnDate[ticker] = txPrice;
 
@@ -2005,7 +2005,7 @@ function renderPerformanceChart() {
             if (holdingsOnDate[ticker]) {
               const h = holdingsOnDate[ticker];
               h.shares = Math.max(0, h.shares - txShares);
-              if (h.shares === 0) {
+              if (h.shares < 1e-9) {
                 delete holdingsOnDate[ticker];
               }
             }
@@ -2278,7 +2278,7 @@ function rebuildPortfolioFromTransactions() {
         newRealizedPL += txRealized;
 
         existing.shares = Math.max(0, existing.shares - tx.shares);
-        if (existing.shares === 0) {
+        if (existing.shares < 1e-9) {
           delete newHoldings[ticker];
         }
       }
@@ -2372,7 +2372,7 @@ async function fetchPortfolioStockHistory(ticker) {
 
 // Execute transaction
 function executeTransaction(ticker, type, shares, price, dateStr = '') {
-  shares = parseInt(shares);
+  shares = parseFloat(shares);
   price = parseFloat(price);
 
   if (!ticker) {
@@ -2391,7 +2391,7 @@ function executeTransaction(ticker, type, shares, price, dateStr = '') {
   // Pre-validate for sell sufficiency if we're selling
   if (type === 'SELL') {
     const holding = portfolioState.holdings[ticker];
-    if (!holding || holding.shares < shares) {
+    if (!holding || holding.shares + 1e-9 < shares) {
       alert(`Insufficient shares. You are attempting to sell ${shares} shares of ${ticker}, but you only own ${holding ? holding.shares : 0} shares.`);
       return false;
     }
@@ -2467,7 +2467,7 @@ function setupPortfolioSearch() {
     document.getElementById('txPrice').value = currentPrice.toFixed(2);
 
     // Calculate total est
-    const qty = parseInt(document.getElementById('txShares').value) || 10;
+    const qty = parseFloat(document.getElementById('txShares').value) || 10;
     document.getElementById('txTotalEst').innerText = formatCurrency(qty * currentPrice);
 
     // Show Stock Preview Info Card
@@ -2664,9 +2664,9 @@ function importTransactionsFromCSV(csvText) {
       }
 
       // 3. Parse Quantity
-      const shares = parseInt(qtyVal);
+      const shares = parseFloat(qtyVal);
       if (isNaN(shares) || shares <= 0) {
-        throw new Error(`Row ${rowNum}: Quantity of Units must be a positive integer. Found: "${qtyVal}"`);
+        throw new Error(`Row ${rowNum}: Quantity of Units must be a positive number. Found: "${qtyVal}"`);
       }
 
       // 4. Parse Price
@@ -2739,7 +2739,7 @@ function importTransactionsFromCSV(csvText) {
       } else {
         // SELL
         const currentShares = simulatedHoldings[ticker] || 0;
-        if (currentShares < tx.shares) {
+        if (currentShares + 1e-9 < tx.shares) {
           const dateStr = new Date(tx.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           alert(
             `CSV Import Aborted (Insufficiency Error):\n\n` +
@@ -2749,7 +2749,12 @@ function importTransactionsFromCSV(csvText) {
           );
           return;
         }
-        simulatedHoldings[ticker] = currentShares - tx.shares;
+        const newShares = currentShares - tx.shares;
+        if (newShares < 1e-9) {
+          delete simulatedHoldings[ticker];
+        } else {
+          simulatedHoldings[ticker] = newShares;
+        }
       }
     }
 
@@ -2834,7 +2839,7 @@ function setupPortfolioEventListeners() {
 
   if (txSharesInput && txPriceInput) {
     function recalculateEstimatedTxTotal() {
-      const qty = parseInt(txSharesInput.value) || 0;
+      const qty = parseFloat(txSharesInput.value) || 0;
       const price = parseFloat(txPriceInput.value) || 0;
       document.getElementById('txTotalEst').innerText = formatCurrency(qty * price);
     }
@@ -2850,7 +2855,7 @@ function setupPortfolioEventListeners() {
       const activeToggle = document.querySelector('.tx-toggle-btn.active');
       const type = activeToggle ? activeToggle.getAttribute('data-tx') : 'BUY';
       const ticker = portfolioState.selectedTicker;
-      const shares = parseInt(txSharesInput.value);
+      const shares = parseFloat(txSharesInput.value);
       const price = parseFloat(txPriceInput.value);
       const dateInput = document.getElementById('txDate');
       const dateStr = dateInput ? dateInput.value : '';
