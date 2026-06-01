@@ -1500,6 +1500,34 @@ function deleteCurrentPortfolio() {
   showNotification(`Deleted portfolio "${activeName}" successfully.`, "success");
 }
 
+// Rename the currently active portfolio
+function renameCurrentPortfolio(newName) {
+  if (!newName || newName.trim() === '') return;
+  const cleanName = newName.trim();
+
+  // Find currently active portfolio
+  const active = portfoliosList.find(p => p.id === activePortfolioId);
+  if (!active) return;
+
+  const oldName = active.name;
+
+  if (oldName === cleanName) return; // Name is unchanged
+
+  // Check if name already exists in another portfolio
+  if (portfoliosList.some(p => p.id !== activePortfolioId && p.name.toLowerCase() === cleanName.toLowerCase())) {
+    showNotification(`A portfolio named "${cleanName}" already exists!`, 'error');
+    return;
+  }
+
+  active.name = cleanName;
+  savePortfolioToStorage();
+
+  // Re-render UI
+  updatePortfolioSelectorDropdown();
+  updatePortfolioDashboard();
+  showNotification(`Renamed portfolio "${oldName}" to "${cleanName}" successfully!`, 'success');
+}
+
 // Populate the portfolio dropdown selector dynamically
 function updatePortfolioSelectorDropdown() {
   const selector = document.getElementById('portfolioSelector');
@@ -2681,6 +2709,19 @@ function setupPortfolioEventListeners() {
       const name = prompt("Enter a unique name for the new portfolio:");
       if (name !== null) {
         createNewPortfolio(name);
+      }
+    };
+  }
+
+  // Rename Portfolio Button Click Handler
+  const btnRenamePortfolio = document.getElementById('btnRenamePortfolio');
+  if (btnRenamePortfolio) {
+    btnRenamePortfolio.onclick = () => {
+      const active = portfoliosList.find(p => p.id === activePortfolioId);
+      const activeName = active ? active.name : '';
+      const name = prompt("Enter a new name for the portfolio:", activeName);
+      if (name !== null) {
+        renameCurrentPortfolio(name);
       }
     };
   }
