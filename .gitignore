@@ -1,0 +1,12 @@
+# Antigravity CLI local workspace cache and logs
+.antigravitycli/
+.gemini/
+
+# macOS system files
+.DS_Store
+
+# Python temporary files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
