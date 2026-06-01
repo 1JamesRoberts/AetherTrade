@@ -90,6 +90,9 @@
       <section class="panel panel-center" aria-label="Interactive Charting Terminal">
         <div class="chart-header">
           <div class="stock-info-block">
+            <button class="btn-refresh" id="btnRefreshStock" title="Refresh stock price" aria-label="Refresh stock price">
+              <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
             <div class="stock-badge" id="activeTicker">AAPL</div>
             <div class="stock-details">
               <h1 class="stock-name" id="activeName">Apple Inc.</h1>
@@ -478,7 +481,12 @@
         <!-- Active Holdings Table -->
         <div class="analysis-section"
           style="flex: 2; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 10px; min-height: 300px;">
-          <div class="section-subtitle">Active Assets Portfolio</div>
+          <div class="section-subtitle" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <span>Active Assets Portfolio</span>
+            <button class="btn-refresh" id="btnRefreshPortfolioStock" title="Refresh portfolio stock prices" aria-label="Refresh portfolio stock prices" style="width: 24px; height: 24px; font-size: 11px;">
+              <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+          </div>
           <div class="projection-table-wrapper" style="flex: 1; overflow-y: auto; max-height: 400px;">
             <table class="projection-table" id="portfolioTable" style="margin: 0; width: 100%;">
               <thead>
@@ -523,7 +531,7 @@
 
   </main>
 
-  <script src="assets/js/app.js"></script>
+  <script type="module" src="assets/js/app.js"></script>
 </body>
 
 </html>

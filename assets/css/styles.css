@@ -674,6 +674,34 @@ body {
   transition: var(--transition-fast);
 }
 
+.btn-refresh {
+  font-family: var(--font-body);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  color: var(--cyan);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  transition: all var(--transition-fast) ease;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.05);
+}
+
+.btn-refresh:hover {
+  background: rgba(0, 240, 255, 0.18);
+  border-color: var(--cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-refresh:active {
+  transform: translateY(0) scale(0.95);
+}
+
 .btn-clear-lines {
   background: rgba(244, 63, 94, 0.05);
   border-color: rgba(244, 63, 94, 0.2);
