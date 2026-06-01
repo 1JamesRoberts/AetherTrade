@@ -1891,10 +1891,10 @@ function renderPerformanceChart() {
     canvas.style.opacity = 1;
     emptyMsg.style.display = 'none';
 
-    // Find the earliest BUY transaction for any currently active ticker
+    // Find the earliest BUY transaction across all transactions in the portfolio to mark inception
     let earliestActiveTimestamp = Infinity;
     txs.forEach(tx => {
-      if (tx.type === 'BUY' && activeTickers.includes(tx.ticker)) {
+      if (tx.type === 'BUY') {
         if (tx.timestamp < earliestActiveTimestamp) {
           earliestActiveTimestamp = tx.timestamp;
         }
@@ -1944,7 +1944,13 @@ function renderPerformanceChart() {
     // Helper to get historical closing price of a stock on a specific date from cache
     function getPriceOnDate(ticker, targetDate, fallbackPrice) {
       const stock = state.stocks[ticker];
-      if (stock && stock.liveCloses && stock.liveCloses.length > 0) {
+      if (!stock) return fallbackPrice;
+
+      // Use the dedicated long-term portfolioHistory if available
+      const closes = stock.portfolioHistory || stock.liveCloses || [];
+      const labels = stock.portfolioLabels || stock.liveLabels || [];
+
+      if (closes.length > 0) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -1952,13 +1958,13 @@ function renderPerformanceChart() {
         compareDate.setHours(0, 0, 0, 0);
 
         if (compareDate.getTime() === today.getTime()) {
-          return parseFloat(stock.price) || parseFloat(stock.liveCloses[stock.liveCloses.length - 1]) || fallbackPrice;
+          return parseFloat(stock.price) || parseFloat(closes[closes.length - 1]) || fallbackPrice;
         }
 
-        // Try exact match in labels first (works for real Twelve Data dates)
-        if (stock.liveLabels && stock.liveLabels.length === stock.liveCloses.length) {
+        // Try exact match in labels first
+        if (labels.length === closes.length) {
           let exactIndex = -1;
-          stock.liveLabels.forEach((label, idx) => {
+          labels.forEach((label, idx) => {
             const labelDate = new Date(label);
             if (!isNaN(labelDate.getTime())) {
               labelDate.setHours(0, 0, 0, 0);
@@ -1968,7 +1974,7 @@ function renderPerformanceChart() {
             }
           });
           if (exactIndex !== -1) {
-            return parseFloat(stock.liveCloses[exactIndex]) || fallbackPrice;
+            return parseFloat(closes[exactIndex]) || fallbackPrice;
           }
         }
 
@@ -1976,15 +1982,16 @@ function renderPerformanceChart() {
         const msDiff = today.getTime() - compareDate.getTime();
         const daysDiff = Math.max(0, Math.floor(msDiff / (24 * 60 * 60 * 1000)));
 
-        // Adjust calendar days to trading days index: 5 trading days out of 7 calendar days
-        const tradingDaysDiff = Math.floor(daysDiff * 5 / 7);
-        const index = stock.liveCloses.length - 1 - tradingDaysDiff;
+        // If we are using the weekly series ('Y'), each index is 7 calendar days apart!
+        const isWeekly = (closes === stock.portfolioHistory) || (state.selectedTimeframe === 'Y' && closes === stock.liveCloses);
+        const indexDiff = isWeekly ? Math.floor(daysDiff / 7) : Math.floor(daysDiff * 5 / 7);
+        const index = closes.length - 1 - indexDiff;
 
-        if (index >= 0 && index < stock.liveCloses.length) {
-          return parseFloat(stock.liveCloses[index]) || fallbackPrice;
+        if (index >= 0 && index < closes.length) {
+          return parseFloat(closes[index]) || fallbackPrice;
         } else if (index < 0) {
           // If the date is older than our loaded history, return the oldest available historical price
-          return parseFloat(stock.liveCloses[0]) || fallbackPrice;
+          return parseFloat(closes[0]) || fallbackPrice;
         }
       }
       return fallbackPrice;
@@ -2309,8 +2316,8 @@ function loadPortfolioHistory() {
   const tickersInPortfolio = [...new Set(portfolioState.transactions.map(tx => tx.ticker))];
 
   tickersInPortfolio.forEach(ticker => {
-    // If we already have the history loaded, skip!
-    if (state.stocks[ticker] && state.stocks[ticker].liveCloses && state.stocks[ticker].liveCloses.length > 0) {
+    // If we already have the portfolioHistory loaded, skip!
+    if (state.stocks[ticker] && state.stocks[ticker].portfolioHistory && state.stocks[ticker].portfolioHistory.length > 0) {
       return;
     }
 
@@ -2321,7 +2328,7 @@ function loadPortfolioHistory() {
 
 async function fetchPortfolioStockHistory(ticker) {
   try {
-    const response = await fetch(`/api/stock?ticker=${ticker}&timeframe=M`);
+    const response = await fetch(`/api/stock?ticker=${ticker}&timeframe=Y`);
     if (!response.ok) throw new Error("Server error");
     const json = await response.json();
     if (json.status !== 'ok') throw new Error(json.message || "Twelve Data error");
@@ -2335,17 +2342,18 @@ async function fetchPortfolioStockHistory(ticker) {
     values.forEach(v => {
       closes.push(parseFloat(v.close));
       const parts = v.datetime.split(' ');
-      const dateObj = new Date(parts[0] + 'T00:00:00');
-      labels.push(dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+      labels.push(parts[0]); // Raw "YYYY-MM-DD"
     });
 
     if (!state.stocks[ticker]) {
       state.stocks[ticker] = {};
     }
     state.stocks[ticker].ticker = ticker;
-    state.stocks[ticker].price = parseFloat(values[values.length - 1].close);
-    state.stocks[ticker].liveCloses = closes;
-    state.stocks[ticker].liveLabels = labels;
+    if (!state.stocks[ticker].price) {
+      state.stocks[ticker].price = parseFloat(values[values.length - 1].close);
+    }
+    state.stocks[ticker].portfolioHistory = closes;
+    state.stocks[ticker].portfolioLabels = labels;
     state.stocks[ticker].isLive = true;
 
     saveCachedStocks();
@@ -2362,7 +2370,9 @@ async function fetchPortfolioStockHistory(ticker) {
     const basePrice = STOCKS_METADATA.find(s => s.ticker === ticker)?.price || 150.00;
     state.stocks[ticker].ticker = ticker;
     state.stocks[ticker].name = state.stocks[ticker].name || (ticker + ' Stock');
-    state.stocks[ticker].price = basePrice;
+    if (!state.stocks[ticker].price) {
+      state.stocks[ticker].price = basePrice;
+    }
 
     if (!state.stocks[ticker].history) {
       state.stocks[ticker].history = {
@@ -2373,8 +2383,20 @@ async function fetchPortfolioStockHistory(ticker) {
       };
     }
 
-    state.stocks[ticker].liveCloses = state.stocks[ticker].history['M'];
-    state.stocks[ticker].liveLabels = getTimeframeLabels('M');
+    // Generate mock portfolioLabels spanning the last 52 weeks
+    const mockCloses = state.stocks[ticker].history['Y'];
+    const mockLabels = [];
+    const today = new Date();
+    for (let i = 0; i < 52; i++) {
+      const d = new Date(today.getTime() - (52 - 1 - i) * 7 * 24 * 60 * 60 * 1000);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      mockLabels.push(`${yyyy}-${mm}-${dd}`);
+    }
+
+    state.stocks[ticker].portfolioHistory = mockCloses;
+    state.stocks[ticker].portfolioLabels = mockLabels;
     state.stocks[ticker].isLive = true;
 
     saveCachedStocks();
