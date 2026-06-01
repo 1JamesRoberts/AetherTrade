@@ -1564,8 +1564,20 @@ function updatePortfolioDashboard() {
   let totalAssetValue = 0;
   let totalCostBasis = 0;
 
-  // Render Active Holdings rows
-  const holdingTickers = Object.keys(portfolioState.holdings);
+  // Render Active Holdings rows sorted in descending order of current market value
+  const holdingTickers = Object.keys(portfolioState.holdings).sort((a, b) => {
+    const holdingA = portfolioState.holdings[a];
+    const metadataA = state.stocks[a] || STOCKS_METADATA.find(s => s.ticker === a) || { price: holdingA.avgCost };
+    const currentPriceA = metadataA.price || holdingA.avgCost;
+    const marketValueA = holdingA.shares * currentPriceA;
+
+    const holdingB = portfolioState.holdings[b];
+    const metadataB = state.stocks[b] || STOCKS_METADATA.find(s => s.ticker === b) || { price: holdingB.avgCost };
+    const currentPriceB = metadataB.price || holdingB.avgCost;
+    const marketValueB = holdingB.shares * currentPriceB;
+
+    return marketValueB - marketValueA;
+  });
 
   if (holdingTickers.length === 0) {
     emptyState.style.display = 'flex';
