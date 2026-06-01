@@ -550,8 +550,20 @@ function setupPortfolioSearch() {
           <span class="name">Add custom symbol</span>
         </div>
       `;
-      div.onclick = () => {
+      div.onclick = async () => {
         const customTicker = val.toUpperCase();
+        
+        // Put in loading text
+        searchInput.value = `Fetching ${customTicker}...`;
+        searchInput.disabled = true;
+        
+        try {
+          await fetchStockPriceInBackground(customTicker);
+        } catch (e) {
+          console.warn("Failed custom background price load", e);
+        }
+        
+        // Fallback if price fetch failed or symbol is invalid
         if (!state.stocks[customTicker]) {
           state.stocks[customTicker] = {
             ticker: customTicker,
@@ -561,6 +573,8 @@ function setupPortfolioSearch() {
             trend: 'up'
           };
         }
+        
+        searchInput.disabled = false;
         selectStockForTransaction(customTicker);
       };
       dropdown.appendChild(div);
@@ -578,8 +592,39 @@ function setupPortfolioSearch() {
         </div>
         <span class="price">${formatCurrency(stock.price)}</span>
       `;
-      div.onclick = () => {
-        selectStockForTransaction(stock.ticker);
+      div.onclick = async () => {
+        const ticker = stock.ticker;
+        // Select it immediately with current cached price
+        selectStockForTransaction(ticker);
+        
+        // Fetch latest price dynamically in the background
+        try {
+          await fetchStockPriceInBackground(ticker);
+          // If the user hasn't switched away, update the price input and previews!
+          if (portfolioState.selectedTicker === ticker) {
+            const updatedStock = state.stocks[ticker];
+            if (updatedStock && updatedStock.price) {
+              const txPriceInput = document.getElementById('txPrice');
+              if (txPriceInput) txPriceInput.value = updatedStock.price.toFixed(2);
+              
+              const qty = parseFloat(document.getElementById('txShares').value) || 10;
+              const txTotalEst = document.getElementById('txTotalEst');
+              if (txTotalEst) txTotalEst.innerText = formatCurrency(qty * updatedStock.price);
+              
+              const priceEl = document.getElementById('previewPrice');
+              if (priceEl) priceEl.innerText = formatCurrency(updatedStock.price);
+              
+              const changeEl = document.getElementById('previewChange');
+              if (changeEl) {
+                const changeVal = updatedStock.change || 0;
+                changeEl.innerText = `${changeVal >= 0 ? '+' : ''}${changeVal.toFixed(2)}%`;
+                changeEl.className = changeVal >= 0 ? 'text-green' : 'text-red';
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Failed dynamically updating selected ticker price", e);
+        }
       };
       dropdown.appendChild(div);
     });
