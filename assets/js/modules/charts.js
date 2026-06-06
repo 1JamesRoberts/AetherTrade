@@ -51,7 +51,7 @@ const horizontalLinesPlugin = {
     // Draw Current Price Level (Reference line)
     const currentPriceY = y.getPixelForValue(currentPrice);
     if (currentPriceY >= top && currentPriceY <= bottom) {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
 
@@ -61,11 +61,11 @@ const horizontalLinesPlugin = {
       ctx.stroke();
 
       // Current Price Label Background (outside to the right of the chart area)
-      ctx.fillStyle = 'rgba(10, 15, 30, 0.85)';
+      ctx.fillStyle = 'rgba(6, 9, 18, 0.9)';
       ctx.fillRect(right + 5, currentPriceY - 10, 75, 20);
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.87)';
-      ctx.font = '700 10px var(--font-display)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = '700 10px var(--font-mono)';
       ctx.fillText(`NOW: $${currentPrice.toFixed(2)}`, right + 10, currentPriceY + 4);
     }
 
@@ -74,7 +74,7 @@ const horizontalLinesPlugin = {
       const lineY = y.getPixelForValue(linePrice);
       if (lineY >= top && lineY <= bottom) {
         const isResistance = linePrice > currentPrice;
-        ctx.strokeStyle = isResistance ? '#f43f5e' : '#10b981';
+        ctx.strokeStyle = isResistance ? '#ff1744' : '#00e676';
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
 
@@ -84,9 +84,9 @@ const horizontalLinesPlugin = {
         ctx.stroke();
 
         // Level Tag Badge Background
-        ctx.fillStyle = isResistance ? '#f43f5e' : '#10b981';
+        ctx.fillStyle = isResistance ? '#ff1744' : '#00e676';
         const labelText = `${isResistance ? 'RES' : 'SUP'} $${linePrice.toFixed(2)}`;
-        ctx.font = '700 11px var(--font-display)';
+        ctx.font = '700 11px var(--font-mono)';
         const textWidth = ctx.measureText(labelText).width;
 
         ctx.beginPath();
@@ -105,7 +105,7 @@ const horizontalLinesPlugin = {
       if (hoverY >= top && hoverY <= bottom) {
         const isHoverResistance = state.hoverPrice > currentPrice;
 
-        ctx.strokeStyle = isHoverResistance ? 'rgba(244, 63, 94, 0.4)' : 'rgba(16, 185, 129, 0.4)';
+        ctx.strokeStyle = isHoverResistance ? 'rgba(255, 23, 68, 0.45)' : 'rgba(0, 230, 118, 0.45)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
 
@@ -115,9 +115,9 @@ const horizontalLinesPlugin = {
         ctx.stroke();
 
         // Draw cursor target preview tag
-        ctx.fillStyle = isHoverResistance ? 'rgba(244, 63, 94, 0.9)' : 'rgba(16, 185, 129, 0.9)';
+        ctx.fillStyle = isHoverResistance ? 'rgba(255, 23, 68, 0.9)' : 'rgba(0, 230, 118, 0.9)';
         const guideText = `Click to add ${isHoverResistance ? 'Resistance' : 'Support'} at $${state.hoverPrice.toFixed(2)}`;
-        ctx.font = '600 10px var(--font-body)';
+        ctx.font = '600 10px var(--font-mono)';
         const textWidth = ctx.measureText(guideText).width;
 
         ctx.beginPath();
@@ -159,7 +159,7 @@ const candlestickWicksPlugin = {
       const open = parseFloat(raw.open);
 
       const isBullish = close >= open;
-      ctx.strokeStyle = isBullish ? '#10b981' : '#f43f5e';
+      ctx.strokeStyle = isBullish ? '#00e676' : '#ff1744';
       ctx.lineWidth = 1.5;
 
       const highY = y.getPixelForValue(high);
@@ -241,8 +241,8 @@ export function renderStockChartDirect() {
   const yMinBound = Math.max(0, parseFloat((minVal - marginPadding).toFixed(2)));
   const yMaxBound = parseFloat((maxVal + marginPadding).toFixed(2));
 
-  const color = activeStock.change >= 0 ? '#10b981' : '#f43f5e';
-  const glow = activeStock.change >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)';
+  const color = activeStock.change >= 0 ? '#00e676' : '#ff1744';
+  const glow = activeStock.change >= 0 ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 23, 68, 0.12)';
 
   let datasetConfig = {};
   let chartType = 'line';
@@ -256,8 +256,8 @@ export function renderStockChartDirect() {
         Math.min(parseFloat(v.open), parseFloat(v.close)),
         Math.max(parseFloat(v.open), parseFloat(v.close))
       ]),
-      backgroundColor: rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? 'rgba(16, 185, 129, 0.75)' : 'rgba(244, 63, 94, 0.75)'),
-      borderColor: rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? '#10b981' : '#f43f5e'),
+      backgroundColor: rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? 'rgba(0, 230, 118, 0.75)' : 'rgba(255, 23, 68, 0.75)'),
+      borderColor: rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? '#00e676' : '#ff1744'),
       borderWidth: 1.5,
       borderSkipped: false,
       barPercentage: 0.65
@@ -266,7 +266,7 @@ export function renderStockChartDirect() {
     chartType = 'line';
     const gradient = ctx.createLinearGradient(0, 0, 0, 400);
     gradient.addColorStop(0, glow);
-    gradient.addColorStop(1, 'rgba(6, 9, 19, 0)');
+    gradient.addColorStop(1, 'rgba(2, 4, 10, 0)');
 
     datasetConfig = {
       label: activeStock.ticker,
@@ -313,10 +313,10 @@ export function renderStockChartDirect() {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#0d1426',
+            backgroundColor: '#060912',
             titleFont: { family: 'Outfit', size: 12, weight: '700' },
-            bodyFont: { family: 'Plus Jakarta Sans', size: 12 },
-            borderColor: 'rgba(255,255,255,0.08)',
+            bodyFont: { family: 'JetBrains Mono', size: 11 },
+            borderColor: 'rgba(255,255,255,0.06)',
             borderWidth: 1,
             padding: 10,
             displayColors: false,
@@ -343,19 +343,19 @@ export function renderStockChartDirect() {
           x: {
             grid: { display: false },
             ticks: {
-              color: '#b6bfd0ff',
-              font: { family: 'Plus Jakarta Sans', size: 12 },
+              color: '#94a3b8',
+              font: { family: 'Plus Jakarta Sans', size: 11, weight: '500' },
               maxTicksLimit: 8
             }
           },
           y: {
             position: 'right',
             grid: {
-              color: 'rgba(255, 255, 255, 0.03)'
+              color: 'rgba(255, 255, 255, 0.02)'
             },
             ticks: {
-              color: '#b6bfd0ff',
-              font: { family: 'Outfit', size: 13 },
+              color: '#94a3b8',
+              font: { family: 'JetBrains Mono', size: 11, weight: '500' },
               callback: function (value) {
                 return '$' + value;
               }
@@ -453,7 +453,7 @@ export function renderAllocationChart(holdingTickers, totalAssetValue) {
       datasets: [{
         data: data,
         backgroundColor: baseColors.slice(0, labels.length),
-        borderColor: 'rgba(6, 9, 19, 0.8)', // Deep dark border matching background
+        borderColor: 'rgba(2, 4, 10, 0.85)', // Deep dark border matching background
         borderWidth: 2,
         hoverOffset: 4
       }]
@@ -466,13 +466,13 @@ export function renderAllocationChart(holdingTickers, totalAssetValue) {
           display: false // Muted legend, progress bars are used instead!
         },
         tooltip: {
-          backgroundColor: 'rgba(13, 20, 38, 0.95)',
-          titleColor: '#00f0ff',
+          backgroundColor: '#060912',
+          titleColor: '#00e5ff',
           bodyColor: '#fff',
-          borderColor: 'rgba(0, 240, 255, 0.2)',
+          borderColor: 'rgba(255, 255, 255, 0.06)',
           borderWidth: 1,
           titleFont: { family: 'Outfit', weight: '700', size: 12 },
-          bodyFont: { family: 'Outfit', size: 11 },
+          bodyFont: { family: 'JetBrains Mono', size: 11 },
           padding: 8,
           cornerRadius: 6,
           displayColors: false,
@@ -711,8 +711,8 @@ export function renderPerformanceChart() {
 
     // Custom glowing line gradient
     const gradient = ctx.createLinearGradient(0, 0, 0, 150);
-    gradient.addColorStop(0, 'rgba(0, 240, 255, 0.2)');
-    gradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+    gradient.addColorStop(0, 'rgba(0, 229, 255, 0.15)');
+    gradient.addColorStop(1, 'rgba(2, 4, 10, 0)');
 
     portfolioPerformanceChartInstance = new Chart(ctx, {
       type: 'line',
@@ -721,14 +721,14 @@ export function renderPerformanceChart() {
         datasets: [{
           label: 'Unrealized P&L',
           data: data,
-          borderColor: '#00f0ff',
+          borderColor: '#00e5ff',
           borderWidth: 2,
-          pointBackgroundColor: '#00f0ff',
-          pointBorderColor: 'rgba(6, 9, 19, 0.8)',
+          pointBackgroundColor: '#00e5ff',
+          pointBorderColor: 'rgba(2, 4, 10, 0.85)',
           pointBorderWidth: 1.5,
           pointRadius: 0, // Invisible by default
           pointHoverRadius: 8, // Prominent hover dot
-          pointHoverBackgroundColor: '#00f0ff',
+          pointHoverBackgroundColor: '#00e5ff',
           pointHoverBorderColor: '#fff', // White glow border on hover
           pointHoverBorderWidth: 2.5, // Thick hover border
           pointHitRadius: 10, // Easily trigger hover dot visibility
@@ -757,8 +757,8 @@ export function renderPerformanceChart() {
               drawBorder: false
             },
             ticks: {
-              color: 'rgba(255, 255, 255, 0.4)',
-              font: { family: 'Outfit', size: 9 },
+              color: '#94a3b8',
+              font: { family: 'Plus Jakarta Sans', size: 9, weight: '500' },
               maxRotation: 0,
               autoSkip: true,
               maxTicksLimit: 5
@@ -770,9 +770,9 @@ export function renderPerformanceChart() {
             grid: {
               color: function (context) {
                 if (context.tick && context.tick.value === 0) {
-                  return 'rgba(0, 240, 255, 0.4)'; // Cyan zero baseline
+                  return 'rgba(0, 229, 255, 0.35)'; // Cyan zero baseline
                 }
-                return 'rgba(255, 255, 255, 0.05)';
+                return 'rgba(255, 255, 255, 0.02)';
               },
               borderDash: function (context) {
                 if (context.tick && context.tick.value === 0) {
@@ -783,8 +783,8 @@ export function renderPerformanceChart() {
               drawBorder: false
             },
             ticks: {
-              color: 'rgba(255, 255, 255, 0.5)',
-              font: { family: 'Outfit', size: 10 },
+              color: '#94a3b8',
+              font: { family: 'JetBrains Mono', size: 9, weight: '500' },
               callback: function (value) {
                 if (value >= 0) {
                   return '+$' + value.toLocaleString();
@@ -800,13 +800,13 @@ export function renderPerformanceChart() {
             display: false
           },
           tooltip: {
-            backgroundColor: 'rgba(13, 20, 38, 0.95)',
-            titleColor: '#00f0ff',
+            backgroundColor: '#060912',
+            titleColor: '#00e5ff',
             bodyColor: '#fff',
-            borderColor: 'rgba(0, 240, 255, 0.2)',
+            borderColor: 'rgba(255, 255, 255, 0.06)',
             borderWidth: 1,
             titleFont: { family: 'Outfit', weight: '700', size: 11 },
-            bodyFont: { family: 'Outfit', size: 11 },
+            bodyFont: { family: 'JetBrains Mono', size: 11 },
             padding: 8,
             cornerRadius: 6,
             displayColors: false,
