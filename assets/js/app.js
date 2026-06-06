@@ -334,36 +334,6 @@ function renderCalculationsTable(supports, resistances) {
   table.appendChild(tbody);
 }
 
-function renderTickerTape() {
-  const tape = document.getElementById('tickerTape');
-  if (!tape) return;
-  tape.innerHTML = '';
-
-  const tapeData = [...STOCKS_METADATA, ...STOCKS_METADATA];
-
-  tapeData.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'ticker-item';
-    const isUp = item.change >= 0;
-
-    div.innerHTML = `
-      <span class="ticker-name">${item.ticker}</span>
-      <span class="ticker-price">$${item.price.toFixed(2)}</span>
-      <span class="ticker-change ${isUp ? 'up' : 'down'}">
-        ${isUp ? '▲' : '▼'} ${Math.abs(item.change)}%
-      </span>
-    `;
-
-    div.onclick = () => {
-      state.activeTicker = item.ticker;
-      renderStockList('');
-      loadStockDataAndRender(item.ticker);
-    };
-
-    tape.appendChild(div);
-  });
-}
-
 // --------------------------------------------------------------------------
 // Workspace Interconnectivity Binders and Watchlist Removers
 // --------------------------------------------------------------------------
@@ -940,7 +910,6 @@ window.addEventListener('DOMContentLoaded', () => {
   seedMockDatabase();
   loadCachedStocks(); // Overwrite mock seeds with cached live records!
   loadSupportResistanceLines(); // Restore all cached Support & Resistance lines!
-  renderTickerTape();
   renderStockList();
   setupCoreEventListeners();
 

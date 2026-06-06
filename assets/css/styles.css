@@ -198,55 +198,7 @@ body {
   margin-left: 2px;
 }
 
-/* Ticker Tape */
-.ticker-tape {
-  flex: 1;
-  margin: 0 40px;
-  overflow: hidden;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 30px;
-  position: relative;
-  mask-image: linear-gradient(to right, transparent, white 10%, white 90%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, white 10%, white 90%, transparent);
-}
 
-.ticker-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: var(--transition-fast);
-}
-
-.ticker-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-  transform: translateY(-1px);
-}
-
-.ticker-name {
-  color: var(--text-primary);
-}
-
-.ticker-price {
-  color: #fff;
-}
-
-.ticker-change {
-  font-size: 11px;
-}
-
-.ticker-change.up { color: var(--bullish); }
-.ticker-change.down { color: var(--bearish); }
 
 /* Capital Input Header Element */
 .capital-input-wrapper {
