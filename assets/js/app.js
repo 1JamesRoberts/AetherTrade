@@ -42,7 +42,8 @@ import {
   createNewPortfolio,
   renameCurrentPortfolio,
   deleteCurrentPortfolio,
-  executeTransaction
+  executeTransaction,
+  setupPortfolioSorting
 } from './modules/portfolio.js';
 
 import {
@@ -909,6 +910,7 @@ function initPortfolio() {
   updatePortfolioSelectorDropdown(); // Populate dropdown selector!
   setupPortfolioSearch();
   setupPortfolioEventListeners();
+  setupPortfolioSorting();
 
   // Default date input to local today's date YYYY-MM-DD
   const dateInput = document.getElementById('txDate');

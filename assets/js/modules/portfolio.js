@@ -109,6 +109,26 @@ export function rebuildSpecificPortfolio(port) {
   port.realizedPL = newRealizedPL;
 }
 
+// State for holdings table sorting
+let sortColumn = 'marketValue';
+let sortDirection = 'desc';
+
+export function setupPortfolioSorting() {
+  const headers = document.querySelectorAll('#portfolioTable th.sortable');
+  headers.forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.getAttribute('data-sort');
+      if (sortColumn === col) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = col;
+        sortDirection = col === 'asset' ? 'asc' : 'desc';
+      }
+      updatePortfolioDashboard();
+    });
+  });
+}
+
 // Calculate unrealized gain/loss and details for each holding, then update UI
 export function updatePortfolioDashboard() {
   const tableBody = document.getElementById('portfolioTableBody');
@@ -118,6 +138,24 @@ export function updatePortfolioDashboard() {
 
   if (!tableBody || !allocationContainer || !logList) return;
 
+  // Update table header icons to match sorting state
+  const headerElements = document.querySelectorAll('#portfolioTable th.sortable');
+  headerElements.forEach(th => {
+    const col = th.getAttribute('data-sort');
+    const icon = th.querySelector('i');
+    if (col === sortColumn) {
+      th.classList.add('active-sort');
+      if (icon) {
+        icon.className = sortDirection === 'asc' ? 'fa-solid fa-sort-up' : 'fa-solid fa-sort-down';
+      }
+    } else {
+      th.classList.remove('active-sort');
+      if (icon) {
+        icon.className = 'fa-solid fa-sort';
+      }
+    }
+  });
+
   tableBody.innerHTML = '';
   allocationContainer.innerHTML = '';
   logList.innerHTML = '';
@@ -125,19 +163,68 @@ export function updatePortfolioDashboard() {
   let totalAssetValue = 0;
   let totalCostBasis = 0;
 
-  // Render Active Holdings rows sorted in descending order of current market value
+  // Render Active Holdings rows sorted by selected column and direction
   const holdingTickers = Object.keys(portfolioState.holdings).sort((a, b) => {
     const holdingA = portfolioState.holdings[a];
     const metadataA = state.stocks[a] || STOCKS_METADATA.find(s => s.ticker === a) || { price: holdingA.avgCost };
     const currentPriceA = metadataA.price || holdingA.avgCost;
+    const totalCostA = (holdingA.shares * holdingA.avgCost) + (holdingA.totalFees || 0);
     const marketValueA = holdingA.shares * currentPriceA;
+    const pnlValA = marketValueA - totalCostA;
 
     const holdingB = portfolioState.holdings[b];
     const metadataB = state.stocks[b] || STOCKS_METADATA.find(s => s.ticker === b) || { price: holdingB.avgCost };
     const currentPriceB = metadataB.price || holdingB.avgCost;
+    const totalCostB = (holdingB.shares * holdingB.avgCost) + (holdingB.totalFees || 0);
     const marketValueB = holdingB.shares * currentPriceB;
+    const pnlValB = marketValueB - totalCostB;
 
-    return marketValueB - marketValueA;
+    let valA, valB;
+    switch (sortColumn) {
+      case 'asset':
+        valA = a;
+        valB = b;
+        break;
+      case 'shares':
+        valA = holdingA.shares;
+        valB = holdingB.shares;
+        break;
+      case 'avgCost':
+        valA = holdingA.avgCost;
+        valB = holdingB.avgCost;
+        break;
+      case 'marketPrice':
+        valA = currentPriceA;
+        valB = currentPriceB;
+        break;
+      case 'totalCost':
+        valA = totalCostA;
+        valB = totalCostB;
+        break;
+      case 'marketValue':
+        valA = marketValueA;
+        valB = marketValueB;
+        break;
+      case 'unrealized':
+        valA = pnlValA;
+        valB = pnlValB;
+        break;
+      default:
+        valA = marketValueA;
+        valB = marketValueB;
+    }
+
+    if (valA === valB) return 0;
+    
+    if (typeof valA === 'string') {
+      return sortDirection === 'asc' 
+        ? valA.localeCompare(valB) 
+        : valB.localeCompare(valA);
+    } else {
+      return sortDirection === 'asc' 
+        ? valA - valB 
+        : valB - valA;
+    }
   });
 
   if (holdingTickers.length === 0) {

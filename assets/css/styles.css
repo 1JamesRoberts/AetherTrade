@@ -1000,6 +1000,37 @@ body {
   white-space: nowrap;
 }
 
+.projection-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition-fast) ease;
+}
+
+.projection-table th.sortable:hover {
+  background: rgba(0, 240, 255, 0.05);
+  color: #fff;
+}
+
+.projection-table th.sortable i {
+  margin-left: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.projection-table th.sortable:hover i {
+  color: var(--cyan);
+}
+
+.projection-table th.sortable.active-sort {
+  color: var(--cyan);
+}
+
+.projection-table th.sortable.active-sort i {
+  color: var(--cyan);
+}
+
+
 .projection-table td {
   padding: 8px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
