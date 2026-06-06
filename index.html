@@ -90,7 +90,8 @@
       <section class="panel panel-center" aria-label="Interactive Charting Terminal">
         <div class="chart-header">
           <div class="stock-info-block">
-            <button class="btn-refresh" id="btnRefreshStock" title="Refresh stock price" aria-label="Refresh stock price">
+            <button class="btn-refresh" id="btnRefreshStock" title="Refresh stock price"
+              aria-label="Refresh stock price">
               <i class="fa-solid fa-arrows-rotate"></i>
             </button>
             <div class="stock-badge" id="activeTicker">AAPL</div>
@@ -232,7 +233,8 @@
               <div class="empty-icon"><i class="fa-solid fa-cubes"></i></div>
               <p class="empty-title">Formulate a Strategy</p>
               <p class="empty-desc">Create at least one <strong>Support</strong> (below current price) and one
-                <strong>Resistance</strong> (above current price) line to project potential trade returns.</p>
+                <strong>Resistance</strong> (above current price) line to project potential trade returns.
+              </p>
             </div>
           </div>
         </div>
@@ -242,7 +244,8 @@
     <!-- View 2: Portfolio Manager -->
     <div id="viewPortfolio" class="workspace-view">
       <!-- Left Panel: Transaction Manager & Asset Allocation -->
-      <section class="panel panel-portfolio-left" aria-label="Portfolio Allocations" style="height: 100%; overflow-y: auto;">
+      <section class="panel panel-portfolio-left" aria-label="Portfolio Allocations"
+        style="height: 100%; overflow-y: auto;">
         <div class="panel-header"
           style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
           <h2 class="panel-title" style="margin: 0;"><i class="fa-solid fa-briefcase"></i> Portfolio Manager</h2>
@@ -348,13 +351,15 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div style="display: flex; flex-direction: column; gap: 6px;">
                 <label for="txFees"
-                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Trading Fees</label>
+                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Trading
+                  Fees</label>
                 <input type="number" id="txFees" min="0" step="0.01" value="0.00"
                   style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
               </div>
               <div style="display: flex; flex-direction: column; gap: 6px;">
                 <label for="txAccount"
-                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Investment Account</label>
+                  style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Investment
+                  Account</label>
                 <input type="text" id="txAccount" placeholder="e.g. Roth IRA, Taxable" value="Primary Portfolio"
                   style="background: rgba(10, 15, 30, 0.4); border: 1px solid var(--border-color); color: #fff; padding: 8px 12px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; outline: none; transition: var(--transition-fast); width: 100%; box-sizing: border-box;">
               </div>
@@ -399,7 +404,8 @@
       </section>
 
       <!-- Right Panel: Performance & Holdings table -->
-      <section class="panel panel-portfolio-right" aria-label="Portfolio Performance" style="height: 100%; overflow-y: auto;">
+      <section class="panel panel-portfolio-right" aria-label="Portfolio Performance"
+        style="height: 100%; overflow-y: auto;">
         <div class="panel-header"
           style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
           <h2 class="panel-title" style="margin: 0;"><i class="fa-solid fa-wallet"></i> Performance & Holdings</h2>
@@ -436,7 +442,7 @@
             style="border-color: rgba(255, 255, 255, 0.05); background: rgba(255, 255, 255, 0.01);">
             <div class="metric-card-header">
               <span class="title">Invested Capital</span>
-              <i class="fa-solid fa-vault text-secondary" style="color: var(--text-secondary) !important;"></i>
+              <i class="fa-solid fa-vault text-cyan"></i>
             </div>
             <div class="metric-val" id="portCostBasis" style="color: #fff;">$0.00</div>
             <div class="metric-subtext">Total cost basis of active assets</div>
@@ -485,9 +491,11 @@
         <!-- Active Holdings Table -->
         <div class="analysis-section"
           style="flex: 2; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 10px; min-height: 450px;">
-          <div class="section-subtitle" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+          <div class="section-subtitle"
+            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <span>Active Assets Portfolio</span>
-            <button class="btn-refresh" id="btnRefreshPortfolioStock" title="Refresh portfolio stock prices" aria-label="Refresh portfolio stock prices" style="width: 24px; height: 24px; font-size: 11px;">
+            <button class="btn-refresh" id="btnRefreshPortfolioStock" title="Refresh portfolio stock prices"
+              aria-label="Refresh portfolio stock prices" style="width: 24px; height: 24px; font-size: 11px;">
               <i class="fa-solid fa-arrows-rotate"></i>
             </button>
           </div>
