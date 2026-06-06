@@ -49,7 +49,7 @@ export function parseCSV(text) {
       row[row.length - 1] += char;
     }
   }
-  
+
   if (row.length > 1 || row[0] !== "") {
     lines.push(row.map(cell => cell.trim()));
   }
@@ -66,14 +66,14 @@ export function importTransactionsFromCSV(csvText) {
     }
 
     const headers = rows[0].map(h => h.toLowerCase());
-    
+
     // Dynamically locate header indices to support any column order
     const dateIdx = headers.findIndex(h => h.includes("date"));
     const typeIdx = headers.findIndex(h => h.includes("type") || h.includes("transaction type"));
     const symbolIdx = headers.findIndex(h => h.includes("symbol") || h.includes("ticker") || h.includes("stock") || h.includes("etf"));
     const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("units"));
     const priceIdx = headers.findIndex(h => h.includes("price") || h.includes("amount per unit") || h.includes("unit price"));
-    const feesIdx = headers.findIndex(h => h.includes("fee") || h.includes("commission") || h.includes("transaction fee") || h.includes("trading fee"));
+    const feesIdx = headers.findIndex(h => (h.includes("fee") || h.includes("commission") || h.includes("transaction fee") || h.includes("trading fee")) && !h.includes("before"));
     const accountIdx = headers.findIndex(h => h.includes("account") || h.includes("investment account") || h.includes("portfolio account"));
 
     if (dateIdx === -1 || typeIdx === -1 || symbolIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
@@ -172,13 +172,13 @@ export function importTransactionsFromCSV(csvText) {
     // Ask the user to Append or Replace
     const active = portfoliosList.find(p => p.id === activePortfolioId);
     const activeName = active ? active.name : "Primary Portfolio";
-    
+
     const choice = confirm(
       `Found ${importedTxs.length} valid transactions in CSV.\n\n` +
       `Click OK to APPEND the transactions to their matched portfolios (or "${activeName}" if unmatched).\n` +
       `Click CANCEL to REPLACE all existing transactions in the matched portfolios (or "${activeName}" if unmatched) with the new ones.`
     );
-    
+
     // Group imported transactions by target portfolio ID based on Investment Account name
     const txsByPortfolio = {};
     importedTxs.forEach(tx => {
@@ -186,7 +186,7 @@ export function importTransactionsFromCSV(csvText) {
       const matchingPort = portfoliosList.find(p => p.name.toLowerCase() === account.toLowerCase());
       const targetPort = matchingPort || active;
       const portId = targetPort.id;
-      
+
       if (!txsByPortfolio[portId]) {
         txsByPortfolio[portId] = [];
       }
@@ -311,18 +311,18 @@ export function exportTransactionsAsCSV() {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  
+
   // Find current active portfolio name for filename
   const active = portfoliosList.find(p => p.id === activePortfolioId);
   const activeName = active ? active.name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : "portfolio";
-  
+
   link.setAttribute("href", url);
   link.setAttribute("download", `${activeName}_transactions_export.csv`);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  
+
   showNotification("Transactions successfully exported as CSV!", "success");
 }
 
