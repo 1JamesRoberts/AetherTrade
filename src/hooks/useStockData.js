@@ -55,6 +55,8 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
       const fetchedPrice = parseFloat(values[values.length - 1].close);
       const firstPrice = values[0] ? parseFloat(values[0].close) : fetchedPrice;
       const timeframeChange = firstPrice ? ((fetchedPrice - firstPrice) / firstPrice) * 100 : 0;
+      const prevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : fetchedPrice;
+      const change = prevPrice ? ((fetchedPrice - prevPrice) / prevPrice) * 100 : 0;
 
       const { closes, labels } = parseStockLabels(values, intervalVal);
 
@@ -65,6 +67,7 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
           ticker,
           name: prev[ticker]?.name || `${ticker} Stock`,
           price: fetchedPrice,
+          change,
           timeframeChange,
           liveCloses: closes,
           liveLabels: labels,

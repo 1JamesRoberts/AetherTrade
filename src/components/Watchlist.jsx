@@ -64,9 +64,9 @@ export default function Watchlist({
         <div className="list-section-title">My Tracked Assets</div>
         <ul className="stock-list">
           {filteredTickers.map((ticker) => {
-            const stock = stocks[ticker] || { ticker, name: `${ticker} Stock`, price: 0, change: 0, isLive: false };
-            const isUp = stock.change >= 0;
-            const priceText = stock.isLive ? `$${stock.price.toFixed(2)}` : '...';
+            const stock = { ticker, name: `${ticker} Stock`, price: 0, change: 0, isLive: false, ...stocks[ticker] };
+            const isUp = (stock.change ?? 0) >= 0;
+            const priceText = stock.price ? `$${stock.price.toFixed(2)}` : '...';
 
             return (
               <li
@@ -84,7 +84,7 @@ export default function Watchlist({
                     {stock.isLive ? (
                       <span className={`stock-item-change ${isUp ? 'up' : 'down'}`}>
                         {isUp ? '+' : ''}
-                        {stock.change.toFixed(2)}%
+                        {(stock.change ?? 0).toFixed(2)}%
                       </span>
                     ) : (
                       <span
