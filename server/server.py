@@ -5,13 +5,14 @@ import json
 import os
 import sys
 
-# User-provided Twelve Data API keys for dynamic key rotation
+# Load API keys from environment variables
 API_KEYS = [
-    'd9689515957d4d55bd1fa2a8cf110dbc',
-    '9ec5eba69f55455990d611d57a5adad4',
-    'e91b963bb3d54ca9aa260c575b2a834d',
-    'fa6f354384cd4a2fb05e63ece7fd1c42'
+    os.environ.get('TWELVE_DATA_KEY_1', ''),
+    os.environ.get('TWELVE_DATA_KEY_2', ''),
+    os.environ.get('TWELVE_DATA_KEY_3', ''),
+    os.environ.get('TWELVE_DATA_KEY_4', ''),
 ]
+API_KEYS = [k for k in API_KEYS if k]
 current_key_index = 0
 
 def get_next_api_key():
