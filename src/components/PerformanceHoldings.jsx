@@ -12,6 +12,7 @@ export default function PerformanceHoldings({
   onResetPortfolio,
   onImportCSV,
   onExportCSV,
+  onRefreshPrices,
   showNotification
 }) {
   const performanceCanvasRef = useRef(null);
@@ -21,6 +22,7 @@ export default function PerformanceHoldings({
   // Sorting state for active holdings table
   const [sortColumn, setSortColumn] = useState('marketValue');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const activePortfolio = portfolios.find(p => p.id === activePortfolioId) || {
     id: 'default',
@@ -419,6 +421,15 @@ export default function PerformanceHoldings({
     return holdingsKeys.filter(t => activePortfolio.holdings[t].shares > 0).length;
   };
 
+  const handleRefreshPrices = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    const heldTickers = holdingsKeys.filter(t => activePortfolio.holdings[t].shares > 0);
+    await Promise.all(heldTickers.map(t => onRefreshPrices(t)));
+    setIsRefreshing(false);
+    showNotification('Stock prices refreshed', 'success');
+  };
+
   const handleSellAll = (ticker, shares, price) => {
     onAddTransaction(activePortfolioId, {
       timestamp: Date.now(),
@@ -573,6 +584,12 @@ export default function PerformanceHoldings({
       <div className="analysis-section" style={{ flex: 2, display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingBottom: '10px', minHeight: '450px' }}>
         <div className="section-subtitle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <span>Active Assets Portfolio</span>
+          {holdingsKeys.length > 0 && (
+            <button onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh stock prices" aria-label="Refresh stock prices" style={{ width: 'auto', padding: '0 10px', gap: '6px', fontSize: '11px' }}>
+              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          )}
         </div>
         <div className="projection-table-wrapper" style={{ flex: 1, overflowY: 'auto', maxHeight: '550px' }}>
           {sortedHoldings.length === 0 ? (

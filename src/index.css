@@ -721,6 +721,13 @@ body {
   transform: translateY(0) scale(0.95);
 }
 
+.btn-refresh:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .btn-clear-lines {
   background: rgba(244, 63, 94, 0.05);
   border-color: rgba(244, 63, 94, 0.2);
