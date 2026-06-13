@@ -53,6 +53,7 @@ export default function ChartContainer({
   const dragStartStartIndexRef = useRef(0);
   const dragStartEndIndexRef = useRef(0);
   const hasDraggedRef = useRef(false);
+  const slicedRawRef = useRef([]);
 
   const activeStock = stocks[activeTicker] || {
     ticker: activeTicker,
@@ -147,6 +148,7 @@ export default function ChartContainer({
     const slicedCloses = activeStock.liveCloses.slice(startIdx, endIdx);
     const slicedLabels = activeStock.liveLabels.slice(startIdx, endIdx);
     const slicedRaw = rawValues.slice(startIdx, endIdx);
+    slicedRawRef.current = slicedRaw;
 
     // Compute range bound limits
     let minVal = 0;
@@ -306,12 +308,16 @@ export default function ChartContainer({
       afterDatasetsDraw(chart) {
         if (chartType !== 'candle') return;
 
-        const { ctx, scales: { y } } = chart;
+        const { ctx, chartArea } = chart;
         const meta = chart.getDatasetMeta(0);
         ctx.save();
 
+        ctx.beginPath();
+        ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        ctx.clip();
+
         meta.data.forEach((bar, index) => {
-          const raw = slicedRaw[index];
+          const raw = slicedRawRef.current[index];
           if (!raw) return;
 
           const high = parseFloat(raw.high);
@@ -323,13 +329,19 @@ export default function ChartContainer({
           ctx.strokeStyle = isBullish ? '#00e676' : '#ff1744';
           ctx.lineWidth = 1.5;
 
-          const highY = y.getPixelForValue(high);
-          const lowY = y.getPixelForValue(low);
-          const barX = bar.x;
+          const bodyHigh = Math.max(open, close);
+          const bodyLow = Math.min(open, close);
+          const bodyPixelTop = Math.min(bar.y, bar.base);
+          const bodyPixelBottom = Math.max(bar.y, bar.base);
+          const range = bodyHigh - bodyLow || 0.01;
+          const ppv = (bodyPixelBottom - bodyPixelTop) / range;
+
+          const wickTopY = bodyPixelTop - (high - bodyHigh) * ppv;
+          const wickBottomY = bodyPixelBottom + (bodyLow - low) * ppv;
 
           ctx.beginPath();
-          ctx.moveTo(barX, highY);
-          ctx.lineTo(barX, lowY);
+          ctx.moveTo(bar.x, wickTopY);
+          ctx.lineTo(bar.x, wickBottomY);
           ctx.stroke();
         });
 
@@ -436,6 +448,7 @@ export default function ChartContainer({
       const slicedCloses = activeStock.liveCloses.slice(chartStartIndexRef.current, chartEndIndexRef.current);
       const slicedLabels = activeStock.liveLabels.slice(chartStartIndexRef.current, chartEndIndexRef.current);
       const slicedRaw = rawValues.slice(chartStartIndexRef.current, chartEndIndexRef.current);
+      slicedRawRef.current = slicedRaw;
 
       chart.data.labels = slicedLabels;
       if (chartType === 'candle') {

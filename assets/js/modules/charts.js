@@ -138,7 +138,7 @@ const candlestickWicksPlugin = {
   afterDatasetsDraw(chart) {
     if (state.chartType !== 'candle') return;
 
-    const { ctx, scales: { y } } = chart;
+    const { ctx, chartArea } = chart;
     const meta = chart.getDatasetMeta(0);
     const activeStock = state.stocks[state.activeTicker];
     if (!activeStock || !activeStock.liveRawValues) return;
@@ -146,6 +146,11 @@ const candlestickWicksPlugin = {
     const rawValues = activeStock.liveRawValues.slice(state.chartStartIndex, state.chartEndIndex);
 
     ctx.save();
+
+    ctx.beginPath();
+    ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+    ctx.clip();
+
     meta.data.forEach((bar, index) => {
       const raw = rawValues[index];
       if (!raw) return;
@@ -159,13 +164,19 @@ const candlestickWicksPlugin = {
       ctx.strokeStyle = isBullish ? '#00e676' : '#ff1744';
       ctx.lineWidth = 1.5;
 
-      const highY = y.getPixelForValue(high);
-      const lowY = y.getPixelForValue(low);
-      const barX = bar.x;
+      const bodyHigh = Math.max(open, close);
+      const bodyLow = Math.min(open, close);
+      const bodyPixelTop = Math.min(bar.y, bar.base);
+      const bodyPixelBottom = Math.max(bar.y, bar.base);
+      const range = bodyHigh - bodyLow || 0.01;
+      const ppv = (bodyPixelBottom - bodyPixelTop) / range;
+
+      const wickTopY = bodyPixelTop - (high - bodyHigh) * ppv;
+      const wickBottomY = bodyPixelBottom + (bodyLow - low) * ppv;
 
       ctx.beginPath();
-      ctx.moveTo(barX, highY);
-      ctx.lineTo(barX, lowY);
+      ctx.moveTo(bar.x, wickTopY);
+      ctx.lineTo(bar.x, wickBottomY);
       ctx.stroke();
     });
     ctx.restore();
