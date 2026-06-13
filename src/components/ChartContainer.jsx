@@ -164,8 +164,11 @@ export default function ChartContainer({
     const yMinBound = Math.max(0, parseFloat((minVal - marginPadding).toFixed(2)));
     const yMaxBound = parseFloat((maxVal + marginPadding).toFixed(2));
 
-    const color = activeStock.change >= 0 ? '#00e676' : '#ff1744';
-    const glow = activeStock.change >= 0 ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 23, 68, 0.12)';
+    const timeframeChange = slicedCloses.length > 1
+      ? ((slicedCloses[slicedCloses.length - 1] - slicedCloses[0]) / slicedCloses[0]) * 100
+      : 0;
+    const color = timeframeChange >= 0 ? '#00e676' : '#ff1744';
+    const glow = timeframeChange >= 0 ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 23, 68, 0.12)';
 
     let datasetConfig = {};
     let resolvedChartType = 'line';
