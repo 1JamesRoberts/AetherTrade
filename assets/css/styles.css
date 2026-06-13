@@ -532,6 +532,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .stock-info-block {
@@ -591,10 +593,12 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .chart-style-selector,
-.timeframe-selector {
+.range-selector,
+.interval-selector {
   display: flex;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -631,28 +635,38 @@ body {
   box-shadow: 0 2px 10px rgba(0, 229, 255, 0.25);
 }
 
-.tf-btn {
+.range-btn,
+.interval-btn {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  padding: 6px 14px;
+  padding: 6px 10px;
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
-  border-radius: 8px;
+  font-size: 11px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all var(--transition-fast) ease;
 }
 
-.tf-btn:hover {
+.range-btn:hover:not(:disabled),
+.interval-btn:hover:not(:disabled) {
   color: #fff;
   background: rgba(255, 255, 255, 0.04);
 }
 
-.tf-btn.active {
+.range-btn.active,
+.interval-btn.active {
   color: #fff;
   background: var(--primary);
   box-shadow: 0 2px 10px var(--primary-glow);
+}
+
+.range-btn:disabled,
+.interval-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  color: var(--text-muted);
 }
 
 .btn {

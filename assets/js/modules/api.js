@@ -39,6 +39,16 @@ export async function loadStockDataAndRender(ticker) {
   const refreshIcon = document.querySelector('#btnRefreshStock i');
   if (refreshIcon) refreshIcon.classList.add('fa-spin');
 
+  // Reset chart index bounds and zoom level on active stock or timeframe/interval change
+  state.chartStartIndex = undefined;
+  state.chartEndIndex = undefined;
+  state.zoomLevel = 100;
+  
+  const zoomSlider = document.getElementById('zoomSlider');
+  const zoomLabel = document.getElementById('zoomLabel');
+  if (zoomSlider) zoomSlider.value = 100;
+  if (zoomLabel) zoomLabel.innerText = '100%';
+
   // Immediately destroy old chart and render clear canvas with glowing loading text in the center
   if (mainChart) {
     mainChart.destroy();
@@ -62,7 +72,7 @@ export async function loadStockDataAndRender(ticker) {
   }
 
   try {
-    const response = await fetch(`/api/stock?ticker=${ticker}&timeframe=${state.selectedTimeframe}`);
+    const response = await fetch(`/api/stock?ticker=${ticker}&range=${state.selectedRange}&interval=${state.selectedInterval}`);
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
       throw new Error(errJson.error || `Proxy error: ${response.status}`);
@@ -84,8 +94,8 @@ export async function loadStockDataAndRender(ticker) {
       state.stocks[ticker] = {};
     }
 
-    // Only update the authoritative real-time price from the timeframe M (daily series)
-    if (state.selectedTimeframe === 'M' || !state.stocks[ticker].price) {
+    // Only update the authoritative real-time price from the interval 1d (daily series)
+    if (state.selectedInterval === '1d' || !state.stocks[ticker].price) {
       state.stocks[ticker].price = fetchedPrice;
     }
 
@@ -106,7 +116,7 @@ export async function loadStockDataAndRender(ticker) {
 
     // Determine the true previous day's close price for the 1-Day change percentage
     let dailyPrevPrice = currentPrice;
-    if (state.selectedTimeframe === 'M') {
+    if (state.selectedInterval === '1d') {
       dailyPrevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : currentPrice;
       state.stocks[ticker].prevClose = dailyPrevPrice;
     } else if (state.stocks[ticker].prevClose !== undefined && state.stocks[ticker].prevClose !== null) {
@@ -123,26 +133,27 @@ export async function loadStockDataAndRender(ticker) {
 
     const closes = [];
     const labels = [];
+    const isIntraday = ['1m', '5m', '15m', '1h'].includes(state.selectedInterval);
 
     values.forEach(item => {
       closes.push(parseFloat(parseFloat(item.close).toFixed(2)));
 
       const datetime = item.datetime;
-      if (state.selectedTimeframe === 'D' || state.selectedTimeframe === 'W') {
+      if (isIntraday) {
         const parts = datetime.split(' ');
         const timePart = parts[1] ? parts[1].substring(0, 5) : '';
         const datePart = parts[0];
 
-        if (state.selectedTimeframe === 'D') {
+        if (['1m', '5m', '15m'].includes(state.selectedInterval)) {
           labels.push(timePart || datePart);
         } else {
           const dateObj = new Date(datePart + 'T' + (parts[1] || '00:00:00'));
-          labels.push(dateObj.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }));
+          labels.push(dateObj.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }));
         }
       } else {
         const datePart = datetime.split(' ')[0];
         const dateObj = new Date(datePart + 'T00:00:00');
-        if (state.selectedTimeframe === 'M') {
+        if (state.selectedInterval === '1d') {
           labels.push(dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
         } else {
           labels.push(dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }));
@@ -207,15 +218,19 @@ export async function loadStockDataAndRender(ticker) {
       state.stocks[ticker].name = state.stocks[ticker].name || (ticker + ' Stock');
       state.stocks[ticker].price = basePrice;
       state.stocks[ticker].history = {
-        D: generateWalk(basePrice, 24, 'up', 0.005),
-        W: generateWalk(basePrice, 7, 'up', 0.012),
-        M: generateWalk(basePrice, 30, 'up', 0.015),
-        Y: generateWalk(basePrice, 52, 'up', 0.025)
+        '1m': generateWalk(basePrice, 200, 'up', 0.002),
+        '5m': generateWalk(basePrice, 200, 'up', 0.003),
+        '15m': generateWalk(basePrice, 200, 'up', 0.004),
+        '1h': generateWalk(basePrice, 200, 'up', 0.006),
+        D: generateWalk(basePrice, 100, 'up', 0.005),
+        W: generateWalk(basePrice, 150, 'up', 0.012),
+        M: generateWalk(basePrice, 200, 'up', 0.015),
+        Y: generateWalk(basePrice, 150, 'up', 0.025)
       };
     }
 
-    state.stocks[ticker].liveCloses = state.stocks[ticker].history[state.selectedTimeframe];
-    state.stocks[ticker].liveLabels = getTimeframeLabels(state.selectedTimeframe);
+    state.stocks[ticker].liveCloses = state.stocks[ticker].history[state.selectedInterval];
+    state.stocks[ticker].liveLabels = getTimeframeLabels(state.selectedInterval);
 
     const closes = state.stocks[ticker].liveCloses || [];
     if (closes.length > 0 && state.stocks[ticker].price !== undefined) {
@@ -225,7 +240,7 @@ export async function loadStockDataAndRender(ticker) {
     const baseWalkPrice = closes[0] || state.stocks[ticker].price || 150.00;
     const currentWalkPrice = state.stocks[ticker].price || (closes.length > 0 ? closes[closes.length - 1] : baseWalkPrice);
 
-    const mCloses = state.stocks[ticker].history ? state.stocks[ticker].history['M'] : [];
+    const mCloses = state.stocks[ticker].history ? state.stocks[ticker].history['1d'] : [];
     const yesterdayClose = mCloses && mCloses.length > 1 ? mCloses[mCloses.length - 2] : baseWalkPrice;
     const dailyChange = yesterdayClose ? ((currentWalkPrice - yesterdayClose) / yesterdayClose) * 100 : 0.35;
     const timeframeChange = baseWalkPrice ? ((currentWalkPrice - baseWalkPrice) / baseWalkPrice) * 100 : 0;

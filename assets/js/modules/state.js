@@ -15,14 +15,17 @@ export const STOCKS_METADATA = [
 export const state = {
   activeTicker: 'AAPL',
   currentCapital: 10000,
-  selectedTimeframe: 'M',
+  selectedRange: '1M',
+  selectedInterval: '1d',
   chartType: 'line', // 'line' or 'candle'
   showLevels: true,
   zoomLevel: 100,
   stocks: {},
   linesMap: {},
   hoverPrice: null,
-  watchlist: []
+  watchlist: [],
+  chartStartIndex: undefined,
+  chartEndIndex: undefined
 };
 
 export let portfoliosList = [];
@@ -156,22 +159,26 @@ export function seedMockDatabase() {
       trend: 'up'
     };
 
-    const historyD = generateWalk(meta.price, 24, meta.trend, 0.005);
-    const historyW = generateWalk(meta.price, 7, meta.trend, 0.012);
-    const historyM = generateWalk(meta.price, 30, meta.trend, 0.015);
-    const historyY = generateWalk(meta.price, 52, meta.trend, 0.025);
+    const history1m = generateWalk(meta.price, 390, meta.trend, 0.002);
+    const history5m = generateWalk(meta.price, 390, meta.trend, 0.003);
+    const history15m = generateWalk(meta.price, 546, meta.trend, 0.004);
+    const history1h = generateWalk(meta.price, 150, meta.trend, 0.006);
+    const history1d = generateWalk(meta.price, 260, meta.trend, 0.012);
+    const history1w = generateWalk(meta.price, 52, meta.trend, 0.025);
 
     state.stocks[ticker] = {
       ...meta,
       isLive: false,
       history: {
-        D: historyD,
-        W: historyW,
-        M: historyM,
-        Y: historyY
+        '1m': history1m,
+        '5m': history5m,
+        '15m': history15m,
+        '1h': history1h,
+        '1d': history1d,
+        '1w': history1w
       },
-      liveCloses: [...historyM],
-      liveLabels: getTimeframeLabels('M'),
+      liveCloses: [...history1d].slice(-30),
+      liveLabels: getTimeframeLabels('1d').slice(-30),
       liveRawValues: []
     };
     if (!state.linesMap[ticker]) {
@@ -195,20 +202,38 @@ export function generateWalk(currentPrice, points, overallTrend, volatility) {
   return result;
 }
 
-export function getTimeframeLabels(timeframe) {
-  switch (timeframe) {
-    case 'D':
-      return Array.from({ length: 24 }, (_, i) => {
-        const hour = 9 + Math.floor(i * 7 / 24);
-        const min = Math.floor((i * 7 % 24) * 60 / 24);
-        return `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+export function getTimeframeLabels(interval) {
+  switch (interval) {
+    case '1m':
+      return Array.from({ length: 390 }, (_, i) => {
+        const time = new Date(Date.now() - (390 - 1 - i) * 60 * 1000);
+        return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       });
-    case 'W':
-      return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    case 'M':
-      return Array.from({ length: 30 }, (_, i) => `Day ${i + 1}`);
-    case 'Y':
-      return Array.from({ length: 52 }, (_, i) => `Wk ${i + 1}`);
+    case '5m':
+      return Array.from({ length: 390 }, (_, i) => {
+        const time = new Date(Date.now() - (390 - 1 - i) * 5 * 60 * 1000);
+        return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      });
+    case '15m':
+      return Array.from({ length: 546 }, (_, i) => {
+        const time = new Date(Date.now() - (546 - 1 - i) * 15 * 60 * 1000);
+        return time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      });
+    case '1h':
+      return Array.from({ length: 150 }, (_, i) => {
+        const time = new Date(Date.now() - (150 - 1 - i) * 60 * 60 * 1000);
+        return time.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+      });
+    case '1d':
+      return Array.from({ length: 260 }, (_, i) => {
+        const dateObj = new Date(Date.now() - (260 - 1 - i) * 24 * 60 * 60 * 1000);
+        return dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      });
+    case '1w':
+      return Array.from({ length: 52 }, (_, i) => {
+        const dateObj = new Date(Date.now() - (52 - 1 - i) * 7 * 24 * 60 * 60 * 1000);
+        return dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+      });
     default:
       return [];
   }

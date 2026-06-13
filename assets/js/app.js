@@ -358,14 +358,75 @@ async function removeStockFromWatchlist(ticker) {
 }
 
 function setupCoreEventListeners() {
-  const tfButtons = document.querySelectorAll('.tf-btn');
-  tfButtons.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      tfButtons.forEach(b => b.classList.remove('active'));
-      e.target.classList.add('active');
-      state.selectedTimeframe = e.target.getAttribute('data-tf');
+  const RANGE_INTERVALS = {
+    '1D': {
+      allowed: ['1m', '5m', '15m', '1h'],
+      default: '15m'
+    },
+    '1W': {
+      allowed: ['5m', '15m', '1h', '1d'],
+      default: '1h'
+    },
+    '1M': {
+      allowed: ['15m', '1h', '1d', '1w'],
+      default: '1d'
+    },
+    '1Y': {
+      allowed: ['1d', '1w'],
+      default: '1w'
+    }
+  };
 
-      // Load live data for the active ticker with the new timeframe
+  const rangeButtons = document.querySelectorAll('.range-btn');
+  const intervalButtons = document.querySelectorAll('.interval-btn');
+
+  function updateIntervalButtons() {
+    const currentRange = state.selectedRange || '1M';
+    const rangeInfo = RANGE_INTERVALS[currentRange];
+    
+    intervalButtons.forEach(btn => {
+      const interval = btn.getAttribute('data-interval');
+      const isAllowed = rangeInfo.allowed.includes(interval);
+      btn.disabled = !isAllowed;
+    });
+  }
+
+  // Initialize
+  updateIntervalButtons();
+
+  rangeButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      rangeButtons.forEach(b => b.classList.remove('active'));
+      const targetRange = e.target.getAttribute('data-range');
+      e.target.classList.add('active');
+      state.selectedRange = targetRange;
+
+      updateIntervalButtons();
+
+      const rangeInfo = RANGE_INTERVALS[targetRange];
+      if (!rangeInfo.allowed.includes(state.selectedInterval)) {
+        state.selectedInterval = rangeInfo.default;
+        intervalButtons.forEach(b => {
+          if (b.getAttribute('data-interval') === rangeInfo.default) {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+      }
+
+      loadStockDataAndRender(state.activeTicker);
+    });
+  });
+
+  intervalButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if (e.target.disabled) return;
+      intervalButtons.forEach(b => b.classList.remove('active'));
+      const targetInterval = e.target.getAttribute('data-interval');
+      e.target.classList.add('active');
+      state.selectedInterval = targetInterval;
+
       loadStockDataAndRender(state.activeTicker);
     });
   });
@@ -444,6 +505,15 @@ function setupCoreEventListeners() {
       const val = parseInt(e.target.value);
       state.zoomLevel = val;
       zoomLabel.innerText = `${val}%`;
+
+      const activeStock = state.stocks[state.activeTicker];
+      if (activeStock) {
+        const totalLength = activeStock.liveCloses.length;
+        const visibleCount = Math.max(5, Math.round((totalLength * val) / 100));
+        state.chartEndIndex = totalLength;
+        state.chartStartIndex = Math.max(0, state.chartEndIndex - visibleCount);
+      }
+
       renderStockChartDirect();
     });
   }

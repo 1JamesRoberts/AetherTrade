@@ -143,10 +143,7 @@ const candlestickWicksPlugin = {
     const activeStock = state.stocks[state.activeTicker];
     if (!activeStock || !activeStock.liveRawValues) return;
 
-    // Slice raw values arrays to match our current zoom percentage to resolve index offset mismatches!
-    const totalLength = activeStock.liveCloses.length;
-    const visibleCount = Math.max(5, Math.round((totalLength * state.zoomLevel) / 100));
-    const rawValues = activeStock.liveRawValues.slice(-visibleCount);
+    const rawValues = activeStock.liveRawValues.slice(state.chartStartIndex, state.chartEndIndex);
 
     ctx.save();
     meta.data.forEach((bar, index) => {
@@ -217,11 +214,17 @@ export function renderStockChartDirect() {
 
   // --- INTERACTIVE TIMEFRAME & TIMELINE ZOOM SLICING ---
   const totalLength = activeStock.liveCloses.length;
-  const visibleCount = Math.max(5, Math.round((totalLength * state.zoomLevel) / 100));
+  
+  if (state.chartStartIndex === undefined || state.chartEndIndex === undefined || state.chartLastLength !== totalLength) {
+    state.chartEndIndex = totalLength;
+    const visibleCount = Math.max(5, Math.round((totalLength * state.zoomLevel) / 100));
+    state.chartStartIndex = Math.max(0, state.chartEndIndex - visibleCount);
+    state.chartLastLength = totalLength;
+  }
 
-  const historyCloses = activeStock.liveCloses.slice(-visibleCount);
-  const labels = activeStock.liveLabels.slice(-visibleCount);
-  const rawValues = activeStock.liveRawValues.slice(-visibleCount);
+  const historyCloses = activeStock.liveCloses.slice(state.chartStartIndex, state.chartEndIndex);
+  const labels = activeStock.liveLabels.slice(state.chartStartIndex, state.chartEndIndex);
+  const rawValues = activeStock.liveRawValues.slice(state.chartStartIndex, state.chartEndIndex);
 
   // --- DYNAMIC Y-AXIS AUTO-SCALING ---
   let minVal = 0;
@@ -365,7 +368,10 @@ export function renderStockChartDirect() {
           }
         },
         onHover: (event, activeElements) => {
-          if (!mainChart || !state.showLevels) return;
+          if (!mainChart || !state.showLevels || isMouseDown) {
+            state.hoverPrice = null;
+            return;
+          }
           const yValue = mainChart.scales.y.getValueForPixel(event.y);
 
           if (yValue !== undefined && yValue >= mainChart.scales.y.min && yValue <= mainChart.scales.y.max) {
@@ -379,24 +385,289 @@ export function renderStockChartDirect() {
       plugins: [horizontalLinesPlugin, candlestickWicksPlugin]
     });
 
-    // Attach click handler to draw horizontal support / resistance lines (only active if showLevels is true)
-    canvas.onclick = (e) => {
-      if (!mainChart || !state.showLevels) return;
-      const yValue = mainChart.scales.y.getValueForPixel(e.offsetY);
-      if (yValue !== undefined && yValue >= mainChart.scales.y.min && yValue <= mainChart.scales.y.max) {
-        const clickedPrice = parseFloat(yValue.toFixed(2));
+    let isMouseDown = false;
+    let dragStartX = 0;
+    let dragStartStartIndex = 0;
+    let dragStartEndIndex = 0;
+    let hasDragged = false;
 
-        const existingLines = state.linesMap[state.activeTicker] || [];
-        const isDuplicate = existingLines.some(price => Math.abs(price - clickedPrice) < (activeStock.price * 0.003));
+    canvas.onmousedown = (e) => {
+      if (e.button !== 0) return; // Only left click
+      isMouseDown = true;
+      dragStartX = e.clientX;
+      dragStartStartIndex = state.chartStartIndex;
+      dragStartEndIndex = state.chartEndIndex;
+      hasDragged = false;
+    };
 
-        if (!isDuplicate) {
-          existingLines.push(clickedPrice);
-          state.linesMap[state.activeTicker] = existingLines;
-          saveSupportResistanceLines();
-          updateDashboard();
+    canvas.onmousemove = (e) => {
+      // 1. Hover Guide Line (only when not dragging)
+      if (mainChart && state.showLevels && !isMouseDown) {
+        const rect = canvas.getBoundingClientRect();
+        const hoverY = e.clientY - rect.top;
+        const yValue = mainChart.scales.y.getValueForPixel(hoverY);
+        if (yValue !== undefined && yValue >= mainChart.scales.y.min && yValue <= mainChart.scales.y.max) {
+          state.hoverPrice = parseFloat(yValue.toFixed(2));
+          mainChart.draw();
+        } else {
+          state.hoverPrice = null;
+        }
+      }
+
+      // 2. Drag/Pan logic
+      if (!isMouseDown) return;
+      const deltaX = e.clientX - dragStartX;
+      if (Math.abs(deltaX) > 5) {
+        hasDragged = true;
+      }
+
+      if (hasDragged && mainChart) {
+        const chartArea = mainChart.chartArea;
+        const totalVisible = dragStartEndIndex - dragStartStartIndex;
+        const barWidth = chartArea.width / totalVisible;
+        const barsDragged = Math.round(deltaX / barWidth);
+        const shift = -barsDragged;
+
+        let newStart = dragStartStartIndex + shift;
+        let newEnd = dragStartEndIndex + shift;
+
+        const totalLength = activeStock.liveCloses.length;
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = totalVisible;
+        }
+        if (newEnd > totalLength) {
+          newEnd = totalLength;
+          newStart = totalLength - totalVisible;
+        }
+
+        if (newStart !== state.chartStartIndex || newEnd !== state.chartEndIndex) {
+          state.chartStartIndex = newStart;
+          state.chartEndIndex = newEnd;
+
+          const historyCloses = activeStock.liveCloses.slice(state.chartStartIndex, state.chartEndIndex);
+          const labels = activeStock.liveLabels.slice(state.chartStartIndex, state.chartEndIndex);
+          const rawValues = activeStock.liveRawValues.slice(state.chartStartIndex, state.chartEndIndex);
+
+          mainChart.data.labels = labels;
+          if (state.chartType === 'candle') {
+            mainChart.data.datasets[0].data = rawValues.map(v => [
+              Math.min(parseFloat(v.open), parseFloat(v.close)),
+              Math.max(parseFloat(v.open), parseFloat(v.close))
+            ]);
+            mainChart.data.datasets[0].backgroundColor = rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? 'rgba(0, 230, 118, 0.75)' : 'rgba(255, 23, 68, 0.75)');
+            mainChart.data.datasets[0].borderColor = rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? '#00e676' : '#ff1744');
+          } else {
+            mainChart.data.datasets[0].data = historyCloses;
+          }
+
+          let minVal, maxVal;
+          if (state.chartType === 'candle') {
+            minVal = Math.min(...rawValues.map(v => parseFloat(v.low)));
+            maxVal = Math.max(...rawValues.map(v => parseFloat(v.high)));
+          } else {
+            minVal = Math.min(...historyCloses);
+            maxVal = Math.max(...historyCloses);
+          }
+          const verticalSpread = maxVal - minVal;
+          const marginPadding = verticalSpread * 0.2 || minVal * 0.03;
+          mainChart.scales.y.options.min = Math.max(0, parseFloat((minVal - marginPadding).toFixed(2)));
+          mainChart.scales.y.options.max = parseFloat((maxVal + marginPadding).toFixed(2));
+
+          mainChart.update('none');
         }
       }
     };
+
+    const handleMouseUpOrLeave = (e) => {
+      if (!isMouseDown) return;
+      isMouseDown = false;
+
+      // If did not drag, trigger add support/resistance level
+      if (!hasDragged && mainChart && state.showLevels) {
+        const rect = canvas.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
+        const yValue = mainChart.scales.y.getValueForPixel(clickY);
+
+        if (yValue !== undefined && yValue >= mainChart.scales.y.min && yValue <= mainChart.scales.y.max) {
+          const clickedPrice = parseFloat(yValue.toFixed(2));
+          const existingLines = state.linesMap[state.activeTicker] || [];
+          const isDuplicate = existingLines.some(price => Math.abs(price - clickedPrice) < (activeStock.price * 0.003));
+
+          if (!isDuplicate) {
+            existingLines.push(clickedPrice);
+            state.linesMap[state.activeTicker] = existingLines;
+            saveSupportResistanceLines();
+            updateDashboard();
+          }
+        }
+      }
+    };
+
+    canvas.onmouseup = handleMouseUpOrLeave;
+    canvas.onmouseleave = (e) => {
+      state.hoverPrice = null;
+      if (mainChart) mainChart.draw();
+      handleMouseUpOrLeave(e);
+    };
+
+    // Scroll Wheel Zoom centered on cursor
+    canvas.onwheel = (e) => {
+      e.preventDefault();
+      if (!mainChart) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const chartArea = mainChart.chartArea;
+      if (mouseX < chartArea.left || mouseX > chartArea.right) return;
+
+      const totalLength = activeStock.liveCloses.length;
+      const currentVisible = state.chartEndIndex - state.chartStartIndex;
+
+      const zoomFactor = e.deltaY < 0 ? 0.9 : 1.1; // Scroll up = zoom in, scroll down = zoom out
+      let newVisible = Math.round(currentVisible * zoomFactor);
+      newVisible = Math.max(5, Math.min(totalLength, newVisible));
+
+      if (newVisible === currentVisible) return;
+
+      const localIndex = mainChart.scales.x.getValueForPixel(mouseX);
+      let hoverIndex = state.chartStartIndex + Math.round(localIndex);
+      if (isNaN(hoverIndex) || hoverIndex < 0 || hoverIndex >= totalLength) {
+        hoverIndex = Math.round((state.chartStartIndex + state.chartEndIndex) / 2);
+      }
+
+      const ratio = (hoverIndex - state.chartStartIndex) / currentVisible;
+      let newStart = Math.round(hoverIndex - ratio * newVisible);
+      let newEnd = newStart + newVisible;
+
+      if (newStart < 0) {
+        newStart = 0;
+        newEnd = newVisible;
+      }
+      if (newEnd > totalLength) {
+        newEnd = totalLength;
+        newStart = totalLength - newVisible;
+      }
+
+      state.chartStartIndex = newStart;
+      state.chartEndIndex = newEnd;
+
+      const percentage = Math.round((newVisible / totalLength) * 100);
+      state.zoomLevel = percentage;
+      const zoomSlider = document.getElementById('zoomSlider');
+      const zoomLabel = document.getElementById('zoomLabel');
+      if (zoomSlider) zoomSlider.value = percentage;
+      if (zoomLabel) zoomLabel.innerText = `${percentage}%`;
+
+      const historyCloses = activeStock.liveCloses.slice(state.chartStartIndex, state.chartEndIndex);
+      const labels = activeStock.liveLabels.slice(state.chartStartIndex, state.chartEndIndex);
+      const rawValues = activeStock.liveRawValues.slice(state.chartStartIndex, state.chartEndIndex);
+
+      mainChart.data.labels = labels;
+      if (state.chartType === 'candle') {
+        mainChart.data.datasets[0].data = rawValues.map(v => [
+          Math.min(parseFloat(v.open), parseFloat(v.close)),
+          Math.max(parseFloat(v.open), parseFloat(v.close))
+        ]);
+        mainChart.data.datasets[0].backgroundColor = rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? 'rgba(0, 230, 118, 0.75)' : 'rgba(255, 23, 68, 0.75)');
+        mainChart.data.datasets[0].borderColor = rawValues.map(v => parseFloat(v.close) >= parseFloat(v.open) ? '#00e676' : '#ff1744');
+      } else {
+        mainChart.data.datasets[0].data = historyCloses;
+      }
+
+      let minVal, maxVal;
+      if (state.chartType === 'candle') {
+        minVal = Math.min(...rawValues.map(v => parseFloat(v.low)));
+        maxVal = Math.max(...rawValues.map(v => parseFloat(v.high)));
+      } else {
+        minVal = Math.min(...historyCloses);
+        maxVal = Math.max(...historyCloses);
+      }
+      const verticalSpread = maxVal - minVal;
+      const marginPadding = verticalSpread * 0.2 || minVal * 0.03;
+      mainChart.scales.y.options.min = Math.max(0, parseFloat((minVal - marginPadding).toFixed(2)));
+      mainChart.scales.y.options.max = parseFloat((maxVal + marginPadding).toFixed(2));
+
+      mainChart.update('none');
+    };
+
+    // Touch events for mobile dragging
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      isMouseDown = true;
+      dragStartX = e.touches[0].clientX;
+      dragStartStartIndex = state.chartStartIndex;
+      dragStartEndIndex = state.chartEndIndex;
+      hasDragged = false;
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (!isMouseDown || e.touches.length !== 1) return;
+      const clientX = e.touches[0].clientX;
+      const deltaX = clientX - dragStartX;
+      if (Math.abs(deltaX) > 5) {
+        hasDragged = true;
+      }
+
+      if (hasDragged && mainChart) {
+        const chartArea = mainChart.chartArea;
+        const totalVisible = dragStartEndIndex - dragStartStartIndex;
+        const barWidth = chartArea.width / totalVisible;
+        const barsDragged = Math.round(deltaX / barWidth);
+        const shift = -barsDragged;
+
+        let newStart = dragStartStartIndex + shift;
+        let newEnd = dragStartEndIndex + shift;
+
+        const totalLength = activeStock.liveCloses.length;
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = totalVisible;
+        }
+        if (newEnd > totalLength) {
+          newEnd = totalLength;
+          newStart = totalLength - totalVisible;
+        }
+
+        if (newStart !== state.chartStartIndex || newEnd !== state.chartEndIndex) {
+          state.chartStartIndex = newStart;
+          state.chartEndIndex = newEnd;
+
+          const historyCloses = activeStock.liveCloses.slice(state.chartStartIndex, state.chartEndIndex);
+          const labels = activeStock.liveLabels.slice(state.chartStartIndex, state.chartEndIndex);
+          const rawValues = activeStock.liveRawValues.slice(state.chartStartIndex, state.chartEndIndex);
+
+          mainChart.data.labels = labels;
+          if (state.chartType === 'candle') {
+            mainChart.data.datasets[0].data = rawValues.map(v => [
+              Math.min(parseFloat(v.open), parseFloat(v.close)),
+              Math.max(parseFloat(v.open), parseFloat(v.close))
+            ]);
+          } else {
+            mainChart.data.datasets[0].data = historyCloses;
+          }
+
+          let minVal, maxVal;
+          if (state.chartType === 'candle') {
+            minVal = Math.min(...rawValues.map(v => parseFloat(v.low)));
+            maxVal = Math.max(...rawValues.map(v => parseFloat(v.high)));
+          } else {
+            minVal = Math.min(...historyCloses);
+            maxVal = Math.max(...historyCloses);
+          }
+          const verticalSpread = maxVal - minVal;
+          const marginPadding = verticalSpread * 0.2 || minVal * 0.03;
+          mainChart.scales.y.options.min = Math.max(0, parseFloat((minVal - marginPadding).toFixed(2)));
+          mainChart.scales.y.options.max = parseFloat((maxVal + marginPadding).toFixed(2));
+
+          mainChart.update('none');
+        }
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('touchend', (e) => {
+      isMouseDown = false;
+    }, { passive: true });
   }, 20);
 }
 
@@ -607,8 +878,8 @@ export function renderPerformanceChart() {
         const msDiff = today.getTime() - compareDate.getTime();
         const daysDiff = Math.max(0, Math.floor(msDiff / (24 * 60 * 60 * 1000)));
 
-        // If we are using the weekly series ('Y'), each index is 7 calendar days apart!
-        const isWeekly = (closes === stock.portfolioHistory) || (state.selectedTimeframe === 'Y' && closes === stock.liveCloses);
+        // If we are using the weekly series ('1w'), each index is 7 calendar days apart!
+        const isWeekly = (closes === stock.portfolioHistory) || (state.selectedInterval === '1w' && closes === stock.liveCloses);
         const indexDiff = isWeekly ? Math.floor(daysDiff / 7) : Math.floor(daysDiff * 5 / 7);
         const index = closes.length - 1 - indexDiff;
 

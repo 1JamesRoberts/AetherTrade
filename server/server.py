@@ -35,7 +35,26 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
         if parsed_url.path == '/api/stock':
             query_params = urllib.parse.parse_qs(parsed_url.query)
             ticker = query_params.get('ticker', ['AAPL'])[0].upper()
-            timeframe = query_params.get('timeframe', ['M'])[0]
+            
+            # Read range and interval, fallback to timeframe if they are missing
+            range_val = query_params.get('range', [None])[0]
+            interval_val = query_params.get('interval', [None])[0]
+            
+            if range_val is None or interval_val is None:
+                # Handle fallback to old timeframe parameter
+                timeframe = query_params.get('timeframe', ['M'])[0]
+                if timeframe == 'D':
+                    range_val, interval_val = '1D', '15m'
+                elif timeframe == 'W':
+                    range_val, interval_val = '1W', '1h'
+                elif timeframe == 'M':
+                    range_val, interval_val = '1M', '1d'
+                elif timeframe == 'Y':
+                    range_val, interval_val = '1Y', '1w'
+                else:
+                    # e.g. timeframe = '1m', '5m', '15m', '1h'
+                    range_val = '1D'
+                    interval_val = timeframe
             
             # Sanitize cryptocurrency and forex indicators for Twelve Data (e.g. BTC-USD to BTC/USD)
             if ticker == 'BTC-USD':
@@ -43,22 +62,32 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
             elif ticker == 'EURUSD=X':
                 ticker = 'EUR/USD'
             
-            # Map timeframes to Twelve Data standard time series intervals & sizes
-            interval = '1day'
-            outputsize = '30'
+            # Map combinations of Range and Interval to Twelve Data interval & outputsize
+            MAPPING = {
+                ('1D', '1m'): ('1min', '390'),
+                ('1D', '5m'): ('5min', '78'),
+                ('1D', '15m'): ('15min', '26'),
+                ('1D', '1h'): ('1h', '7'),
+                
+                ('1W', '5m'): ('5min', '390'),
+                ('1W', '15m'): ('15min', '130'),
+                ('1W', '1h'): ('1h', '35'),
+                ('1W', '1d'): ('1day', '5'),
+                
+                ('1M', '15m'): ('15min', '546'),
+                ('1M', '1h'): ('1h', '150'),
+                ('1M', '1d'): ('1day', '30'),
+                ('1M', '1w'): ('1week', '4'),
+                
+                ('1Y', '1d'): ('1day', '260'),
+                ('1Y', '1w'): ('1week', '52'),
+            }
             
-            if timeframe == 'D':
-                interval = '15min'
-                outputsize = '26'  # covers 6.5 hours of trading candles
-            elif timeframe == 'W':
-                interval = '2h'
-                outputsize = '35'  # 7 candles per day * 5 days
-            elif timeframe == 'M':
-                interval = '1day'
-                outputsize = '30'
-            elif timeframe == 'Y':
-                interval = '1week'
-                outputsize = '52'
+            mapping_key = (range_val, interval_val)
+            if mapping_key in MAPPING:
+                interval, outputsize = MAPPING[mapping_key]
+            else:
+                interval, outputsize = '1day', '30'
                 
             data = None
             last_error = None
