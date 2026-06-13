@@ -19,7 +19,8 @@ export default function PortfolioManager({
   setActivePortfolioId,
   stocks,
   onAddTransaction,
-  showNotification
+  showNotification,
+  onFetchPrice
 }) {
   const allocationCanvasRef = useRef(null);
   const allocationChartRef = useRef(null);
@@ -156,25 +157,47 @@ export default function PortfolioManager({
   };
 
   // Select stock from search dropdown autocomplete list
-  const handleSelectStock = (stock) => {
+  const handleSelectStock = async (stock) => {
     setSelectedTicker(stock.ticker);
     setSearchQuery(stock.ticker);
     setShowDropdown(false);
-    setPrice(stock.price || 150.00);
+    const livePrice = stock.price || stocks[stock.ticker]?.price;
+    if (livePrice) {
+      setPrice(livePrice);
+    }
+    if (onFetchPrice) {
+      const fetched = await onFetchPrice(stock.ticker);
+      if (!fetched) {
+        showNotification(`No price data found for "${stock.ticker}". Please check the symbol and try again.`, 'error');
+      }
+    }
   };
 
-  // Add custom symbol selection support
-  const handleAddCustomSymbol = () => {
+  const handleAddCustomSymbol = async () => {
     const customTicker = searchQuery.toUpperCase().trim();
     if (customTicker) {
       setSelectedTicker(customTicker);
       setSearchQuery(customTicker);
       setShowDropdown(false);
-      
       const existing = stocks[customTicker];
-      setPrice(existing ? existing.price : 150.00);
+      const livePrice = existing?.price;
+      if (livePrice) {
+        setPrice(livePrice);
+      }
+      if (onFetchPrice) {
+        const fetched = await onFetchPrice(customTicker);
+        if (!fetched) {
+          showNotification(`No price data found for "${customTicker}". Please check the symbol and try again.`, 'error');
+        }
+      }
     }
   };
+
+  useEffect(() => {
+    if (selectedTicker && stocks[selectedTicker]?.price) {
+      setPrice(stocks[selectedTicker].price);
+    }
+  }, [selectedTicker, stocks]);
 
   // Transaction fields inputs conversions
   const cleanFloat = (val) => {
@@ -423,17 +446,9 @@ export default function PortfolioManager({
           </div>
 
           {/* suggestions list */}
-          {showDropdown && (
+          {showDropdown && searchQuery.trim().length > 0 && (
             <div id="portfolioSearchDropdown" className="portfolio-search-dropdown" style={{ display: 'block' }}>
-              {searchResults.length === 0 ? (
-                <div onClick={handleAddCustomSymbol} className="portfolio-search-item">
-                  <div>
-                    <span className="ticker"><i className="fa-solid fa-circle-plus"></i> ADD '{searchQuery.toUpperCase()}'</span>
-                    <span className="name">Add custom symbol</span>
-                  </div>
-                </div>
-              ) : (
-                searchResults.slice(0, 5).map(stock => (
+              {searchResults.slice(0, 5).map(stock => (
                   <div key={stock.ticker} onClick={() => handleSelectStock(stock)} className="portfolio-search-item">
                     <div>
                       <span className="ticker">{stock.ticker}</span>
@@ -442,7 +457,13 @@ export default function PortfolioManager({
                     <span className="price">${(stock.price ?? 0).toFixed(2)}</span>
                   </div>
                 ))
-              )}
+              }
+              <div onClick={handleAddCustomSymbol} className="portfolio-search-item" style={{ borderTop: searchResults.length > 0 ? '1px solid var(--border-color)' : 'none' }}>
+                <div>
+                  <span className="ticker" style={{ color: 'var(--cyan)' }}><i className="fa-solid fa-circle-plus"></i> {searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Fetch Price' : `ADD '${searchQuery.toUpperCase().trim()}'`}</span>
+                  <span className="name">{searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Refresh live price for this stock' : 'Add custom symbol'}</span>
+                </div>
+              </div>
             </div>
           )}
         </div>

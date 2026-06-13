@@ -106,12 +106,12 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
   const fetchBackgroundPrice = useCallback(async (ticker) => {
     try {
       const res = await fetch(`/api/stock?ticker=${ticker}&range=1M&interval=1d`);
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const json = await res.json();
-      if (json.status !== 'ok') return;
+      if (json.status !== 'ok') return false;
 
       const values = json.values || [];
-      if (values.length === 0) return;
+      if (values.length === 0) return false;
 
       const fetchedPrice = parseFloat(values[values.length - 1].close);
       const prevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : fetchedPrice;
@@ -128,8 +128,10 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
           isLive: true
         }
       }));
+      return true;
     } catch {
       console.warn(`Background fetch failed for ${ticker}`);
+      return false;
     }
   }, []);
 

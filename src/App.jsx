@@ -148,7 +148,7 @@ export default function App() {
           </div>
         ) : (
           <div id="viewPortfolio" className="workspace-view active">
-            <PortfolioManager portfolios={portfolios} setPortfolios={setPortfolios} activePortfolioId={activePortfolioId} setActivePortfolioId={setActivePortfolioId} stocks={stocks} onAddTransaction={addTransaction} showNotification={addToast} />
+            <PortfolioManager portfolios={portfolios} setPortfolios={setPortfolios} activePortfolioId={activePortfolioId} setActivePortfolioId={setActivePortfolioId} stocks={stocks} onAddTransaction={addTransaction} showNotification={addToast} onFetchPrice={fetchBackgroundPrice} />
             <PerformanceHoldings portfolios={portfolios} activePortfolioId={activePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onDeleteTransaction={deleteTransaction} onResetPortfolio={resetPortfolio} onImportCSV={handleImportCSV} onExportCSV={handleExportCSV} onRefreshPrices={fetchBackgroundPrice} showNotification={addToast} />
           </div>
         )}
