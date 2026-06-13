@@ -1,26 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  STOCKS_METADATA,
-  seedMockDatabase,
-  generateWalk,
-  getTimeframeLabels,
-  parseStockLabels,
-  buildMockFallback
-} from '../utils/stockUtils';
+import { parseStockLabels } from '../utils/stockUtils';
 
-function loadCachedStocks(base) {
+function loadCachedStocks() {
   try {
     const saved = localStorage.getItem('aethertrade_cached_stocks');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      Object.keys(parsed).forEach(ticker => {
-        base[ticker] = { ...base[ticker], ...parsed[ticker], isLive: true };
-      });
-    }
+    if (saved) return JSON.parse(saved);
   } catch (e) {
     console.error(e);
   }
-  return base;
+  return {};
 }
 
 function persistStocks(stocks) {
@@ -34,7 +22,7 @@ function persistStocks(stocks) {
 }
 
 export function useStockData(activeTicker, selectedRange, selectedInterval, addToast) {
-  const [stocks, setStocks] = useState(() => loadCachedStocks(seedMockDatabase()));
+  const [stocks, setStocks] = useState(loadCachedStocks);
   const [isLoading, setIsLoading] = useState(false);
   const abortRef = useRef(null);
 
@@ -92,53 +80,28 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
     } catch (err) {
       if (err.name === 'AbortError') return { success: false, aborted: true };
 
-      console.warn(`Could not load Twelve Data for ${ticker}. Seeding fallback mock walk.`, err);
+      console.warn(`Could not load data for ${ticker}.`, err);
 
-      const popular = STOCKS_METADATA.find(s => s.ticker === ticker);
       const isSymbolNotFound = err.message.toLowerCase().includes("not found") ||
                                err.message.toLowerCase().includes("not valid") ||
                                err.message.toLowerCase().includes("invalid symbol");
 
-      if (isSymbolNotFound && !popular) {
-        addToast(`Ticker "${ticker}" does not exist on Twelve Data!`, 'error');
+      if (isSymbolNotFound) {
+        addToast(`Ticker "${ticker}" does not exist!`, 'error');
         if (watchlist && setWatchlist) {
           const next = watchlist.filter(t => t !== ticker);
           setWatchlist(next);
           if (setActiveTicker) setActiveTicker(next.length > 0 ? next[0] : 'AAPL');
         }
-        return { success: false, notFound: true };
+      } else {
+        addToast(`Failed to load data for ${ticker}.`, 'error');
       }
-
-      const base = stocks[ticker] || seedMockDatabase()[ticker] || {
-        ticker, name: `${ticker} Stock`, price: 150.00, change: 0.0, history: {}
-      };
-      const basePrice = base.price || 150.00;
-      const mockHistory = base.history || buildMockFallback(ticker, basePrice);
-      const closes = mockHistory[intervalVal] || generateWalk(basePrice, 100, 'up', 0.01);
-      const labels = getTimeframeLabels(intervalVal);
-
-      setStocks(prev => ({
-        ...prev,
-        [ticker]: {
-          ...prev[ticker],
-          ticker,
-          name: prev[ticker]?.name || `${ticker} Stock`,
-          price: basePrice,
-          change: base.change || 0.35,
-          timeframeChange: 1.25,
-          liveCloses: closes,
-          liveLabels: labels,
-          liveRawValues: null,
-          history: mockHistory,
-          isLive: true
-        }
-      }));
 
       return { success: false };
     } finally {
       setIsLoading(false);
     }
-  }, [stocks, addToast]);
+  }, [addToast]);
 
   const fetchBackgroundPrice = useCallback(async (ticker) => {
     try {
@@ -159,6 +122,7 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
         [ticker]: {
           ...prev[ticker],
           ticker,
+          name: prev[ticker]?.name || `${ticker} Stock`,
           price: fetchedPrice,
           change,
           isLive: true
@@ -191,22 +155,9 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
         [ticker]: { ...prev[ticker], ticker, portfolioHistory: closes, portfolioLabels: labels, isLive: true }
       }));
     } catch {
-      const basePrice = stocks[ticker]?.price || 150.00;
-      const mockHistory = stocks[ticker]?.history || { '1d': generateWalk(basePrice, 260, 'up', 0.012) };
-      const mockCloses = mockHistory['1d'];
-      const mockLabels = [];
-      const today = new Date();
-      for (let i = 0; i < 260; i++) {
-        const d = new Date(today.getTime() - (260 - 1 - i) * 24 * 60 * 60 * 1000);
-        mockLabels.push(d.toISOString().split('T')[0]);
-      }
-
-      setStocks(prev => ({
-        ...prev,
-        [ticker]: { ...prev[ticker], ticker, portfolioHistory: mockCloses, portfolioLabels: mockLabels, isLive: true }
-      }));
+      console.warn(`Portfolio history fetch failed for ${ticker}`);
     }
-  }, [stocks]);
+  }, []);
 
   return { stocks, setStocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory };
 }

@@ -7,21 +7,6 @@ export const STOCKS_METADATA = [
   { ticker: 'AMZN', name: 'Amazon.com Inc.', price: 180.80, change: -0.45, trend: 'down' }
 ];
 
-export function generateWalk(currentPrice, points, overallTrend, volatility) {
-  const result = [];
-  let price = currentPrice;
-  const bias = overallTrend === 'up' ? 0.002 : -0.002;
-
-  for (let i = points - 1; i >= 0; i--) {
-    result.unshift(parseFloat(price.toFixed(2)));
-    const changePercent = (Math.random() - 0.5) * volatility + bias;
-    price = price / (1 + changePercent);
-  }
-
-  result[result.length - 1] = currentPrice;
-  return result;
-}
-
 export function getTimeframeLabels(interval) {
   switch (interval) {
     case '1m':
@@ -57,41 +42,6 @@ export function getTimeframeLabels(interval) {
     default:
       return [];
   }
-}
-
-export function seedMockDatabase() {
-  const seeded = {};
-  STOCKS_METADATA.forEach(meta => {
-    seeded[meta.ticker] = {
-      ...meta,
-      isLive: false,
-      history: {
-        '1m': generateWalk(meta.price, 390, meta.trend, 0.002),
-        '5m': generateWalk(meta.price, 390, meta.trend, 0.003),
-        '15m': generateWalk(meta.price, 546, meta.trend, 0.004),
-        '1h': generateWalk(meta.price, 150, meta.trend, 0.006),
-        '1d': generateWalk(meta.price, 260, meta.trend, 0.012),
-        '1w': generateWalk(meta.price, 52, meta.trend, 0.025)
-      },
-      liveCloses: [],
-      liveLabels: [],
-      liveRawValues: []
-    };
-    seeded[meta.ticker].liveCloses = [...seeded[meta.ticker].history['1d']].slice(-30);
-    seeded[meta.ticker].liveLabels = getTimeframeLabels('1d').slice(-30);
-  });
-  return seeded;
-}
-
-export function buildMockFallback(ticker, basePrice = 150.00) {
-  return {
-    '1m': generateWalk(basePrice, 390, 'up', 0.002),
-    '5m': generateWalk(basePrice, 390, 'up', 0.003),
-    '15m': generateWalk(basePrice, 546, 'up', 0.004),
-    '1h': generateWalk(basePrice, 150, 'up', 0.006),
-    '1d': generateWalk(basePrice, 260, 'up', 0.012),
-    '1w': generateWalk(basePrice, 52, 'up', 0.025)
-  };
 }
 
 export function parseStockLabels(values, intervalVal) {
