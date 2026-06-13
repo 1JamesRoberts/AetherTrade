@@ -66,7 +66,7 @@ export default function ChartContainer({
   };
 
   const currentPrice = activeStock.price;
-  const displayChange = activeStock.timeframeChange !== undefined ? activeStock.timeframeChange : activeStock.change;
+  const displayChange = activeStock.change;
   const isUp = displayChange >= 0;
 
   // Handle Range modifications
