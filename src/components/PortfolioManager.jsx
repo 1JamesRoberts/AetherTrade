@@ -211,6 +211,12 @@ export default function PortfolioManager({
       return;
     }
 
+    const stockData = stocks[selectedTicker];
+    if (!stockData || !stockData.price || stockData.price <= 0) {
+      showNotification(`"${selectedTicker}" does not exist or has no valid price data. Please check the symbol.`, 'error');
+      return;
+    }
+
     const sharesQty = cleanFloat(shares);
     const pricePerShare = cleanFloat(price);
     const txFees = cleanFloat(fees) || 0;
