@@ -71,6 +71,7 @@ export default function App() {
   // Load active ticker + stagger sidebar fetches
   useEffect(() => {
     loadStockDataRef.current(activeTicker, selectedRange, selectedInterval, watchlistRef.current, setWatchlistRef.current, setActiveTickerRef.current);
+    fetchBackgroundPriceRef.current(activeTicker);
     watchlistRef.current.filter(t => t !== activeTicker).forEach((ticker, i) => {
       setTimeout(() => fetchBackgroundPriceRef.current(ticker), (i + 1) * 2000);
     });
