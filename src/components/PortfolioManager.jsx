@@ -439,7 +439,7 @@ export default function PortfolioManager({
                       <span className="ticker">{stock.ticker}</span>
                       <span className="name">{stock.name || `${stock.ticker} Stock`}</span>
                     </div>
-                    <span className="price">${stock.price.toFixed(2)}</span>
+                    <span className="price">${(stock.price ?? 0).toFixed(2)}</span>
                   </div>
                 ))
               )}
