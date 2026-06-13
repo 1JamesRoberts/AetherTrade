@@ -150,13 +150,24 @@ export default function PerformanceHoldings({
       timelineDates.push(new Date(endDate.getTime()));
     }
 
-    // Historical price retrieval logic from local cache
     const getPriceOnDate = (ticker, targetDate, fallbackPrice) => {
       const stock = stocks[ticker];
       if (!stock) return fallbackPrice;
 
       const closes = stock.portfolioHistory || stock.liveCloses || [];
       const labels = stock.portfolioLabels || stock.liveLabels || [];
+      const livePrice = parseFloat(stock.price) || 0;
+
+      const parseLocalDate = (dateStr) => {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      };
+
+      const validatePrice = (price) => {
+        if (!price || !livePrice || livePrice <= 0) return price;
+        const ratio = price / livePrice;
+        return (ratio > 3 || ratio < 0.33) ? livePrice : price;
+      };
 
       if (closes.length > 0) {
         const today = new Date();
@@ -166,36 +177,48 @@ export default function PerformanceHoldings({
         compareDate.setHours(0, 0, 0, 0);
 
         if (compareDate.getTime() === today.getTime()) {
-          return parseFloat(stock.price) || parseFloat(closes[closes.length - 1]) || fallbackPrice;
+          return livePrice || parseFloat(closes[closes.length - 1]) || fallbackPrice;
         }
+
+        let rawPrice = null;
 
         if (labels.length === closes.length) {
           let exactIndex = -1;
           labels.forEach((label, idx) => {
-            const labelDate = new Date(label);
-            if (!isNaN(labelDate.getTime())) {
-              labelDate.setHours(0, 0, 0, 0);
+            const parts = label.split('-');
+            if (parts.length === 3) {
+              const labelDate = parseLocalDate(label);
               if (labelDate.getTime() === compareDate.getTime()) {
                 exactIndex = idx;
               }
             }
           });
           if (exactIndex !== -1) {
-            return parseFloat(closes[exactIndex]) || fallbackPrice;
+            rawPrice = parseFloat(closes[exactIndex]) || fallbackPrice;
+            return validatePrice(rawPrice);
           }
         }
 
-        const msDiff = today.getTime() - compareDate.getTime();
-        const daysDiff = Math.max(0, Math.floor(msDiff / (24 * 60 * 60 * 1000)));
-
-        const isWeekly = (closes === stock.portfolioHistory) || (closes === stock.liveCloses && closes.length < 100);
-        const indexDiff = isWeekly ? Math.floor(daysDiff / 7) : Math.floor(daysDiff * 5 / 7);
-        const index = closes.length - 1 - indexDiff;
-
-        if (index >= 0 && index < closes.length) {
-          return parseFloat(closes[index]) || fallbackPrice;
-        } else if (index < 0) {
-          return parseFloat(closes[0]) || fallbackPrice;
+        let bestIdx = -1;
+        let bestDiff = Infinity;
+        labels.forEach((label, idx) => {
+          const parts = label.split('-');
+          if (parts.length === 3) {
+            const labelDate = parseLocalDate(label);
+            const diff = compareDate.getTime() - labelDate.getTime();
+            if (diff >= 0 && diff < bestDiff) {
+              bestDiff = diff;
+              bestIdx = idx;
+            }
+          }
+        });
+        if (bestIdx !== -1) {
+          rawPrice = parseFloat(closes[bestIdx]) || fallbackPrice;
+          return validatePrice(rawPrice);
+        }
+        if (closes.length > 0) {
+          rawPrice = parseFloat(closes[0]) || fallbackPrice;
+          return validatePrice(rawPrice);
         }
       }
       return fallbackPrice;
@@ -231,7 +254,7 @@ export default function PerformanceHoldings({
               h.shares = Math.max(0, h.shares - txShares);
               
               if (originalShares > 0) {
-                h.totalFees = h.shares * ((h.totalFees || 0) / originalShares);
+                h.totalFees = (h.totalFees || 0) * (h.shares / originalShares);
               } else {
                 h.totalFees = 0;
               }
@@ -319,7 +342,6 @@ export default function PerformanceHoldings({
           },
           y: {
             position: 'right',
-            beginAtZero: true,
             grid: {
               color: (context) => (context.tick && context.tick.value === 0) ? 'rgba(0, 229, 255, 0.35)' : 'rgba(255, 255, 255, 0.02)',
               borderDash: (context) => (context.tick && context.tick.value === 0) ? [5, 5] : [],

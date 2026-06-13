@@ -44,7 +44,7 @@ export function importTransactionsFromCSV(csvText) {
   const symbolIdx = headers.findIndex(h => h.includes("symbol") || h.includes("ticker") || h.includes("stock"));
   const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("unit"));
   const priceIdx = headers.findIndex(h => h.includes("price") || h.includes("amount"));
-  const feesIdx = headers.findIndex(h => h.includes("fee") || h.includes("commission"));
+  const feesIdx = headers.findIndex(h => (h.includes("fee") || h.includes("commission")) && !h.includes("before"));
   const accountIdx = headers.findIndex(h => h.includes("account"));
 
   if (dateIdx === -1 || typeIdx === -1 || symbolIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
