@@ -54,6 +54,7 @@ export default function ChartContainer({
   const dragStartEndIndexRef = useRef(0);
   const hasDraggedRef = useRef(false);
   const slicedRawRef = useRef([]);
+  const hoverXRef = useRef(null);
 
   const activeStock = stocks[activeTicker] || {
     ticker: activeTicker,
@@ -204,11 +205,7 @@ export default function ChartContainer({
         fill: true,
         tension: 0.35,
         pointRadius: 0,
-        pointHoverRadius: 8,
-        pointHoverBackgroundColor: color,
-        pointHoverBorderColor: '#fff',
-        pointHoverBorderWidth: 2.5,
-        pointHitRadius: 10
+        pointHitRadius: 0
       };
     }
 
@@ -303,6 +300,28 @@ export default function ChartContainer({
     };
 
     // Custom Candlestick Wicks Plugin
+    // Vertical crosshair line plugin
+    const verticalLinePlugin = {
+      id: 'verticalLine',
+      afterDraw(chart) {
+        if (hoverXRef.current === null) return;
+        const { ctx, chartArea } = chart;
+        const { top, bottom } = chartArea;
+        const x = hoverXRef.current;
+        if (x < chartArea.left || x > chartArea.right) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+        ctx.restore();
+      }
+    };
+
     const candlestickWicksPlugin = {
       id: 'candlestickWicks',
       afterDatasetsDraw(chart) {
@@ -368,6 +387,11 @@ export default function ChartContainer({
           mode: 'index',
           intersect: false
         },
+        elements: {
+          point: {
+            radius: 0
+          }
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -423,7 +447,7 @@ export default function ChartContainer({
           }
         }
       },
-      plugins: [horizontalLinesPlugin, candlestickWicksPlugin]
+      plugins: [horizontalLinesPlugin, verticalLinePlugin, candlestickWicksPlugin]
     });
 
     return () => {
@@ -460,6 +484,7 @@ export default function ChartContainer({
         chart.data.datasets[0].borderColor = slicedRaw.map(v => parseFloat(v.close) >= parseFloat(v.open) ? '#00e676' : '#ff1744');
       } else {
         chart.data.datasets[0].data = slicedCloses;
+        chart.data.datasets[0].pointRadius = 0;
       }
 
       // Re-scale boundaries
@@ -494,7 +519,15 @@ export default function ChartContainer({
       if (!chart) return;
 
       const rect = canvas.getBoundingClientRect();
+      const hoverX = e.clientX - rect.left;
       const hoverY = e.clientY - rect.top;
+      const chartArea = chart.chartArea;
+
+      if (hoverX >= chartArea.left && hoverX <= chartArea.right) {
+        hoverXRef.current = hoverX;
+      } else {
+        hoverXRef.current = null;
+      }
 
       if (!isMouseDownRef.current) {
         // Handle hovering guide line preview
@@ -502,11 +535,11 @@ export default function ChartContainer({
           const yValue = chart.scales.y.getValueForPixel(hoverY);
           if (yValue !== undefined && yValue >= chart.scales.y.min && yValue <= chart.scales.y.max) {
             hoverPriceRef.current = parseFloat(yValue.toFixed(2));
-            chart.draw();
           } else {
             hoverPriceRef.current = null;
           }
         }
+        chart.draw();
         return;
       }
 
@@ -576,6 +609,7 @@ export default function ChartContainer({
     const onMouseLeave = () => {
       isMouseDownRef.current = false;
       hoverPriceRef.current = null;
+      hoverXRef.current = null;
       if (chartInstanceRef.current) {
         chartInstanceRef.current.draw();
       }
