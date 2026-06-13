@@ -1,4 +1,4 @@
-export function parseCSV(text) {
+function parseCSV(text) {
   const lines = [];
   let row = [""];
   let insideQuote = false;
