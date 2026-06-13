@@ -5,12 +5,25 @@ import json
 import os
 import sys
 
+# Auto-load .env file if it exists
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
+if os.path.isfile(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith('#') and '=' in _line:
+                _key, _, _val = _line.partition('=')
+                os.environ.setdefault(_key.strip(), _val.strip().strip('"').strip("'"))
+
 # Load API keys from environment variables
 API_KEYS = [
     os.environ.get('TWELVE_DATA_KEY_1', ''),
     os.environ.get('TWELVE_DATA_KEY_2', ''),
     os.environ.get('TWELVE_DATA_KEY_3', ''),
     os.environ.get('TWELVE_DATA_KEY_4', ''),
+    os.environ.get('TWELVE_DATA_KEY_5', ''),
+    os.environ.get('TWELVE_DATA_KEY_6', ''),
+    os.environ.get('TWELVE_DATA_KEY_7', ''),
 ]
 API_KEYS = [k for k in API_KEYS if k]
 current_key_index = 0
