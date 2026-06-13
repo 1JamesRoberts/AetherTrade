@@ -56,7 +56,7 @@ export default function ChartContainer({
   const slicedRawRef = useRef([]);
   const hoverXRef = useRef(null);
 
-  const activeStock = stocks[activeTicker] || {
+  const activeStock = {
     ticker: activeTicker,
     name: `${activeTicker} Stock`,
     price: 150.00,
@@ -64,7 +64,8 @@ export default function ChartContainer({
     timeframeChange: 0.0,
     liveCloses: [],
     liveLabels: [],
-    liveRawValues: []
+    liveRawValues: [],
+    ...stocks[activeTicker]
   };
 
   const currentPrice = activeStock.price;
