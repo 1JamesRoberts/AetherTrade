@@ -1333,25 +1333,275 @@ body {
   }
 }
 
+/* Mobile Stock Picker — hidden on desktop */
+.mobile-stock-picker {
+  display: none;
+}
+
+/* Tablet */
 @media (max-width: 850px) {
+  .app-workspace {
+    height: auto;
+    overflow-y: auto;
+  }
+
+  .workspace-view {
+    overflow: visible;
+  }
+
   #viewTerminal.workspace-view.active {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .mobile-stock-picker {
+    display: block;
+  }
+
+  .mobile-stock-picker select {
+    width: 100%;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    cursor: pointer;
+  }
+
+  .mobile-stock-picker select:focus {
+    outline: none;
+    border-color: var(--cyan);
   }
 
   .panel-left {
     display: none;
-    /* Hide stock selection or fold into a dropdown on smaller sizes */
+  }
+
+  .panel-right {
+    grid-column: 1;
+    overflow: visible;
+  }
+
+  .panel-center {
+    overflow: visible;
   }
 
   .app-header {
     flex-wrap: wrap;
     height: auto;
-    padding: 12px 16px;
-    gap: 12px;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .header-logo {
+    gap: 8px;
+  }
+
+  .header-logo .logo-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .header-logo .logo-brand {
+    font-size: 16px;
+  }
+
+  .header-logo .logo-sub {
+    font-size: 10px;
+  }
+
+  .app-nav {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .user-email {
+    display: none;
   }
 
   .ticker-tape {
     display: none;
+  }
+
+  .panel-center {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .chart-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chart-controls {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .stock-name {
+    font-size: 18px;
+  }
+
+  .stock-price {
+    font-size: 16px;
+  }
+
+  .stock-badge {
+    padding: 6px 12px;
+    font-size: 15px;
+  }
+
+  .analysis-section {
+    padding: 16px;
+  }
+
+  .holding-panel {
+    padding: 14px 16px;
+  }
+
+  .holding-row {
+    padding: 8px 10px;
+  }
+
+  .holding-row-details {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .analysis-cards-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .auth-card {
+    padding: 28px 20px;
+    margin: 10px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .app-header {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .nav-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .nav-btn i {
+    font-size: 12px;
+  }
+
+  .panel-center {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .chart-container {
+    min-height: 220px;
+  }
+
+  .chart-controls {
+    gap: 6px;
+  }
+
+  .range-selector,
+  .interval-selector,
+  .chart-style-selector {
+    padding: 3px;
+  }
+
+  .range-btn,
+  .interval-btn,
+  .style-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .toggle-container span {
+    font-size: 10px !important;
+  }
+
+  .zoom-container {
+    display: none !important;
+  }
+
+  .stock-name {
+    font-size: 16px;
+  }
+
+  .stock-price {
+    font-size: 14px;
+  }
+
+  .stock-trend {
+    font-size: 12px;
+  }
+
+  .stock-badge {
+    padding: 5px 10px;
+    font-size: 13px;
+  }
+
+  .chart-instructions {
+    font-size: 10px;
+  }
+
+  .holding-panel-header {
+    font-size: 11px;
+  }
+
+  .holding-row-name {
+    font-size: 11px;
+  }
+
+  .holding-row-pnl {
+    font-size: 11px;
+  }
+
+  .holding-row-details span {
+    font-size: 10px;
+  }
+
+  .analysis-section {
+    padding: 12px;
+  }
+
+  .section-subtitle {
+    font-size: 12px;
+  }
+
+  .analysis-cards-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .metric-card {
+    padding: 12px 14px;
+  }
+
+  .auth-card {
+    padding: 24px 16px;
+    margin: 8px;
+  }
+
+  .auth-title {
+    font-size: 18px;
+  }
+
+  .auth-providers {
+    flex-direction: column;
   }
 }
 
@@ -1749,6 +1999,12 @@ input[type="date"]:focus {
 /* Collapsed Watchlist */
 #viewTerminal.workspace-view.active.watchlist-collapsed {
   grid-template-columns: 48px 1fr 360px;
+}
+
+@media (max-width: 850px) {
+  #viewTerminal.workspace-view.active.watchlist-collapsed {
+    grid-template-columns: 1fr;
+  }
 }
 
 .panel-left.collapsed {
