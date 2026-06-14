@@ -179,7 +179,7 @@ export default function ChartContainer({
       ? ((slicedCloses[slicedCloses.length - 1] - slicedCloses[0]) / slicedCloses[0]) * 100
       : 0;
     const color = timeframeChange >= 0 ? '#00e676' : '#ff1744';
-    const glow = timeframeChange >= 0 ? 'rgba(0, 230, 118, 0.12)' : 'rgba(255, 23, 68, 0.12)';
+    const glow = timeframeChange >= 0 ? 'rgba(0, 230, 118, 0.35)' : 'rgba(255, 23, 68, 0.35)';
 
     let datasetConfig = {};
     let resolvedChartType = 'line';
