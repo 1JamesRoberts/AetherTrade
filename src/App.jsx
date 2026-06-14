@@ -160,8 +160,35 @@ export default function App() {
         {view === 'terminal' ? (
           <div id="viewTerminal" className={`workspace-view active ${isWatchlistCollapsed ? 'watchlist-collapsed' : ''}`}>
             <Watchlist watchlist={watchlist} activeTicker={activeTicker} setActiveTicker={setActiveTicker} stocks={stocks} onRemoveTicker={handleRemoveTicker} onAddTicker={handleAddTicker} isCollapsed={isWatchlistCollapsed} onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)} />
-            <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} tickerHoldings={activeTickerHoldings} holdingCurrentPrice={activeStockPrice} />
-            <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} />
+            <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} />
+            <div className="panel panel-right">
+              {activeTickerHoldings.length > 0 && (
+                <div className="holding-panel">
+                  <div className="holding-panel-header">
+                    <i className="fa-solid fa-briefcase"></i> Holdings — {activeTicker}
+                  </div>
+                  {activeTickerHoldings.map(h => {
+                    const pnl = (activeStockPrice - h.avgCost) * h.shares;
+                    const pnlPct = h.avgCost ? ((activeStockPrice - h.avgCost) / h.avgCost * 100) : 0;
+                    return (
+                      <div key={h.portfolioId} className="holding-row">
+                        <div className="holding-row-header">
+                          <span className="holding-row-name">{h.portfolioName}</span>
+                          <span className={`holding-row-pnl ${pnl >= 0 ? 'positive' : 'negative'}`}>
+                            {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ({pnlPct.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <div className="holding-row-details">
+                          <span>{h.shares} shares @ ${h.avgCost.toFixed(2)}</span>
+                          <span>Value: ${(h.shares * activeStockPrice).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} />
+            </div>
           </div>
         ) : (
           <div id="viewPortfolio" className="workspace-view active">

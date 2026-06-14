@@ -794,71 +794,73 @@ body {
   color: var(--cyan);
 }
 
-/* Holding Info Bar */
-.holding-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
+/* Holding Panel (right column) */
+.holding-panel {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.holding-bar {
+.holding-panel-header {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 24px;
-  padding: 10px 16px;
+  gap: 6px;
+}
+
+.holding-panel-header i {
+  color: var(--cyan);
+}
+
+.holding-row {
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
+  margin-bottom: 6px;
 }
 
-.holding-bar-portfolio {
-  font-size: 11px;
+.holding-row:last-child {
+  margin-bottom: 0;
+}
+
+.holding-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.holding-row-name {
+  font-size: 12px;
   font-weight: 700;
   color: var(--cyan);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding-right: 12px;
-  border-right: 1px solid var(--border-color);
-  white-space: nowrap;
 }
 
-.holding-bar-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.holding-bar-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.5px;
-  font-weight: 600;
-}
-
-.holding-bar-value {
-  font-size: 13px;
+.holding-row-pnl {
+  font-size: 12px;
   font-weight: 700;
   font-family: 'JetBrains Mono', monospace;
-  color: var(--text-primary);
 }
 
-.holding-bar-value.positive {
+.holding-row-pnl.positive {
   color: var(--green);
 }
 
-.holding-bar-value.negative {
+.holding-row-pnl.negative {
   color: var(--red);
 }
 
-.holding-bar-pct {
+.holding-row-details {
+  display: flex;
+  justify-content: space-between;
   font-size: 11px;
-  font-weight: 600;
-  margin-left: 4px;
-  opacity: 0.8;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
 }
 
 /* Quick Analysis Cards */
