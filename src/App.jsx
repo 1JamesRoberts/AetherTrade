@@ -5,9 +5,11 @@ import AnalysisEngine from './components/AnalysisEngine';
 import PortfolioManager from './components/PortfolioManager';
 import PerformanceHoldings from './components/PerformanceHoldings';
 import ToastContainer from './components/ToastContainer';
+import AuthPage from './components/AuthPage';
 import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
 import { usePortfolio, rebuildPortfolioHoldings } from './hooks/usePortfolio';
+import { useAuth } from './hooks/useAuth';
 import { importTransactionsFromCSV, validateCSVImport, exportTransactionsAsCSV } from './utils/csvUtils';
 
 function loadLinesMap() {
@@ -19,6 +21,7 @@ function loadLinesMap() {
 }
 
 export default function App() {
+  const { user, loading: authLoading, signUp, signIn, signInWithGitHub, signInWithGoogle, signOut } = useAuth();
   const [view, setView] = useState('terminal');
   const [toasts, setToasts] = useState([]);
   const [currentCapital, setCurrentCapital] = useState(10000);
@@ -41,7 +44,7 @@ export default function App() {
 
   const { watchlist, setWatchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist();
   const { stocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory } = useStockData(activeTicker, selectedRange, selectedInterval, addToast);
-  const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio } = usePortfolio(addToast);
+  const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio } = usePortfolio(addToast, user);
 
   const loadStockDataRef = useRef(loadStockData);
   const fetchBackgroundPriceRef = useRef(fetchBackgroundPrice);
@@ -133,6 +136,28 @@ export default function App() {
     addToast("Transactions exported successfully!", "success");
   };
 
+  if (authLoading) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card" style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="logo-icon" style={{ margin: '0 auto 16px' }}><i className="fa-solid fa-chart-line"></i></div>
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AuthPage
+        onSignUp={signUp}
+        onSignIn={signIn}
+        onGitHub={signInWithGitHub}
+        onGoogle={signInWithGoogle}
+      />
+    );
+  }
+
   return (
     <>
       <div className="glow-sphere glow-sphere-1"></div>
@@ -154,6 +179,12 @@ export default function App() {
             <i className="fa-solid fa-briefcase"></i> Portfolio
           </button>
         </nav>
+        <div className="header-user">
+          <span className="user-email">{user.email}</span>
+          <button className="btn-signout" onClick={signOut} title="Sign out">
+            <i className="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
       </header>
 
       <main className="app-workspace">
