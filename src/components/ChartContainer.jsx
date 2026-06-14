@@ -56,6 +56,7 @@ export default function ChartContainer({
   const slicedRawRef = useRef([]);
   const hoverXRef = useRef(null);
   const hoverYRef = useRef(null);
+  const slicedLabelsRef = useRef([]);
 
   const activeStock = {
     ticker: activeTicker,
@@ -156,6 +157,7 @@ export default function ChartContainer({
     const slicedLabels = activeStock.liveLabels.slice(startIdx, endIdx);
     const slicedRaw = rawValues.slice(startIdx, endIdx);
     slicedRawRef.current = slicedRaw;
+    slicedLabelsRef.current = slicedLabels;
 
     // Compute range bound limits
     let minVal = 0;
@@ -311,19 +313,48 @@ export default function ChartContainer({
       id: 'verticalLine',
       afterDraw(chart) {
         if (hoverXRef.current === null) return;
-        const { ctx, chartArea } = chart;
+        const { ctx, chartArea, scales: { x } } = chart;
         const { top, bottom } = chartArea;
-        const x = hoverXRef.current;
-        if (x < chartArea.left || x > chartArea.right) return;
+        const hoverX = hoverXRef.current;
+        if (hoverX < chartArea.left || hoverX > chartArea.right) return;
+
+        // Snap to nearest data point index
+        const rawIndex = x.getValueForPixel(hoverX);
+        const snappedIndex = Math.round(rawIndex);
+        const snappedX = x.getPixelForValue(snappedIndex);
+
+        const labels = slicedLabelsRef.current;
+        const dateLabel = labels[snappedIndex] || '';
 
         ctx.save();
+
+        // Draw vertical line at snapped position
         ctx.beginPath();
-        ctx.moveTo(x, top);
-        ctx.lineTo(x, bottom);
+        ctx.moveTo(snappedX, top);
+        ctx.lineTo(snappedX, bottom);
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.stroke();
+
+        // Draw date label at the bottom
+        if (dateLabel) {
+          ctx.font = '600 10px var(--font-mono)';
+          const textWidth = ctx.measureText(dateLabel).width;
+          const tagWidth = textWidth + 12;
+          const tagHeight = 18;
+          const tagX = snappedX - tagWidth / 2;
+          const tagY = bottom + 4;
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.beginPath();
+          ctx.roundRect(tagX, tagY, tagWidth, tagHeight, 4);
+          ctx.fill();
+
+          ctx.fillStyle = '#060912';
+          ctx.fillText(dateLabel, tagX + 6, tagY + 13);
+        }
+
         ctx.restore();
       }
     };
@@ -429,7 +460,8 @@ export default function ChartContainer({
         maintainAspectRatio: false,
         layout: {
           padding: {
-            right: 85
+            right: 85,
+            bottom: 30
           }
         },
         interaction: {
