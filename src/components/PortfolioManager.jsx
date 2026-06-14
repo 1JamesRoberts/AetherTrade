@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
@@ -283,21 +283,20 @@ export default function PortfolioManager({
 
   // Holdings allocations listing
   const holdingsKeys = Object.keys(activePortfolio.holdings || {});
-  let totalAssetValue = 0;
 
-  const holdingsList = holdingsKeys.map(ticker => {
-    const holding = activePortfolio.holdings[ticker];
-    const stockMeta = stocks[ticker] || { price: holding.avgCost };
-    const stockPrice = stockMeta.price || holding.avgCost;
-    const marketValue = holding.shares * stockPrice;
-    totalAssetValue += marketValue;
-    return {
-      ticker,
-      shares: holding.shares,
-      price: stockPrice,
-      marketValue
-    };
-  }).sort((a, b) => b.marketValue - a.marketValue);
+  const { holdingsList, totalAssetValue } = useMemo(() => {
+    let total = 0;
+    const list = holdingsKeys.map(ticker => {
+      const holding = activePortfolio.holdings[ticker];
+      const stockMeta = stocks[ticker] || { price: holding.avgCost };
+      const stockPrice = stockMeta.price || holding.avgCost;
+      const marketValue = holding.shares * stockPrice;
+      total += marketValue;
+      return { ticker, shares: holding.shares, price: stockPrice, marketValue };
+    }).sort((a, b) => b.marketValue - a.marketValue);
+    return { holdingsList: list, totalAssetValue: total };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePortfolio.holdings, stocks, ...holdingsKeys]);
 
   // Render Allocation Doughnut Chart using Chart.js on holdings changes
   useEffect(() => {
