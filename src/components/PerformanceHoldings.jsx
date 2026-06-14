@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
@@ -42,48 +42,36 @@ export default function PerformanceHoldings({
   let totalCostBasis = 0;
 
   const holdingsKeys = Object.keys(activePortfolio.holdings || {});
+  const rawHoldings = holdingsKeys.map(ticker => {
+    const holding = activePortfolio.holdings[ticker];
+    const stockMeta = stocks[ticker] || { price: holding.avgCost, name: `${ticker} Stock` };
+    const stockPrice = stockMeta.price || holding.avgCost;
+    const totalCost = (holding.shares * holding.avgCost) + (holding.totalFees || 0);
+    const marketValue = holding.shares * stockPrice;
+    const pnlVal = marketValue - totalCost;
+    const pnlPct = totalCost > 0 ? (pnlVal / totalCost) * 100 : 0;
 
-  // Recompute holdings whenever stocks or portfolio changes
-  const rawHoldings = useMemo(() => {
-    let assetVal = 0;
-    let costBasis = 0;
-    const holdings = holdingsKeys.map(ticker => {
-      const holding = activePortfolio.holdings[ticker];
-      const stockMeta = stocks[ticker] || { price: holding.avgCost, name: `${ticker} Stock` };
-      const stockPrice = stockMeta.price || holding.avgCost;
-      const totalCost = (holding.shares * holding.avgCost) + (holding.totalFees || 0);
-      const marketValue = holding.shares * stockPrice;
-      const pnlVal = marketValue - totalCost;
-      const pnlPct = totalCost > 0 ? (pnlVal / totalCost) * 100 : 0;
+    totalAssetValue += marketValue;
+    totalCostBasis += totalCost;
 
-      assetVal += marketValue;
-      costBasis += totalCost;
-
-      return {
-        ticker,
-        name: stockMeta.name || `${ticker} Stock`,
-        shares: holding.shares,
-        avgCost: holding.avgCost,
-        currentPrice: stockPrice,
-        totalCost,
-        marketValue,
-        pnlVal,
-        pnlPct
-      };
-    });
-    return { holdings, assetVal, costBasis };
-  }, [activePortfolio, stocks, holdingsKeys]);
-
-  // Use memoized values for totals
-  totalAssetValue = rawHoldings.assetVal;
-  totalCostBasis = rawHoldings.costBasis;
-  const sortedHoldingsData = rawHoldings.holdings;
+    return {
+      ticker,
+      name: stockMeta.name || `${ticker} Stock`,
+      shares: holding.shares,
+      avgCost: holding.avgCost,
+      currentPrice: stockPrice,
+      totalCost,
+      marketValue,
+      pnlVal,
+      pnlPct
+    };
+  });
 
   const netProfit = totalAssetValue - totalCostBasis;
   const netReturnPct = totalCostBasis > 0 ? (netProfit / totalCostBasis) * 100 : 0;
 
   // Sorting logic
-  const sortedHoldings = [...sortedHoldingsData].sort((a, b) => {
+  const sortedHoldings = [...rawHoldings].sort((a, b) => {
     let valA = a[sortColumn];
     let valB = b[sortColumn];
 
