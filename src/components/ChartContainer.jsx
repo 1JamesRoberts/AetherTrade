@@ -179,7 +179,7 @@ export default function ChartContainer({
       ? ((slicedCloses[slicedCloses.length - 1] - slicedCloses[0]) / slicedCloses[0]) * 100
       : 0;
     const color = timeframeChange >= 0 ? '#00e676' : '#ff1744';
-    const glow = timeframeChange >= 0 ? 'rgba(0, 230, 118, 0.35)' : 'rgba(255, 23, 68, 0.35)';
+    const glow = timeframeChange >= 0 ? 'rgba(0, 230, 118, 0.7)' : 'rgba(255, 23, 68, 0.7)';
 
     let datasetConfig = {};
     let resolvedChartType = 'line';
@@ -332,7 +332,7 @@ export default function ChartContainer({
         ctx.beginPath();
         ctx.moveTo(snappedX, top);
         ctx.lineTo(snappedX, bottom);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.stroke();
@@ -378,7 +378,7 @@ export default function ChartContainer({
         ctx.beginPath();
         ctx.moveTo(left, yPixel);
         ctx.lineTo(right, yPixel);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.stroke();
@@ -675,7 +675,7 @@ export default function ChartContainer({
         if (yValue !== undefined && yValue >= chart.scales.y.min && yValue <= chart.scales.y.max) {
           const clickedPrice = parseFloat(yValue.toFixed(2));
           const existingLines = linesMap[activeTicker] || [];
-          
+
           // Floating-point safety delta bound checks
           const isDuplicate = existingLines.some(price => Math.abs(price - clickedPrice) < (activeStock.price * 0.003));
           if (!isDuplicate) {
