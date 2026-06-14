@@ -101,6 +101,13 @@ export default function App() {
       });
 
       setPortfolios(updated);
+
+      // Fetch live prices for all imported tickers so the table updates
+      const importedTickers = [...new Set(importedTxs.map(tx => tx.ticker))];
+      importedTickers.forEach((ticker, i) => {
+        setTimeout(() => fetchBackgroundPriceRef.current(ticker), i * 500);
+      });
+
       addToast(`Successfully imported ${importedTxs.length} transactions!`, 'success');
     } catch (err) {
       alert(`CSV Import Failed:\n\n${err.message}`);
