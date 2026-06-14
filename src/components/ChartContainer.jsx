@@ -55,6 +55,7 @@ export default function ChartContainer({
   const hasDraggedRef = useRef(false);
   const slicedRawRef = useRef([]);
   const hoverXRef = useRef(null);
+  const hoverYRef = useRef(null);
 
   const activeStock = {
     ticker: activeTicker,
@@ -327,6 +328,49 @@ export default function ChartContainer({
       }
     };
 
+    // Horizontal crosshair line plugin with price label
+    const horizontalLinePlugin = {
+      id: 'horizontalLine',
+      afterDraw(chart) {
+        if (showLevels) return;
+        if (hoverYRef.current === null) return;
+        const { ctx, chartArea, scales: { y } } = chart;
+        const { left, right } = chartArea;
+        const yPixel = hoverYRef.current;
+        if (yPixel < chartArea.top || yPixel > chartArea.bottom) return;
+
+        const priceAtCursor = y.getValueForPixel(yPixel);
+
+        ctx.save();
+
+        // Draw horizontal dashed line
+        ctx.beginPath();
+        ctx.moveTo(left, yPixel);
+        ctx.lineTo(right, yPixel);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.stroke();
+
+        // Draw price tag on the right
+        const tagWidth = 80;
+        const tagHeight = 22;
+        const tagX = right + 5;
+        const tagY = yPixel - tagHeight / 2;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(tagX, tagY, tagWidth, tagHeight, 4);
+        ctx.fill();
+
+        ctx.fillStyle = '#060912';
+        ctx.font = '700 11px var(--font-mono)';
+        ctx.fillText(`$${priceAtCursor.toFixed(2)}`, tagX + 8, yPixel + 4);
+
+        ctx.restore();
+      }
+    };
+
     const candlestickWicksPlugin = {
       id: 'candlestickWicks',
       afterDatasetsDraw(chart) {
@@ -452,7 +496,7 @@ export default function ChartContainer({
           }
         }
       },
-      plugins: [horizontalLinesPlugin, verticalLinePlugin, candlestickWicksPlugin]
+      plugins: [horizontalLinesPlugin, horizontalLinePlugin, verticalLinePlugin, candlestickWicksPlugin]
     });
 
     return () => {
@@ -530,8 +574,10 @@ export default function ChartContainer({
 
       if (hoverX >= chartArea.left && hoverX <= chartArea.right) {
         hoverXRef.current = hoverX;
+        hoverYRef.current = hoverY;
       } else {
         hoverXRef.current = null;
+        hoverYRef.current = null;
       }
 
       if (!isMouseDownRef.current) {
@@ -615,6 +661,7 @@ export default function ChartContainer({
       isMouseDownRef.current = false;
       hoverPriceRef.current = null;
       hoverXRef.current = null;
+      hoverYRef.current = null;
       if (chartInstanceRef.current) {
         chartInstanceRef.current.draw();
       }
