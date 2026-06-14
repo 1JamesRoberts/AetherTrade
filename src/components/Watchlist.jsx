@@ -6,7 +6,9 @@ export default function Watchlist({
   setActiveTicker,
   stocks,
   onRemoveTicker,
-  onAddTicker
+  onAddTicker,
+  isCollapsed,
+  onToggleCollapse
 }) {
   const [query, setQuery] = useState('');
 
@@ -31,14 +33,17 @@ export default function Watchlist({
   };
 
   return (
-    <section className="panel panel-left" aria-label="Stock Selection">
-      <div className="panel-header">
-        <h2 className="panel-title">
-          <i className="fa-solid fa-star"></i> Watchlist
+    <section className={`panel panel-left ${isCollapsed ? 'collapsed' : ''}`} aria-label="Stock Selection">
+      <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={onToggleCollapse}>
+        <h2 className="panel-title" style={{ margin: 0 }}>
+          <i className="fa-solid fa-star"></i> {!isCollapsed && 'Watchlist'}
         </h2>
+        <i className={`fa-solid ${isCollapsed ? 'fa-angles-right' : 'fa-angles-left'}`} style={{ fontSize: '11px', color: 'var(--text-muted)', transition: 'transform 0.2s ease' }}></i>
       </div>
 
-      <div className="search-box">
+      {!isCollapsed && (
+        <>
+          <div className="search-box">
         <div className="search-input-container">
           <i className="fa-solid fa-magnifying-glass search-icon"></i>
           <input
@@ -139,6 +144,8 @@ export default function Watchlist({
           )}
         </ul>
       </div>
+        </>
+      )}
     </section>
   );
 }

@@ -28,6 +28,7 @@ export default function App() {
   const [showLevels, setShowLevels] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [linesMap, setLinesMap] = useState(loadLinesMap);
+  const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
 
   const addToast = useCallback((message, type = 'success') => {
     const id = Date.now() + Math.random().toString(36).substr(2, 9);
@@ -141,8 +142,8 @@ export default function App() {
 
       <main className="app-workspace">
         {view === 'terminal' ? (
-          <div id="viewTerminal" className="workspace-view active">
-            <Watchlist watchlist={watchlist} activeTicker={activeTicker} setActiveTicker={setActiveTicker} stocks={stocks} onRemoveTicker={handleRemoveTicker} onAddTicker={handleAddTicker} />
+          <div id="viewTerminal" className={`workspace-view active ${isWatchlistCollapsed ? 'watchlist-collapsed' : ''}`}>
+            <Watchlist watchlist={watchlist} activeTicker={activeTicker} setActiveTicker={setActiveTicker} stocks={stocks} onRemoveTicker={handleRemoveTicker} onAddTicker={handleAddTicker} isCollapsed={isWatchlistCollapsed} onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)} />
             <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} />
             <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} />
           </div>

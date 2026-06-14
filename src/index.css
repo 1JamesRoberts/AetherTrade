@@ -745,8 +745,8 @@ body {
 .chart-container {
   flex: 1;
   position: relative;
-  min-height: 250px;
-  max-height: 480px;
+  min-height: 300px;
+  max-height: 700px;
   background: rgba(4, 6, 12, 0.55);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -1623,4 +1623,20 @@ input[type="date"]:focus {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* Collapsed Watchlist */
+#viewTerminal.watchlist-collapsed {
+  grid-template-columns: 48px 1fr 360px;
+}
+.panel-left.collapsed {
+  min-width: 48px;
+  max-width: 48px;
+}
+.panel-left.collapsed .panel-header {
+  padding: 12px 8px;
+  justify-content: center;
+}
+.panel-left.collapsed .panel-title {
+  display: none;
 }
