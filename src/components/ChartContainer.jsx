@@ -39,7 +39,7 @@ export default function ChartContainer({
   setLinesMap,
   onRefresh,
   isLoading,
-  holding,
+  tickerHoldings,
   holdingCurrentPrice
 }) {
   const canvasRef = useRef(null);
@@ -987,33 +987,40 @@ export default function ChartContainer({
       </div>
 
       {/* Holding Info Bar */}
-      {holding && (
-        <div className="holding-bar">
-          <div className="holding-bar-item">
-            <span className="holding-bar-label">Shares</span>
-            <span className="holding-bar-value">{holding.shares}</span>
-          </div>
-          <div className="holding-bar-item">
-            <span className="holding-bar-label">Avg Cost</span>
-            <span className="holding-bar-value">${holding.avgCost.toFixed(2)}</span>
-          </div>
-          <div className="holding-bar-item">
-            <span className="holding-bar-label">Current</span>
-            <span className="holding-bar-value">${holdingCurrentPrice.toFixed(2)}</span>
-          </div>
-          <div className="holding-bar-item">
-            <span className="holding-bar-label">Market Value</span>
-            <span className="holding-bar-value">${(holding.shares * holdingCurrentPrice).toFixed(2)}</span>
-          </div>
-          <div className="holding-bar-item">
-            <span className="holding-bar-label">Unrealized P&L</span>
-            <span className={`holding-bar-value ${(holdingCurrentPrice - holding.avgCost) * holding.shares >= 0 ? 'positive' : 'negative'}`}>
-              {(holdingCurrentPrice - holding.avgCost) * holding.shares >= 0 ? '+' : ''}${((holdingCurrentPrice - holding.avgCost) * holding.shares).toFixed(2)}
-              <span className="holding-bar-pct">
-                ({((holdingCurrentPrice - holding.avgCost) / holding.avgCost * 100).toFixed(1)}%)
-              </span>
-            </span>
-          </div>
+      {tickerHoldings && tickerHoldings.length > 0 && (
+        <div className="holding-bars">
+          {tickerHoldings.map(h => {
+            const pnl = (holdingCurrentPrice - h.avgCost) * h.shares;
+            const pnlPct = h.avgCost ? ((holdingCurrentPrice - h.avgCost) / h.avgCost * 100) : 0;
+            return (
+              <div key={h.portfolioId} className="holding-bar">
+                <div className="holding-bar-portfolio">{h.portfolioName}</div>
+                <div className="holding-bar-item">
+                  <span className="holding-bar-label">Shares</span>
+                  <span className="holding-bar-value">{h.shares}</span>
+                </div>
+                <div className="holding-bar-item">
+                  <span className="holding-bar-label">Avg Cost</span>
+                  <span className="holding-bar-value">${h.avgCost.toFixed(2)}</span>
+                </div>
+                <div className="holding-bar-item">
+                  <span className="holding-bar-label">Current</span>
+                  <span className="holding-bar-value">${holdingCurrentPrice.toFixed(2)}</span>
+                </div>
+                <div className="holding-bar-item">
+                  <span className="holding-bar-label">Market Value</span>
+                  <span className="holding-bar-value">${(h.shares * holdingCurrentPrice).toFixed(2)}</span>
+                </div>
+                <div className="holding-bar-item">
+                  <span className="holding-bar-label">Unrealized P&L</span>
+                  <span className={`holding-bar-value ${pnl >= 0 ? 'positive' : 'negative'}`}>
+                    {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
+                    <span className="holding-bar-pct">({pnlPct.toFixed(1)}%)</span>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>

@@ -80,9 +80,14 @@ export default function App() {
 
   const handleRefresh = () => loadStockDataRef.current(activeTicker, selectedRange, selectedInterval, watchlistRef.current, setWatchlistRef.current, setActiveTickerRef.current);
 
-  const activePortfolio = portfolios.find(p => p.id === activePortfolioId);
-  const activeHolding = activePortfolio?.holdings?.[activeTicker] || null;
   const activeStockPrice = stocks[activeTicker]?.price || 0;
+  const activeTickerHoldings = portfolios
+    .filter(port => port.holdings?.[activeTicker])
+    .map(port => ({
+      portfolioId: port.id,
+      portfolioName: port.name,
+      ...port.holdings[activeTicker]
+    }));
 
   const handleRemoveTicker = (ticker) => removeTicker(ticker, addToast);
   const handleAddTicker = (ticker) => addTicker(ticker, addToast);
@@ -155,7 +160,7 @@ export default function App() {
         {view === 'terminal' ? (
           <div id="viewTerminal" className={`workspace-view active ${isWatchlistCollapsed ? 'watchlist-collapsed' : ''}`}>
             <Watchlist watchlist={watchlist} activeTicker={activeTicker} setActiveTicker={setActiveTicker} stocks={stocks} onRemoveTicker={handleRemoveTicker} onAddTicker={handleAddTicker} isCollapsed={isWatchlistCollapsed} onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)} />
-            <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} holding={activeHolding} holdingCurrentPrice={activeStockPrice} />
+            <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} tickerHoldings={activeTickerHoldings} holdingCurrentPrice={activeStockPrice} />
             <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} />
           </div>
         ) : (

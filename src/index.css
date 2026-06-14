@@ -795,16 +795,33 @@ body {
 }
 
 /* Holding Info Bar */
+.holding-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .holding-bar {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 24px;
   padding: 10px 16px;
-  margin-top: 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
+}
+
+.holding-bar-portfolio {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .holding-bar-item {
