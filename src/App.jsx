@@ -25,7 +25,7 @@ export default function App() {
   const [selectedRange, setSelectedRange] = useState('1M');
   const [selectedInterval, setSelectedInterval] = useState('1d');
   const [chartType, setChartType] = useState('line');
-  const [showLevels, setShowLevels] = useState(true);
+  const [showLevels, setShowLevels] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [linesMap, setLinesMap] = useState(loadLinesMap);
   const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
