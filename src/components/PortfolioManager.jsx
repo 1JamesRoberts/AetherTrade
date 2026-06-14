@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
-import { Briefcase, Search, PlusCircle, MinusCircle, X, Trash2, ChevronDown, Plus, Pencil } from 'lucide-react';
 
 Chart.register(...registerables);
 
@@ -378,7 +377,7 @@ export default function PortfolioManager({
     <section className="panel panel-portfolio-left" aria-label="Portfolio Allocations" style={{ height: '100%', overflowY: 'auto' }}>
       <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
         <h2 className="panel-title" style={{ margin: 0 }}>
-          <><Briefcase size={14} /> Portfolio Manager</>
+          <i className="fa-solid fa-briefcase"></i> Portfolio Manager
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className="select-wrapper" style={{ position: 'relative' }}>
@@ -407,16 +406,16 @@ export default function PortfolioManager({
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            <ChevronDown size={10} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <i className="fa-solid fa-chevron-down" style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px', color: 'var(--text-muted)', pointerEvents: 'none' }}></i>
           </div>
           <button onClick={handleCreatePortfolio} id="btnCreatePortfolio" className="btn" title="Create new portfolio" style={{ padding: '6px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', color: 'var(--cyan)', boxShadow: '0 0 8px rgba(0, 240, 255, 0.1)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center' }}>
-            <Plus size={13} />
+            <i className="fa-solid fa-plus"></i>
           </button>
           <button onClick={handleRenamePortfolio} id="btnRenamePortfolio" className="btn" title="Rename current portfolio" style={{ padding: '6px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.1)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center' }}>
-            <Pencil size={12} />
+            <i className="fa-solid fa-pen"></i>
           </button>
           <button onClick={handleDeletePortfolio} id="btnDeletePortfolio" className="btn" title="Delete current portfolio" style={{ padding: '6px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', color: 'var(--red)', boxShadow: '0 0 8px rgba(244, 63, 94, 0.1)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center' }}>
-            <Trash2 size={12} />
+            <i className="fa-solid fa-trash-can"></i>
           </button>
         </div>
       </div>
@@ -428,7 +427,7 @@ export default function PortfolioManager({
         {/* Autocomplete Ticker Search */}
         <div className="search-box" style={{ padding: 0, marginBottom: '12px', position: 'relative' }}>
           <div className="search-input-container">
-            <Search size={14} className="search-icon" />
+            <i className="fa-solid fa-magnifying-glass search-icon"></i>
             <input
               type="text"
               placeholder="Search ticker (e.g. AAPL, NVDA)..."
@@ -447,7 +446,7 @@ export default function PortfolioManager({
                 className="clear-btn"
                 style={{ display: 'block' }}
               >
-                <X size={14} />
+                <i className="fa-solid fa-xmark"></i>
               </button>
             )}
           </div>
@@ -467,7 +466,7 @@ export default function PortfolioManager({
               }
               <div onClick={handleAddCustomSymbol} className="portfolio-search-item" style={{ borderTop: searchResults.length > 0 ? '1px solid var(--border-color)' : 'none' }}>
                 <div>
-                  <span className="ticker" style={{ color: 'var(--cyan)' }}><PlusCircle size={12} /> {searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Fetch Price' : `ADD '${searchQuery.toUpperCase().trim()}'`}</span>
+                  <span className="ticker" style={{ color: 'var(--cyan)' }}><i className="fa-solid fa-circle-plus"></i> {searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Fetch Price' : `ADD '${searchQuery.toUpperCase().trim()}'`}</span>
                   <span className="name">{searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Refresh live price for this stock' : 'Add custom symbol'}</span>
                 </div>
               </div>
@@ -599,7 +598,7 @@ export default function PortfolioManager({
               marginTop: '6px'
             }}
           >
-            {txType === 'BUY' ? <PlusCircle size={14} /> : <MinusCircle size={14} />} Record {txType} Transaction
+            <i className={txType === 'BUY' ? "fa-solid fa-circle-plus" : "fa-solid fa-circle-minus"}></i> Record {txType} Transaction
           </button>
         </div>
       </div>

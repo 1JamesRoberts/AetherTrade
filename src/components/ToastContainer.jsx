@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import { CheckCircle, AlertTriangle, XCircle, Info, X } from 'lucide-react';
 
 export default function ToastContainer({ toasts, removeToast }) {
   return (
@@ -34,20 +33,20 @@ function ToastItem({ toast, onRemove }) {
     return () => clearTimeout(timer);
   }, [id, onRemove]);
 
-  let iconComponent = <CheckCircle size={16} style={{ color: 'var(--bullish)' }} />;
+  let iconClass = 'fa-circle-check';
   let iconColor = 'var(--bullish)';
   let borderLeft = '3px solid var(--bullish)';
 
   if (type === 'error') {
-    iconComponent = <XCircle size={16} style={{ color: 'var(--bearish)' }} />;
+    iconClass = 'fa-circle-exclamation';
     iconColor = 'var(--bearish)';
     borderLeft = '3px solid var(--bearish)';
   } else if (type === 'warning') {
-    iconComponent = <AlertTriangle size={16} style={{ color: '#f59e0b' }} />;
+    iconClass = 'fa-triangle-exclamation';
     iconColor = '#f59e0b';
     borderLeft = '3px solid #f59e0b';
   } else if (type === 'info') {
-    iconComponent = <Info size={16} style={{ color: 'var(--cyan)' }} />;
+    iconClass = 'fa-circle-info';
     iconColor = 'var(--cyan)';
     borderLeft = '3px solid var(--cyan)';
   }
@@ -74,7 +73,7 @@ function ToastItem({ toast, onRemove }) {
         animation: 'slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
       }}
     >
-      {iconComponent}
+      <i className={`fa-solid ${iconClass}`} style={{ fontSize: '16px', color: iconColor }}></i>
       <span style={{ flex: 1, lineHeight: 1.4 }}>{message}</span>
       <button
         onClick={() => onRemove(id)}
@@ -90,7 +89,7 @@ function ToastItem({ toast, onRemove }) {
           alignItems: 'center',
         }}
       >
-        <X size={14} />
+        <i className="fa-solid fa-xmark"></i>
       </button>
     </div>
   );

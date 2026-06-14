@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Search, Star, X, PlusCircle, Trash2 } from 'lucide-react';
 
 export default function Watchlist({
   watchlist,
@@ -35,13 +34,13 @@ export default function Watchlist({
     <section className="panel panel-left" aria-label="Stock Selection">
       <div className="panel-header">
         <h2 className="panel-title">
-          <><Star size={14} /> Watchlist</>
+          <i className="fa-solid fa-star"></i> Watchlist
         </h2>
       </div>
 
       <div className="search-box">
         <div className="search-input-container">
-          <Search size={14} className="search-icon" />
+          <i className="fa-solid fa-magnifying-glass search-icon"></i>
           <input
             type="text"
             value={query}
@@ -55,7 +54,7 @@ export default function Watchlist({
               title="Clear search"
               style={{ display: 'block' }}
             >
-              <X size={14} />
+              <i className="fa-solid fa-xmark"></i>
             </button>
           )}
         </div>
@@ -113,7 +112,7 @@ export default function Watchlist({
                     title="Remove from watchlist"
                     aria-label={`Remove ${stock.ticker} from watchlist`}
                   >
-                    <Trash2 size={12} />
+                    <i className="fa-solid fa-trash-can"></i>
                   </button>
                 </div>
               </li>
@@ -127,7 +126,7 @@ export default function Watchlist({
             >
               <div className="stock-item-info">
                 <span className="stock-item-ticker" style={{ color: 'var(--cyan)' }}>
-                  <PlusCircle size={12} /> Add '{query.toUpperCase().trim()}'
+                  <i className="fa-solid fa-circle-plus"></i> Add '{query.toUpperCase().trim()}'
                 </span>
                 <span className="stock-item-name">Add to your active watchlist</span>
               </div>

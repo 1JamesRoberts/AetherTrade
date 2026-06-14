@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
-import { Briefcase, RotateCcw, Upload, Download, Trash2, RefreshCw, X, PlusCircle, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 Chart.register(...registerables);
 
@@ -96,8 +95,8 @@ export default function PerformanceHoldings({
   };
 
   const renderSortIcon = (col) => {
-    if (sortColumn !== col) return <ArrowUpDown size={10} />;
-    return sortDirection === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />;
+    if (sortColumn !== col) return <i className="fa-solid fa-sort"></i>;
+    return sortDirection === 'asc' ? <i className="fa-solid fa-sort-up"></i> : <i className="fa-solid fa-sort-down"></i>;
   };
 
   // Reconstruct performance curve over time using transaction audit logs
@@ -496,17 +495,17 @@ export default function PerformanceHoldings({
     <section className="panel panel-portfolio-right" aria-label="Portfolio Performance" style={{ height: '100%', overflowY: 'auto' }}>
       <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
         <h2 className="panel-title" style={{ margin: 0 }}>
-          <><Briefcase size={14} /> Performance & Holdings</>
+          <i className="fa-solid fa-wallet"></i> Performance & Holdings
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button onClick={() => fileInputRef.current.click()} className="btn" title="Import transactions from CSV" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', color: 'var(--cyan)', boxShadow: '0 0 8px rgba(0, 240, 255, 0.05)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            <><Upload size={13} /> Import CSV</>
+            <i className="fa-solid fa-file-import"></i> Import CSV
           </button>
           <button onClick={() => onExportCSV(activePortfolioId)} className="btn" title="Export transactions as CSV" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--bullish)', boxShadow: '0 0 8px rgba(16, 185, 129, 0.05)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            <><Download size={13} /> Export CSV</>
+            <i className="fa-solid fa-file-export"></i> Export CSV
           </button>
           <button onClick={handleReset} className="btn btn-clear-lines" id="btnResetPortfolio" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', gap: '6px' }}>
-            <><RotateCcw size={13} /> Reset Portfolio</>
+            <i className="fa-solid fa-rotate-left"></i> Reset Portfolio
           </button>
           <input
             ref={fileInputRef}
@@ -524,7 +523,7 @@ export default function PerformanceHoldings({
         <div className="metric-card card-cyan">
           <div className="metric-card-header">
             <span className="title">Portfolio Market Value</span>
-            <Briefcase size={14} className="text-cyan" />
+            <i className="fa-solid fa-briefcase text-cyan"></i>
           </div>
           <div className="metric-val">{formatCurrency(totalAssetValue)}</div>
           <div className="metric-subtext">Current market value of active assets</div>
@@ -533,7 +532,7 @@ export default function PerformanceHoldings({
         <div className="metric-card card-green" style={{ borderColor: 'rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.01)' }}>
           <div className="metric-card-header">
             <span className="title">Invested Capital</span>
-            <Briefcase size={14} className="text-cyan" />
+            <i className="fa-solid fa-vault text-cyan"></i>
           </div>
           <div className="metric-val" style={{ color: '#fff' }}>{formatCurrency(totalCostBasis)}</div>
           <div className="metric-subtext">Total cost basis of active assets</div>
@@ -548,7 +547,7 @@ export default function PerformanceHoldings({
         >
           <div className="metric-card-header">
             <span className="title">Total Profit / Loss</span>
-            <Briefcase size={14} className="text-cyan" />
+            <i className="fa-solid fa-money-bill-trend-up text-cyan"></i>
           </div>
           <div className={`metric-val ${netProfit > 0 ? 'text-green' : netProfit < 0 ? 'text-red' : ''}`}>
             {netProfit >= 0 ? '+' : ''}{formatCurrency(netProfit)}
@@ -565,7 +564,7 @@ export default function PerformanceHoldings({
         >
           <div className="metric-card-header">
             <span className="title">Realized Profit / Loss</span>
-            <Briefcase size={14} className="text-cyan" />
+            <i className="fa-solid fa-wallet text-cyan"></i>
           </div>
           <div className={`metric-val ${activePortfolio.realizedPL > 0 ? 'text-green' : activePortfolio.realizedPL < 0 ? 'text-red' : ''}`}>
             {activePortfolio.realizedPL >= 0 ? '+' : ''}{formatCurrency(activePortfolio.realizedPL)}
@@ -582,7 +581,7 @@ export default function PerformanceHoldings({
         >
           <div className="metric-card-header">
             <span className="title">Total Return Rate</span>
-            <Briefcase size={14} className="text-cyan" />
+            <i className="fa-solid fa-percent text-cyan"></i>
           </div>
           <div className={`metric-val ${netProfit > 0 ? 'text-green' : netProfit < 0 ? 'text-red' : ''}`}>
             {netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%
@@ -609,7 +608,7 @@ export default function PerformanceHoldings({
           <span>Active Assets Portfolio</span>
           {holdingsKeys.length > 0 && (
             <button onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh stock prices" aria-label="Refresh stock prices" style={{ width: 'auto', padding: '0 10px', gap: '6px', fontSize: '11px' }}>
-              <RefreshCw size={14} className={isRefreshing ? 'fa-spin' : ''} />
+              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
               <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
             </button>
           )}
@@ -617,7 +616,7 @@ export default function PerformanceHoldings({
         <div className="projection-table-wrapper" style={{ flex: 1, overflowY: 'auto', maxHeight: '550px' }}>
           {sortedHoldings.length === 0 ? (
             <div className="empty-table-state" id="emptyPortfolioState" style={{ display: 'flex', padding: '40px 0', position: 'relative', background: 'transparent' }}>
-              <div className="empty-icon"><Briefcase size={32} /></div>
+              <div className="empty-icon"><i className="fa-solid fa-briefcase"></i></div>
               <p className="empty-title">Your Portfolio is Empty</p>
               <p className="empty-desc">Search for a ticker and record a BUY transaction in the left panel to build your portfolio holdings.</p>
             </div>
@@ -694,7 +693,7 @@ export default function PerformanceHoldings({
                         if (confirmDelete) {
                           onDeleteTransaction(activePortfolioId, actualIndex);
                         }
-                      }} className="btn-tx-delete" title="Delete transaction entry"><X size={11} /></button>
+                      }} className="btn-tx-delete" title="Delete transaction entry"><i className="fa-solid fa-xmark"></i></button>
                     </div>
                   </li>
                 );
