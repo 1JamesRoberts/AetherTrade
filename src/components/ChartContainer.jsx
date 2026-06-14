@@ -69,7 +69,11 @@ export default function ChartContainer({
   };
 
   const currentPrice = activeStock.price;
-  const displayChange = activeStock.change;
+  const liveCloses = activeStock.liveCloses || [];
+  const timeframeChange = liveCloses.length > 1
+    ? ((liveCloses[liveCloses.length - 1] - liveCloses[0]) / liveCloses[0]) * 100
+    : 0;
+  const displayChange = timeframeChange;
   const isUp = displayChange >= 0;
 
   // Handle Range modifications
