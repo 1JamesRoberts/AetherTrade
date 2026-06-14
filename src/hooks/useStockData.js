@@ -152,9 +152,23 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
         labels.push(v.datetime.split(' ')[0]);
       });
 
+      // Cache the last price and change so the table has data immediately
+      const fetchedPrice = closes[closes.length - 1];
+      const prevPrice = closes.length > 1 ? closes[closes.length - 2] : fetchedPrice;
+      const change = prevPrice ? ((fetchedPrice - prevPrice) / prevPrice) * 100 : 0;
+
       setStocks(prev => ({
         ...prev,
-        [ticker]: { ...prev[ticker], ticker, portfolioHistory: closes, portfolioLabels: labels, isLive: true }
+        [ticker]: {
+          ...prev[ticker],
+          ticker,
+          name: prev[ticker]?.name || `${ticker} Stock`,
+          portfolioHistory: closes,
+          portfolioLabels: labels,
+          price: prev[ticker]?.price || fetchedPrice,
+          change: prev[ticker]?.change ?? change,
+          isLive: true
+        }
       }));
     } catch {
       console.warn(`Portfolio history fetch failed for ${ticker}`);
