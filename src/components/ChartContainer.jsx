@@ -38,7 +38,9 @@ export default function ChartContainer({
   linesMap,
   setLinesMap,
   onRefresh,
-  isLoading
+  isLoading,
+  holding,
+  holdingCurrentPrice
 }) {
   const canvasRef = useRef(null);
   const chartInstanceRef = useRef(null);
@@ -983,6 +985,37 @@ export default function ChartContainer({
           <i className="fa-solid fa-circle-info"></i> Click anywhere on the chart canvas to add a Support or Resistance level
         </div>
       </div>
+
+      {/* Holding Info Bar */}
+      {holding && (
+        <div className="holding-bar">
+          <div className="holding-bar-item">
+            <span className="holding-bar-label">Shares</span>
+            <span className="holding-bar-value">{holding.shares}</span>
+          </div>
+          <div className="holding-bar-item">
+            <span className="holding-bar-label">Avg Cost</span>
+            <span className="holding-bar-value">${holding.avgCost.toFixed(2)}</span>
+          </div>
+          <div className="holding-bar-item">
+            <span className="holding-bar-label">Current</span>
+            <span className="holding-bar-value">${holdingCurrentPrice.toFixed(2)}</span>
+          </div>
+          <div className="holding-bar-item">
+            <span className="holding-bar-label">Market Value</span>
+            <span className="holding-bar-value">${(holding.shares * holdingCurrentPrice).toFixed(2)}</span>
+          </div>
+          <div className="holding-bar-item">
+            <span className="holding-bar-label">Unrealized P&L</span>
+            <span className={`holding-bar-value ${(holdingCurrentPrice - holding.avgCost) * holding.shares >= 0 ? 'positive' : 'negative'}`}>
+              {(holdingCurrentPrice - holding.avgCost) * holding.shares >= 0 ? '+' : ''}${((holdingCurrentPrice - holding.avgCost) * holding.shares).toFixed(2)}
+              <span className="holding-bar-pct">
+                ({((holdingCurrentPrice - holding.avgCost) / holding.avgCost * 100).toFixed(1)}%)
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
