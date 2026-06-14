@@ -19,6 +19,9 @@
   --bullish-glow: rgba(0, 230, 118, 0.15);
   --bearish: #ff1744;       /* Vibrant Crimson Resistance */
   --bearish-glow: rgba(255, 23, 68, 0.15);
+
+  --green: #00e676;
+  --red: #ff1744;
   
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
