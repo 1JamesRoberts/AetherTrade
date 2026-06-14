@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Chart, registerables } from 'chart.js';
+import { RefreshCw, BarChart3, TrendingUp, Info, X, Search } from 'lucide-react';
 
 Chart.register(...registerables);
 
@@ -831,7 +832,7 @@ export default function ChartContainer({
             aria-label="Refresh stock price"
             disabled={isLoading}
           >
-            <i className={`fa-solid fa-arrows-rotate ${isLoading ? 'fa-spin' : ''}`}></i>
+            <RefreshCw size={14} className={isLoading ? 'spinning' : ''} />
           </button>
           <div className="stock-badge" id="activeTicker">
             {activeStock.ticker}
@@ -889,7 +890,7 @@ export default function ChartContainer({
               borderRadius: 'var(--radius-md)',
             }}
           >
-            <i className="fa-solid fa-magnifying-glass" style={{ fontSize: '11px', color: 'var(--text-muted)' }}></i>
+            <Search size={11} style={{ color: 'var(--text-muted)' }} />
             <input
               type="range"
               min="20"
@@ -933,14 +934,14 @@ export default function ChartContainer({
               className={`style-btn ${chartType === 'line' ? 'active' : ''}`}
               title="Line Chart"
             >
-              <i className="fa-solid fa-chart-line"></i> Line
+              <><TrendingUp size={13} /> Line</>
             </button>
             <button
               onClick={() => setChartType('candle')}
               className={`style-btn ${chartType === 'candle' ? 'active' : ''}`}
               title="Candlestick Chart"
             >
-              <i className="fa-solid fa-chart-bar"></i> Candle
+              <><BarChart3 size={13} /> Candle</>
             </button>
           </div>
 
@@ -980,7 +981,7 @@ export default function ChartContainer({
       <div className={`chart-container ${isLoading ? 'loading' : ''}`}>
         <canvas ref={canvasRef} id="mainChart"></canvas>
         <div className="chart-instructions">
-          <i className="fa-solid fa-circle-info"></i> Click anywhere on the chart canvas to add a Support or Resistance level
+          <Info size={12} /> Click anywhere on the chart canvas to add a Support or Resistance level
         </div>
       </div>
     </section>

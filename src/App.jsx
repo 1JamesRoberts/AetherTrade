@@ -9,6 +9,7 @@ import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
 import { usePortfolio, rebuildPortfolioHoldings } from './hooks/usePortfolio';
 import { importTransactionsFromCSV, validateCSVImport, exportTransactionsAsCSV } from './utils/csvUtils';
+import { TrendingUp, Briefcase } from 'lucide-react';
 
 function loadLinesMap() {
   try {
@@ -123,7 +124,7 @@ export default function App() {
 
       <header className="app-header">
         <div className="header-logo">
-          <div className="logo-icon"><i className="fa-solid fa-chart-line"></i></div>
+          <div className="logo-icon"><TrendingUp size={18} /></div>
           <div className="logo-text">
             <span className="logo-brand">AETHER</span>
             <span className="logo-sub">TRADE</span>
@@ -131,10 +132,10 @@ export default function App() {
         </div>
         <nav className="app-nav">
           <button onClick={() => setView('terminal')} className={`nav-btn ${view === 'terminal' ? 'active' : ''}`}>
-            <i className="fa-solid fa-chart-line"></i> Terminal
+            <><TrendingUp size={15} /> Terminal</>
           </button>
           <button onClick={() => setView('portfolio')} className={`nav-btn ${view === 'portfolio' ? 'active' : ''}`}>
-            <i className="fa-solid fa-briefcase"></i> Portfolio
+            <><Briefcase size={15} /> Portfolio</>
           </button>
         </nav>
       </header>

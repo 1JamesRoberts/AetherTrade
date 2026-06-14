@@ -1,4 +1,5 @@
 import React from 'react';
+import { Layers, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, Percent, DollarSign, Wallet, Landmark, Trash2, Boxes } from 'lucide-react';
 
 export default function AnalysisEngine({
   activeTicker,
@@ -54,7 +55,7 @@ export default function AnalysisEngine({
     <section className="panel panel-right" aria-label="Trading Strategy & Analysis">
       <div className="panel-header">
         <h2 className="panel-title">
-          <i className="fa-solid fa-layer-group"></i> Analysis Engine
+          <><Layers size={14} /> Analysis Engine</>
         </h2>
       </div>
 
@@ -68,12 +69,12 @@ export default function AnalysisEngine({
             id="clearAllLines"
             style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto' }}
           >
-            <i className="fa-solid fa-trash-can"></i> Clear All
+            <Trash2 size={12} /> Clear All
           </button>
         </div>
         <div className="levels-scroller">
           <div className="levels-sub-header text-green">
-            <i className="fa-solid fa-circle-chevron-up"></i> Support Levels
+            <ChevronUp size={14} /> Support Levels
           </div>
           <ul className="level-pills-list">
             {supports.length === 0 ? (
@@ -87,7 +88,7 @@ export default function AnalysisEngine({
                     className="pill-delete-btn"
                     title={`Delete support level $${price}`}
                   >
-                    <i className="fa-solid fa-trash"></i>
+                    <Trash2 size={10} />
                   </button>
                 </li>
               ))
@@ -95,7 +96,7 @@ export default function AnalysisEngine({
           </ul>
 
           <div className="levels-sub-header text-red" style={{ marginTop: '15px' }}>
-            <i className="fa-solid fa-circle-chevron-down"></i> Resistance Levels
+            <ChevronDown size={14} /> Resistance Levels
           </div>
           <ul className="level-pills-list">
             {resistances.length === 0 ? (
@@ -109,7 +110,7 @@ export default function AnalysisEngine({
                     className="pill-delete-btn"
                     title={`Delete resistance level $${price}`}
                   >
-                    <i className="fa-solid fa-trash"></i>
+                    <Trash2 size={10} />
                   </button>
                 </li>
               ))
@@ -206,7 +207,7 @@ export default function AnalysisEngine({
           ) : (
             <div className="empty-table-state" id="emptyMatrixState" style={{ display: 'flex' }}>
               <div className="empty-icon">
-                <i className="fa-solid fa-cubes"></i>
+                <Boxes size={32} />
               </div>
               <p className="empty-title">Formulate a Strategy</p>
               <p className="empty-desc">
