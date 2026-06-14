@@ -179,7 +179,7 @@ export default function App() {
                           </span>
                         </div>
                         <div className="holding-row-details">
-                          <span>{h.shares} shares @ ${h.avgCost.toFixed(2)}</span>
+                          <span>{parseFloat(h.shares.toFixed(4))} shares @ ${h.avgCost.toFixed(2)}</span>
                           <span>Value: ${(h.shares * activeStockPrice).toFixed(2)}</span>
                         </div>
                       </div>
