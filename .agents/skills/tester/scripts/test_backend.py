@@ -3,7 +3,7 @@ import urllib.request
 import json
 import sys
 
-BASE_URL = "http://localhost:8080/api/stock"
+BASE_URL = "http://127.0.0.1:8080/api/stock"
 
 def test_endpoint(ticker, expected_status, is_valid_symbol=True):
     url = f"{BASE_URL}?ticker={ticker}&timeframe=M"
