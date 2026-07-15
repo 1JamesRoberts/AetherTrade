@@ -64,86 +64,110 @@ export function usePortfolio(addToast, user) {
   const [activePortfolioId, setActivePortfolioId] = useState(loadLocalActiveId);
   const [dbLoaded, setDbLoaded] = useState(false);
 
-  // Load from Supabase when user logs in
-  useEffect(() => {
+  const loadFromDB = useCallback(async () => {
     if (!user) { setDbLoaded(false); return; }
 
-    async function loadFromDB() {
-      const { data: dbPortfolios } = await supabase
-        .from('portfolios')
-        .select('*')
-        .order('created_at', { ascending: true });
+    const { data: dbPortfolios } = await supabase
+      .from('portfolios')
+      .select('*')
+      .order('created_at', { ascending: true });
 
-      const { data: dbTransactions } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('date', { ascending: true });
+    const { data: dbTransactions } = await supabase
+      .from('transactions')
+      .select('*')
+      .order('date', { ascending: true });
 
-      const dbTransactionsWithTimestamp = (dbTransactions || []).map(tx => ({
-        ...tx,
-        timestamp: tx.date ? new Date(tx.date).getTime() : Date.now()
-      }));
+    const dbTransactionsWithTimestamp = (dbTransactions || []).map(tx => ({
+      ...tx,
+      timestamp: tx.date ? new Date(tx.date).getTime() : Date.now()
+    }));
 
-      if (dbPortfolios && dbPortfolios.length > 0) {
-        const local = loadLocalPortfolios();
-        const txMap = {};
-        dbTransactionsWithTimestamp.forEach(tx => {
-          if (!txMap[tx.portfolio_id]) txMap[tx.portfolio_id] = [];
-          txMap[tx.portfolio_id].push(tx);
-        });
+    if (dbPortfolios && dbPortfolios.length > 0) {
+      const local = loadLocalPortfolios();
+      const txMap = {};
+      dbTransactionsWithTimestamp.forEach(tx => {
+        if (!txMap[tx.portfolio_id]) txMap[tx.portfolio_id] = [];
+        txMap[tx.portfolio_id].push(tx);
+      });
 
-        const merged = dbPortfolios.map(dbPort => {
-          const dbTxs = txMap[dbPort.id] || [];
-          const localPort = local.find(p => p.id === dbPort.id || (p.id === 'default' && dbPort.id === `default_${user.id}`));
-          const localTxs = localPort?.transactions || [];
-          const transactions = mergeTransactions(localTxs, dbTxs);
-          const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
-          return { id: dbPort.id, name: dbPort.name, transactions, holdings, realizedPL };
-        });
+      const merged = dbPortfolios.map(dbPort => {
+        const dbTxs = txMap[dbPort.id] || [];
+        const localPort = local.find(p => p.id === dbPort.id || (p.id === 'default' && dbPort.id === `default_${user.id}`));
+        const localTxs = localPort?.transactions || [];
+        const transactions = mergeTransactions(localTxs, dbTxs);
+        const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
+        return { id: dbPort.id, name: dbPort.name, transactions, holdings, realizedPL };
+      });
 
-        setPortfolios(merged);
-        setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
-      } else {
-        // First login — create default portfolio in DB
-        const local = loadLocalPortfolios();
-        const uploaded = [];
-        for (const port of local) {
-          const dbPortId = port.id === 'default' ? `default_${user.id}` : port.id;
-          const { data: newPort } = await supabase
-            .from('portfolios')
-            .insert({ id: dbPortId, user_id: user.id, name: port.name })
-            .select()
-            .single();
+      setPortfolios(merged);
+      setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
+    } else {
+      // First login — create default portfolio in DB
+      const local = loadLocalPortfolios();
+      const uploaded = [];
+      for (const port of local) {
+        const dbPortId = port.id === 'default' ? `default_${user.id}` : port.id;
+        const { data: newPort } = await supabase
+          .from('portfolios')
+          .insert({ id: dbPortId, user_id: user.id, name: port.name })
+          .select()
+          .single();
 
-          const transactionsWithIds = port.transactions.map(tx => ({
-            ...tx,
-            id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+        const transactionsWithIds = port.transactions.map(tx => ({
+          ...tx,
+          id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+        }));
+
+        if (newPort && transactionsWithIds.length > 0) {
+          const txs = transactionsWithIds.map(tx => ({
+            id: tx.id,
+            portfolio_id: dbPortId,
+            ticker: tx.ticker,
+            type: tx.type,
+            shares: tx.shares,
+            price: tx.price,
+            fees: tx.fees || 0,
+            date: new Date(tx.timestamp).toISOString()
           }));
-
-          if (newPort && transactionsWithIds.length > 0) {
-            const txs = transactionsWithIds.map(tx => ({
-              id: tx.id,
-              portfolio_id: dbPortId,
-              ticker: tx.ticker,
-              type: tx.type,
-              shares: tx.shares,
-              price: tx.price,
-              fees: tx.fees || 0,
-              date: new Date(tx.timestamp).toISOString()
-            }));
-            await supabase.from('transactions').insert(txs);
-          }
-          uploaded.push({ ...port, id: dbPortId, transactions: transactionsWithIds });
+          await supabase.from('transactions').insert(txs);
         }
-        setPortfolios(uploaded);
-        setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
+        uploaded.push({ ...port, id: dbPortId, transactions: transactionsWithIds });
       }
-
-      setDbLoaded(true);
+      setPortfolios(uploaded);
+      setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
     }
 
-    loadFromDB();
+    setDbLoaded(true);
   }, [user]);
+
+  // Load from Supabase when user logs in or hook mounts
+  useEffect(() => {
+    loadFromDB();
+  }, [user, loadFromDB]);
+
+  // Supabase Real-time Sync subscription
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('realtime_transactions_sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'transactions'
+        },
+        () => {
+          loadFromDB();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, loadFromDB]);
 
   // Persist to localStorage
   useEffect(() => {
