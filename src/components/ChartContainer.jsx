@@ -1,7 +1,5 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Chart, registerables } from 'chart.js';
-
-Chart.register(...registerables);
+import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { createChart, AreaSeries, CandlestickSeries } from 'lightweight-charts';
 
 const RANGE_INTERVALS = {
   '1D': {
@@ -40,23 +38,12 @@ export default function ChartContainer({
   onRefresh,
   isLoading
 }) {
-  const canvasRef = useRef(null);
+  const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
+  const seriesRef = useRef(null);
+  const isScaleUpdatingRef = useRef(false);
 
-  // Maintain canvas interactive states in refs to prevent excessive React re-renders on mousemove/wheel/drag
-  const chartStartIndexRef = useRef(undefined);
-  const chartEndIndexRef = useRef(undefined);
-  const chartLastLengthRef = useRef(0);
-  const hoverPriceRef = useRef(null);
-  const isMouseDownRef = useRef(false);
-  const dragStartXRef = useRef(0);
-  const dragStartStartIndexRef = useRef(0);
-  const dragStartEndIndexRef = useRef(0);
-  const hasDraggedRef = useRef(false);
-  const slicedRawRef = useRef([]);
-  const hoverXRef = useRef(null);
-  const hoverYRef = useRef(null);
-  const slicedLabelsRef = useRef([]);
+  const [hoverPrice, setHoverPrice] = useState(null);
 
   const activeStock = {
     ticker: activeTicker,
@@ -70,20 +57,15 @@ export default function ChartContainer({
     ...stocks[activeTicker]
   };
 
-  const currentPrice = activeStock.price;
-  const liveCloses = activeStock.liveCloses || [];
-  const timeframeChange = liveCloses.length > 1
-    ? ((liveCloses[liveCloses.length - 1] - liveCloses[0]) / liveCloses[0]) * 100
-    : 0;
+  const timeframeChange = activeStock.timeframeChange || 0;
+  const isUp = timeframeChange >= 0;
   const displayChange = timeframeChange;
-  const isUp = displayChange >= 0;
 
   // Handle Range modifications
   const handleRangeChange = (targetRange) => {
     setRange(targetRange);
     setZoomLevel(100);
 
-    // Enforce Webull restriction constraints
     const rangeInfo = RANGE_INTERVALS[targetRange];
     if (!rangeInfo.allowed.includes(interval)) {
       setInterval(rangeInfo.default);
@@ -96,49 +78,15 @@ export default function ChartContainer({
     setZoomLevel(100);
   };
 
-  // Synchronize index slicing logic on data, zoom, or symbol change
-  const totalLength = activeStock.liveCloses.length;
-  if (chartStartIndexRef.current === undefined || chartEndIndexRef.current === undefined || chartLastLengthRef.current !== totalLength) {
-    chartEndIndexRef.current = totalLength;
-    const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
-    chartStartIndexRef.current = Math.max(0, chartEndIndexRef.current - visibleCount);
-    chartLastLengthRef.current = totalLength;
-  }
+  // Convert Twelve Data stock history into format compatible with Lightweight Charts
+  const formattedData = useMemo(() => {
+    const rawValues = activeStock.liveRawValues || [];
+    let dataPoints = [];
 
-  // Effect to instantiate and manage Chart.js instance lifecycle
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-
-    // Destroy existing chart instance
-    if (chartInstanceRef.current) {
-      chartInstanceRef.current.destroy();
-      chartInstanceRef.current = null;
-    }
-
-    if (totalLength === 0) {
-      // Draw dynamic retrieving message on empty history
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      ctx.fillStyle = '#00f0ff';
-      ctx.font = '600 14px "Outfit", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(0, 240, 255, 0.4)';
-      ctx.fillText(`Retrieving Live ${activeTicker} Market Data...`, canvas.width / 2, canvas.height / 2);
-      ctx.restore();
-      return;
-    }
-
-    // Candle wicks generation logic if raw values are missing
-    let rawValues = activeStock.liveRawValues || [];
     if (rawValues.length === 0 && activeStock.liveCloses.length > 0) {
       const closes = activeStock.liveCloses;
       const labels = activeStock.liveLabels;
-      rawValues = closes.map((c, idx) => {
+      dataPoints = closes.map((c, idx) => {
         const prev = idx > 0 ? closes[idx - 1] : c * 0.985;
         const o = parseFloat(prev.toFixed(2));
         const cl = parseFloat(c.toFixed(2));
@@ -147,677 +95,238 @@ export default function ChartContainer({
         const l = parseFloat((Math.min(o, cl) - Math.random() * spread * 0.5).toFixed(2));
         return { open: o, close: cl, high: h, low: l, datetime: labels[idx] };
       });
-    }
-
-    // Visible window slicing parameters
-    const startIdx = chartStartIndexRef.current;
-    const endIdx = chartEndIndexRef.current;
-
-    const slicedCloses = activeStock.liveCloses.slice(startIdx, endIdx);
-    const slicedLabels = activeStock.liveLabels.slice(startIdx, endIdx);
-    const slicedRaw = rawValues.slice(startIdx, endIdx);
-    slicedRawRef.current = slicedRaw;
-    slicedLabelsRef.current = slicedLabels;
-
-    // Compute range bound limits
-    let minVal = 0;
-    let maxVal = 0;
-    if (chartType === 'candle' && slicedRaw.length > 0) {
-      minVal = Math.min(...slicedRaw.map(v => parseFloat(v.low)));
-      maxVal = Math.max(...slicedRaw.map(v => parseFloat(v.high)));
-    } else if (slicedCloses.length > 0) {
-      minVal = Math.min(...slicedCloses);
-      maxVal = Math.max(...slicedCloses);
-    }
-
-    const verticalSpread = maxVal - minVal;
-    const marginPadding = verticalSpread * 0.2 || minVal * 0.03;
-    const yMinBound = Math.max(0, parseFloat((minVal - marginPadding).toFixed(2)));
-    const yMaxBound = parseFloat((maxVal + marginPadding).toFixed(2));
-
-    const timeframeChange = slicedCloses.length > 1
-      ? ((slicedCloses[slicedCloses.length - 1] - slicedCloses[0]) / slicedCloses[0]) * 100
-      : 0;
-    const color = timeframeChange >= 0 ? '#00e676' : '#ff1744';
-    const glow = timeframeChange >= 0 ? 'rgba(0, 230, 118, 0.7)' : 'rgba(255, 23, 68, 0.7)';
-
-    let datasetConfig = {};
-    let resolvedChartType = 'line';
-
-    if (chartType === 'candle') {
-      resolvedChartType = 'bar';
-      datasetConfig = {
-        label: activeTicker,
-        data: slicedRaw.map(v => [
-          Math.min(parseFloat(v.open), parseFloat(v.close)),
-          Math.max(parseFloat(v.open), parseFloat(v.close))
-        ]),
-        backgroundColor: slicedRaw.map(v => parseFloat(v.close) >= parseFloat(v.open) ? 'rgba(0, 230, 118, 0.75)' : 'rgba(255, 23, 68, 0.75)'),
-        borderColor: slicedRaw.map(v => parseFloat(v.close) >= parseFloat(v.open) ? '#00e676' : '#ff1744'),
-        borderWidth: 1.5,
-        borderSkipped: false,
-        barPercentage: 0.65
-      };
     } else {
-      resolvedChartType = 'line';
-      const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-      gradient.addColorStop(0, glow);
-      gradient.addColorStop(1, 'rgba(2, 4, 10, 0)');
-
-      datasetConfig = {
-        label: activeTicker,
-        data: slicedCloses,
-        borderColor: color,
-        borderWidth: 2.5,
-        backgroundColor: gradient,
-        fill: true,
-        tension: 0.35,
-        pointRadius: 0,
-        pointHitRadius: 0
-      };
+      dataPoints = rawValues;
     }
 
-    // Custom S&R Drawing Plugin
-    const horizontalLinesPlugin = {
-      id: 'horizontalLines',
-      afterDraw(chart) {
-        if (!showLevels) return;
+    const seenTimes = new Set();
+    const result = [];
 
-        const { ctx, chartArea: { left, right, top, bottom }, scales: { y } } = chart;
-        ctx.save();
+    dataPoints.forEach(item => {
+      if (!item.datetime) return;
+      let t;
+      const parts = item.datetime.split(' ');
+      if (parts.length === 1) {
+        // Daily / Weekly labels "YYYY-MM-DD"
+        const dateObj = new Date(parts[0] + 'T00:00:00Z');
+        t = Math.floor(dateObj.getTime() / 1000);
+      } else {
+        // Intraday labels "YYYY-MM-DD HH:MM:SS"
+        const [datePart, timePart] = parts;
+        const dateObj = new Date(`${datePart}T${timePart}`);
+        t = Math.floor(dateObj.getTime() / 1000);
+      }
 
-        // Draw Current Price Level (NOW reference dash line)
-        const currentPriceY = y.getPixelForValue(currentPrice);
-        if (currentPriceY >= top && currentPriceY <= bottom) {
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([3, 3]);
-          ctx.beginPath();
-          ctx.moveTo(left, currentPriceY);
-          ctx.lineTo(right, currentPriceY);
-          ctx.stroke();
-
-          // Price Tag Background
-          ctx.fillStyle = 'rgba(6, 9, 18, 0.9)';
-          ctx.fillRect(right + 5, currentPriceY - 10, 75, 20);
-
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.font = '700 10px var(--font-mono)';
-          ctx.fillText(`NOW: $${currentPrice.toFixed(2)}`, right + 10, currentPriceY + 4);
-        }
-
-        // Draw Drawn S&R Levels
-        const lines = linesMap[activeTicker] || [];
-        lines.forEach(linePrice => {
-          const lineY = y.getPixelForValue(linePrice);
-          if (lineY >= top && lineY <= bottom) {
-            const isResistance = linePrice > currentPrice;
-            ctx.strokeStyle = isResistance ? '#ff1744' : '#00e676';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([6, 4]);
-            ctx.beginPath();
-            ctx.moveTo(left, lineY);
-            ctx.lineTo(right, lineY);
-            ctx.stroke();
-
-            // Badge Background
-            ctx.fillStyle = isResistance ? '#ff1744' : '#00e676';
-            const labelText = `${isResistance ? 'RES' : 'SUP'} $${linePrice.toFixed(2)}`;
-            ctx.font = '700 11px var(--font-mono)';
-            const textWidth = ctx.measureText(labelText).width;
-
-            ctx.beginPath();
-            ctx.roundRect(left + 8, lineY - 11, textWidth + 12, 22, 6);
-            ctx.fill();
-
-            // Text
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(labelText, left + 14, lineY + 4);
-          }
+      if (!isNaN(t) && !seenTimes.has(t)) {
+        seenTimes.add(t);
+        result.push({
+          time: t,
+          open: parseFloat(item.open),
+          high: parseFloat(item.high),
+          low: parseFloat(item.low),
+          close: parseFloat(item.close),
+          value: parseFloat(item.close)
         });
-
-        // Draw Hover Helper Guide Line
-        if (hoverPriceRef.current !== null) {
-          const hoverY = y.getPixelForValue(hoverPriceRef.current);
-          if (hoverY >= top && hoverY <= bottom) {
-            const isHoverResistance = hoverPriceRef.current > currentPrice;
-            ctx.strokeStyle = isHoverResistance ? 'rgba(255, 23, 68, 0.45)' : 'rgba(0, 230, 118, 0.45)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([4, 4]);
-            ctx.beginPath();
-            ctx.moveTo(left, hoverY);
-            ctx.lineTo(right, hoverY);
-            ctx.stroke();
-
-            ctx.fillStyle = isHoverResistance ? 'rgba(255, 23, 68, 0.9)' : 'rgba(0, 230, 118, 0.9)';
-            const guideText = `Click to add ${isHoverResistance ? 'Resistance' : 'Support'} at $${hoverPriceRef.current.toFixed(2)}`;
-            ctx.font = '600 10px var(--font-mono)';
-            const textWidth = ctx.measureText(guideText).width;
-
-            ctx.beginPath();
-            ctx.roundRect(left + 8, hoverY - 9, textWidth + 12, 18, 4);
-            ctx.fill();
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillText(guideText, left + 14, hoverY + 3);
-          }
-        }
-
-        ctx.restore();
       }
-    };
-
-    // Custom Candlestick Wicks Plugin
-    // Vertical crosshair line plugin
-    const verticalLinePlugin = {
-      id: 'verticalLine',
-      afterDraw(chart) {
-        if (hoverXRef.current === null) return;
-        const { ctx, chartArea, scales: { x } } = chart;
-        const { top, bottom } = chartArea;
-        const hoverX = hoverXRef.current;
-        if (hoverX < chartArea.left || hoverX > chartArea.right) return;
-
-        // Snap to nearest data point index
-        const rawIndex = x.getValueForPixel(hoverX);
-        const snappedIndex = Math.round(rawIndex);
-        const snappedX = x.getPixelForValue(snappedIndex);
-
-        const labels = slicedLabelsRef.current;
-        const dateLabel = labels[snappedIndex] || '';
-
-        ctx.save();
-
-        // Draw vertical line at snapped position
-        ctx.beginPath();
-        ctx.moveTo(snappedX, top);
-        ctx.lineTo(snappedX, bottom);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.stroke();
-
-        // Draw date label at the bottom
-        if (dateLabel) {
-          ctx.font = '600 10px var(--font-mono)';
-          const textWidth = ctx.measureText(dateLabel).width;
-          const tagWidth = textWidth + 12;
-          const tagHeight = 18;
-          const tagX = snappedX - tagWidth / 2;
-          const tagY = bottom + 4;
-
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-          ctx.beginPath();
-          ctx.roundRect(tagX, tagY, tagWidth, tagHeight, 4);
-          ctx.fill();
-
-          ctx.fillStyle = '#060912';
-          ctx.fillText(dateLabel, tagX + 6, tagY + 13);
-        }
-
-        ctx.restore();
-      }
-    };
-
-    // Horizontal crosshair line plugin with price label
-    const horizontalLinePlugin = {
-      id: 'horizontalLine',
-      afterDraw(chart) {
-        if (showLevels) return;
-        if (hoverYRef.current === null) return;
-        const { ctx, chartArea, scales: { y } } = chart;
-        const { left, right } = chartArea;
-        const yPixel = hoverYRef.current;
-        if (yPixel < chartArea.top || yPixel > chartArea.bottom) return;
-
-        const priceAtCursor = y.getValueForPixel(yPixel);
-
-        ctx.save();
-
-        // Draw horizontal dashed line
-        ctx.beginPath();
-        ctx.moveTo(left, yPixel);
-        ctx.lineTo(right, yPixel);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.stroke();
-
-        // Draw price tag on the right
-        const tagWidth = 80;
-        const tagHeight = 22;
-        const tagX = right + 5;
-        const tagY = yPixel - tagHeight / 2;
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.beginPath();
-        ctx.roundRect(tagX, tagY, tagWidth, tagHeight, 4);
-        ctx.fill();
-
-        ctx.fillStyle = '#060912';
-        ctx.font = '700 11px var(--font-mono)';
-        ctx.fillText(`$${priceAtCursor.toFixed(2)}`, tagX + 8, yPixel + 4);
-
-        ctx.restore();
-      }
-    };
-
-    const candlestickWicksPlugin = {
-      id: 'candlestickWicks',
-      afterDatasetsDraw(chart) {
-        if (chartType !== 'candle') return;
-
-        const { ctx, chartArea } = chart;
-        const meta = chart.getDatasetMeta(0);
-        ctx.save();
-
-        ctx.beginPath();
-        ctx.rect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
-        ctx.clip();
-
-        meta.data.forEach((bar, index) => {
-          const raw = slicedRawRef.current[index];
-          if (!raw) return;
-
-          const high = parseFloat(raw.high);
-          const low = parseFloat(raw.low);
-          const close = parseFloat(raw.close);
-          const open = parseFloat(raw.open);
-
-          const isBullish = close >= open;
-          ctx.strokeStyle = isBullish ? '#00e676' : '#ff1744';
-          ctx.lineWidth = 1.5;
-
-          const bodyHigh = Math.max(open, close);
-          const bodyLow = Math.min(open, close);
-          const bodyPixelTop = Math.min(bar.y, bar.base);
-          const bodyPixelBottom = Math.max(bar.y, bar.base);
-          const range = bodyHigh - bodyLow || 0.01;
-          const ppv = (bodyPixelBottom - bodyPixelTop) / range;
-
-          const wickTopY = bodyPixelTop - (high - bodyHigh) * ppv;
-          const wickBottomY = bodyPixelBottom + (bodyLow - low) * ppv;
-
-          ctx.beginPath();
-          ctx.moveTo(bar.x, wickTopY);
-          ctx.lineTo(bar.x, wickBottomY);
-          ctx.stroke();
-        });
-
-        ctx.restore();
-      }
-    };
-
-    // Instantiate Chart.js
-    chartInstanceRef.current = new Chart(ctx, {
-      type: resolvedChartType,
-      data: {
-        labels: slicedLabels,
-        datasets: [datasetConfig]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: {
-          padding: {
-            right: 85,
-            bottom: 30
-          }
-        },
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
-        elements: {
-          point: {
-            radius: 0
-          }
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#060912',
-            titleFont: { family: 'Outfit', size: 12, weight: '700' },
-            bodyFont: { family: 'JetBrains Mono', size: 11 },
-            borderColor: 'rgba(255,255,255,0.06)',
-            borderWidth: 1,
-            padding: 10,
-            displayColors: false,
-            callbacks: {
-              label: function (context) {
-                if (chartType === 'candle') {
-                  const idx = context.dataIndex;
-                  const rawObj = slicedRaw[idx];
-                  if (rawObj) {
-                    return [
-                      `Open:  $${parseFloat(rawObj.open).toFixed(2)}`,
-                      `High:  $${parseFloat(rawObj.high).toFixed(2)}`,
-                      `Low:   $${parseFloat(rawObj.low).toFixed(2)}`,
-                      `Close: $${parseFloat(rawObj.close).toFixed(2)}`
-                    ];
-                  }
-                }
-                return `Price: $${context.raw.toFixed(2)}`;
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: {
-              color: '#94a3b8',
-              font: { family: 'Plus Jakarta Sans', size: 11, weight: '500' },
-              maxTicksLimit: 8
-            }
-          },
-          y: {
-            position: 'right',
-            grid: {
-              color: 'rgba(255, 255, 255, 0.02)'
-            },
-            ticks: {
-              color: '#94a3b8',
-              font: { family: 'JetBrains Mono', size: 11, weight: '500' },
-              callback: function (val) {
-                return '$' + val;
-              }
-            },
-            min: yMinBound,
-            max: yMaxBound
-          }
-        }
-      },
-      plugins: [horizontalLinesPlugin, horizontalLinePlugin, verticalLinePlugin, candlestickWicksPlugin]
     });
 
-    return () => {
-      if (chartInstanceRef.current) {
-        chartInstanceRef.current.destroy();
-        chartInstanceRef.current = null;
-      }
-    };
-  }, [activeTicker, chartType, showLevels, totalLength, linesMap, stocks]);
+    return result.sort((a, b) => a.time - b.time);
+  }, [activeStock.liveRawValues, activeStock.liveCloses, activeStock.liveLabels]);
 
-  // Event handlers registration inside canvas bindings to preserve performance and avoid re-renders
+  // Main Effect to manage Lightweight Charts instance and updates
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!chartContainerRef.current || formattedData.length === 0) return;
 
-    // Redraw function helper
-    const triggerChartUpdate = () => {
-      const chart = chartInstanceRef.current;
-      if (!chart) return;
+    const container = chartContainerRef.current;
 
-      const rawValues = activeStock.liveRawValues || [];
-      const slicedCloses = activeStock.liveCloses.slice(chartStartIndexRef.current, chartEndIndexRef.current);
-      const slicedLabels = activeStock.liveLabels.slice(chartStartIndexRef.current, chartEndIndexRef.current);
-      const slicedRaw = rawValues.slice(chartStartIndexRef.current, chartEndIndexRef.current);
-      slicedRawRef.current = slicedRaw;
+    // Create chart instance
+    const chart = createChart(container, {
+      width: container.clientWidth,
+      height: container.clientHeight,
+      layout: {
+        background: { type: 'solid', color: 'transparent' },
+        textColor: '#94a3b8',
+        fontFamily: '"Outfit", sans-serif',
+      },
+      grid: {
+        vertLines: { color: 'rgba(255, 255, 255, 0.02)' },
+        horzLines: { color: 'rgba(255, 255, 255, 0.02)' },
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+        textColor: '#94a3b8',
+      },
+      timeScale: {
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      crosshair: {
+        mode: 0,
+        vertLine: {
+          color: 'rgba(255, 255, 255, 0.3)',
+          width: 1,
+          style: 1, // Dashed
+          labelBackgroundColor: '#060912',
+        },
+        horzLine: {
+          color: 'rgba(255, 255, 255, 0.3)',
+          width: 1,
+          style: 1, // Dashed
+          labelBackgroundColor: '#060912',
+        },
+      },
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+      },
+      handleScroll: {
+        mouseDrag: true,
+        touchDrag: true,
+      },
+    });
 
-      chart.data.labels = slicedLabels;
-      if (chartType === 'candle') {
-        chart.data.datasets[0].data = slicedRaw.map(v => [
-          Math.min(parseFloat(v.open), parseFloat(v.close)),
-          Math.max(parseFloat(v.open), parseFloat(v.close))
-        ]);
-        chart.data.datasets[0].backgroundColor = slicedRaw.map(v => parseFloat(v.close) >= parseFloat(v.open) ? 'rgba(0, 230, 118, 0.75)' : 'rgba(255, 23, 68, 0.75)');
-        chart.data.datasets[0].borderColor = slicedRaw.map(v => parseFloat(v.close) >= parseFloat(v.open) ? '#00e676' : '#ff1744');
-      } else {
-        chart.data.datasets[0].data = slicedCloses;
-        chart.data.datasets[0].pointRadius = 0;
+    chartInstanceRef.current = chart;
+
+    // Create appropriate series based on chartType
+    const seriesColor = isUp ? '#00e676' : '#ff1744';
+    let series;
+
+    if (chartType === 'candle') {
+      series = chart.addSeries(CandlestickSeries, {
+        upColor: '#00e676',
+        downColor: '#ff1744',
+        borderDownColor: '#ff1744',
+        borderUpColor: '#00e676',
+        wickDownColor: '#ff1744',
+        wickUpColor: '#00e676',
+        priceLineVisible: true,
+        priceLineColor: 'rgba(255, 255, 255, 0.2)',
+        priceLineStyle: 2, // Dotted
+      });
+    } else {
+      series = chart.addSeries(AreaSeries, {
+        lineColor: seriesColor,
+        topColor: isUp ? 'rgba(0, 230, 118, 0.25)' : 'rgba(255, 23, 68, 0.25)',
+        bottomColor: 'rgba(2, 4, 10, 0)',
+        lineWidth: 2.5,
+        priceLineVisible: true,
+        priceLineColor: 'rgba(255, 255, 255, 0.2)',
+        priceLineStyle: 2, // Dotted
+      });
+    }
+
+    seriesRef.current = series;
+    series.setData(formattedData);
+
+    // Apply initial zoom
+    const totalLength = formattedData.length;
+    const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
+    chart.timeScale().setVisibleLogicalRange({
+      from: totalLength - visibleCount,
+      to: totalLength - 1,
+    });
+
+    // Render S&R Levels
+    const lines = linesMap[activeTicker] || [];
+    if (showLevels) {
+      lines.forEach(linePrice => {
+        const isResistance = linePrice > activeStock.price;
+        const lineColor = isResistance ? '#ff1744' : '#00e676';
+        const labelTitle = isResistance ? `RES $${linePrice.toFixed(2)}` : `SUP $${linePrice.toFixed(2)}`;
+
+        series.createPriceLine({
+          price: linePrice,
+          color: lineColor,
+          lineWidth: 2,
+          lineStyle: 1, // Dashed
+          axisLabelVisible: true,
+          title: labelTitle,
+        });
+      });
+    }
+
+    // Subscribe to Click Event for drawing Support / Resistance
+    const handleChartClick = (param) => {
+      if (!showLevels || !param.point) return;
+      const clickedPrice = series.coordinateToPrice(param.point.y);
+      if (clickedPrice === null || clickedPrice === undefined) return;
+
+      const roundedPrice = parseFloat(clickedPrice.toFixed(2));
+      const existingLines = linesMap[activeTicker] || [];
+      const isDuplicate = existingLines.some(price => Math.abs(price - roundedPrice) < (activeStock.price * 0.003));
+
+      if (!isDuplicate) {
+        const newLines = [...existingLines, roundedPrice];
+        setLinesMap({
+          ...linesMap,
+          [activeTicker]: newLines
+        });
       }
-
-      // Re-scale boundaries
-      let minVal = 0, maxVal = 0;
-      if (chartType === 'candle' && slicedRaw.length > 0) {
-        minVal = Math.min(...slicedRaw.map(v => parseFloat(v.low)));
-        maxVal = Math.max(...slicedRaw.map(v => parseFloat(v.high)));
-      } else if (slicedCloses.length > 0) {
-        minVal = Math.min(...slicedCloses);
-        maxVal = Math.max(...slicedCloses);
-      }
-
-      const verticalSpread = maxVal - minVal;
-      const marginPadding = verticalSpread * 0.2 || minVal * 0.03;
-      chart.scales.y.options.min = Math.max(0, parseFloat((minVal - marginPadding).toFixed(2)));
-      chart.scales.y.options.max = parseFloat((maxVal + marginPadding).toFixed(2));
-
-      chart.update('none');
     };
+    chart.subscribeClick(handleChartClick);
 
-    const onMouseDown = (e) => {
-      if (e.button !== 0) return;
-      isMouseDownRef.current = true;
-      dragStartXRef.current = e.clientX;
-      dragStartStartIndexRef.current = chartStartIndexRef.current;
-      dragStartEndIndexRef.current = chartEndIndexRef.current;
-      hasDraggedRef.current = false;
-    };
-
-    const onMouseMove = (e) => {
-      const chart = chartInstanceRef.current;
-      if (!chart) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const hoverX = e.clientX - rect.left;
-      const hoverY = e.clientY - rect.top;
-      const chartArea = chart.chartArea;
-
-      if (hoverX >= chartArea.left && hoverX <= chartArea.right) {
-        hoverXRef.current = hoverX;
-        hoverYRef.current = hoverY;
-      } else {
-        hoverXRef.current = null;
-        hoverYRef.current = null;
-      }
-
-      if (!isMouseDownRef.current) {
-        // Handle hovering guide line preview
-        if (showLevels) {
-          const yValue = chart.scales.y.getValueForPixel(hoverY);
-          if (yValue !== undefined && yValue >= chart.scales.y.min && yValue <= chart.scales.y.max) {
-            hoverPriceRef.current = parseFloat(yValue.toFixed(2));
-          } else {
-            hoverPriceRef.current = null;
-          }
-        }
-        chart.draw();
+    // Subscribe to Crosshair Movement for guide lines preview
+    const handleCrosshairMove = (param) => {
+      if (!showLevels || !param.point) {
+        setHoverPrice(null);
         return;
       }
-
-      // Handle Panning/Dragging
-      const deltaX = e.clientX - dragStartXRef.current;
-      if (Math.abs(deltaX) > 5) {
-        hasDraggedRef.current = true;
-      }
-
-      if (hasDraggedRef.current) {
-        const chartArea = chart.chartArea;
-        const totalVisible = dragStartEndIndexRef.current - dragStartStartIndexRef.current;
-        const barWidth = chartArea.width / totalVisible;
-        const barsDragged = Math.round(deltaX / barWidth);
-        const shift = -barsDragged;
-
-        let newStart = dragStartStartIndexRef.current + shift;
-        let newEnd = dragStartEndIndexRef.current + shift;
-
-        if (newStart < 0) {
-          newStart = 0;
-          newEnd = totalVisible;
-        }
-        if (newEnd > totalLength) {
-          newEnd = totalLength;
-          newStart = totalLength - totalVisible;
-        }
-
-        if (newStart !== chartStartIndexRef.current || newEnd !== chartEndIndexRef.current) {
-          chartStartIndexRef.current = newStart;
-          chartEndIndexRef.current = newEnd;
-          triggerChartUpdate();
-        }
-      }
+      const price = series.coordinateToPrice(param.point.y);
+      setHoverPrice(price !== null ? parseFloat(price.toFixed(2)) : null);
     };
+    chart.subscribeCrosshairMove(handleCrosshairMove);
 
-    const onMouseUp = (e) => {
-      if (!isMouseDownRef.current) return;
-      isMouseDownRef.current = false;
-
-      const chart = chartInstanceRef.current;
-      if (!chart) return;
-
-      // Click to draw line logic if not dragged
-      if (!hasDraggedRef.current && showLevels) {
-        const rect = canvas.getBoundingClientRect();
-        const clickY = e.clientY - rect.top;
-        const yValue = chart.scales.y.getValueForPixel(clickY);
-
-        if (yValue !== undefined && yValue >= chart.scales.y.min && yValue <= chart.scales.y.max) {
-          const clickedPrice = parseFloat(yValue.toFixed(2));
-          const existingLines = linesMap[activeTicker] || [];
-
-          // Floating-point safety delta bound checks
-          const isDuplicate = existingLines.some(price => Math.abs(price - clickedPrice) < (activeStock.price * 0.003));
-          if (!isDuplicate) {
-            const newLines = [...existingLines, clickedPrice];
-            setLinesMap({
-              ...linesMap,
-              [activeTicker]: newLines
-            });
-          }
-        }
-      }
+    // Subscribe to TimeScale changes to synchronize the Zoom Slider
+    const handleVisibleLogicalRangeChange = (logicalRange) => {
+      if (isScaleUpdatingRef.current || !logicalRange) return;
+      const visibleCount = logicalRange.to - logicalRange.from;
+      const percent = Math.round((visibleCount / totalLength) * 100);
+      const boundedPercent = Math.max(20, Math.min(100, percent));
+      
+      isScaleUpdatingRef.current = true;
+      setZoomLevel(boundedPercent);
+      setTimeout(() => {
+        isScaleUpdatingRef.current = false;
+      }, 50);
     };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
 
-    const onMouseLeave = () => {
-      isMouseDownRef.current = false;
-      hoverPriceRef.current = null;
-      hoverXRef.current = null;
-      hoverYRef.current = null;
-      if (chartInstanceRef.current) {
-        chartInstanceRef.current.draw();
-      }
-    };
+    // Handle Responsive Resize
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length === 0 || !entries[0].contentRect) return;
+      const { width, height } = entries[0].contentRect;
+      chart.applyOptions({ width, height });
+    });
+    resizeObserver.observe(container);
 
-    // Scroll centered wheel zoom
-    const onWheel = (e) => {
-      e.preventDefault();
-      const chart = chartInstanceRef.current;
-      if (!chart) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const chartArea = chart.chartArea;
-      if (mouseX < chartArea.left || mouseX > chartArea.right) return;
-
-      const currentVisible = chartEndIndexRef.current - chartStartIndexRef.current;
-      const zoomFactor = e.deltaY < 0 ? 0.9 : 1.1;
-
-      let newVisible = Math.round(currentVisible * zoomFactor);
-      newVisible = Math.max(5, Math.min(totalLength, newVisible));
-
-      if (newVisible === currentVisible) return;
-
-      const localIndex = chart.scales.x.getValueForPixel(mouseX);
-      let hoverIndex = chartStartIndexRef.current + Math.round(localIndex);
-      if (isNaN(hoverIndex) || hoverIndex < 0 || hoverIndex >= totalLength) {
-        hoverIndex = Math.round((chartStartIndexRef.current + chartEndIndexRef.current) / 2);
-      }
-
-      const ratio = (hoverIndex - chartStartIndexRef.current) / currentVisible;
-      let newStart = Math.round(hoverIndex - ratio * newVisible);
-      let newEnd = newStart + newVisible;
-
-      if (newStart < 0) {
-        newStart = 0;
-        newEnd = newVisible;
-      }
-      if (newEnd > totalLength) {
-        newEnd = totalLength;
-        newStart = totalLength - newVisible;
-      }
-
-      chartStartIndexRef.current = newStart;
-      chartEndIndexRef.current = newEnd;
-
-      const percentage = Math.round((newVisible / totalLength) * 100);
-      setZoomLevel(percentage);
-      triggerChartUpdate();
-    };
-
-    // Touch event binders
-    const onTouchStart = (e) => {
-      if (e.touches.length !== 1) return;
-      isMouseDownRef.current = true;
-      dragStartXRef.current = e.touches[0].clientX;
-      dragStartStartIndexRef.current = chartStartIndexRef.current;
-      dragStartEndIndexRef.current = chartEndIndexRef.current;
-      hasDraggedRef.current = false;
-    };
-
-    const onTouchMove = (e) => {
-      if (!isMouseDownRef.current || e.touches.length !== 1) return;
-      const chart = chartInstanceRef.current;
-      if (!chart) return;
-
-      const clientX = e.touches[0].clientX;
-      const deltaX = clientX - dragStartXRef.current;
-      if (Math.abs(deltaX) > 5) {
-        hasDraggedRef.current = true;
-      }
-
-      if (hasDraggedRef.current) {
-        const chartArea = chart.chartArea;
-        const totalVisible = dragStartEndIndexRef.current - dragStartStartIndexRef.current;
-        const barWidth = chartArea.width / totalVisible;
-        const barsDragged = Math.round(deltaX / barWidth);
-        const shift = -barsDragged;
-
-        let newStart = dragStartStartIndexRef.current + shift;
-        let newEnd = dragStartEndIndexRef.current + shift;
-
-        if (newStart < 0) {
-          newStart = 0;
-          newEnd = totalVisible;
-        }
-        if (newEnd > totalLength) {
-          newEnd = totalLength;
-          newStart = totalLength - totalVisible;
-        }
-
-        if (newStart !== chartStartIndexRef.current || newEnd !== chartEndIndexRef.current) {
-          chartStartIndexRef.current = newStart;
-          chartEndIndexRef.current = newEnd;
-          triggerChartUpdate();
-        }
-      }
-    };
-
-    const onTouchEnd = () => {
-      isMouseDownRef.current = false;
-    };
-
-    // Bind event listeners
-    canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('mouseleave', onMouseLeave);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    canvas.addEventListener('touchstart', onTouchStart, { passive: true });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: true });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: true });
-
+    // Clean up on component unmount / update
     return () => {
-      canvas.removeEventListener('mousedown', onMouseDown);
-      canvas.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('mouseup', onMouseUp);
-      canvas.removeEventListener('mouseleave', onMouseLeave);
-      canvas.removeEventListener('wheel', onWheel);
-      canvas.removeEventListener('touchstart', onTouchStart);
-      canvas.removeEventListener('touchmove', onTouchMove);
-      canvas.removeEventListener('touchend', onTouchEnd);
+      resizeObserver.disconnect();
+      chart.remove();
+      chartInstanceRef.current = null;
+      seriesRef.current = null;
     };
-  }, [activeStock, chartType, showLevels, totalLength, linesMap, activeTicker]);
+  }, [activeTicker, chartType, showLevels, formattedData, linesMap, activeStock.price, isUp]);
+
+  // Synchronize zoom changes from the slider to the chart
+  useEffect(() => {
+    if (isScaleUpdatingRef.current) return;
+    const chart = chartInstanceRef.current;
+    if (!chart || formattedData.length === 0) return;
+
+    const totalLength = formattedData.length;
+    const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
+
+    isScaleUpdatingRef.current = true;
+    chart.timeScale().setVisibleLogicalRange({
+      from: totalLength - visibleCount,
+      to: totalLength - 1,
+    });
+    setTimeout(() => {
+      isScaleUpdatingRef.current = false;
+    }, 50);
+  }, [zoomLevel, formattedData.length]);
 
   return (
     <section className="panel panel-center" aria-label="Interactive Charting Terminal">
@@ -895,14 +404,7 @@ export default function ChartContainer({
               min="20"
               max="100"
               value={zoomLevel}
-              onChange={(e) => {
-                const val = parseInt(e.target.value);
-                setZoomLevel(val);
-                if (totalLength > 0) {
-                  const visibleCount = Math.max(5, Math.round((totalLength * val) / 100));
-                  chartStartIndexRef.current = Math.max(0, chartEndIndexRef.current - visibleCount);
-                }
-              }}
+              onChange={(e) => setZoomLevel(parseInt(e.target.value))}
               style={{
                 width: '80px',
                 accentColor: 'var(--cyan)',
@@ -978,9 +480,41 @@ export default function ChartContainer({
 
       {/* Chart Container */}
       <div className={`chart-container ${isLoading ? 'loading' : ''}`}>
-        <canvas ref={canvasRef} id="mainChart"></canvas>
+        <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
+          {formattedData.length === 0 && (
+            <div className="chart-loading-overlay" style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(6, 9, 18, 0.6)',
+              backdropFilter: 'blur(8px)',
+              color: 'var(--cyan)',
+              fontFamily: '"Outfit", sans-serif',
+              fontSize: '16px',
+              fontWeight: 600,
+              textShadow: '0 0 10px rgba(0, 240, 255, 0.4)',
+              zIndex: 10,
+              borderRadius: 'var(--radius-lg)'
+            }}>
+              Retrieving Live {activeTicker} Market Data...
+            </div>
+          )}
+        </div>
         <div className="chart-instructions">
-          <i className="fa-solid fa-circle-info"></i> Click anywhere on the chart canvas to add a Support or Resistance level
+          <i className="fa-solid fa-circle-info"></i>{' '}
+          {hoverPrice !== null && showLevels ? (
+            <span style={{ color: hoverPrice > activeStock.price ? '#ff1744' : '#00e676', fontWeight: 700 }}>
+              Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at ${hoverPrice.toFixed(2)}
+            </span>
+          ) : (
+            "Click anywhere on the chart canvas to add a Support or Resistance level"
+          )}
         </div>
       </div>
     </section>
