@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
 function loadLocalPortfolios() {
@@ -63,6 +63,12 @@ export function usePortfolio(addToast, user) {
   const [portfolios, setPortfolios] = useState(loadLocalPortfolios);
   const [activePortfolioId, setActivePortfolioId] = useState(loadLocalActiveId);
   const [dbLoaded, setDbLoaded] = useState(false);
+  const dbLoadedRef = useRef(false);
+
+  // Reset first-load tracker when user logs out/in
+  useEffect(() => {
+    dbLoadedRef.current = false;
+  }, [user]);
 
   const loadFromDB = useCallback(async () => {
     if (!user) { setDbLoaded(false); return; }
@@ -92,9 +98,14 @@ export function usePortfolio(addToast, user) {
 
       const merged = dbPortfolios.map(dbPort => {
         const dbTxs = txMap[dbPort.id] || [];
-        const localPort = local.find(p => p.id === dbPort.id || (p.id === 'default' && dbPort.id === `default_${user.id}`));
-        const localTxs = localPort?.transactions || [];
-        const transactions = mergeTransactions(localTxs, dbTxs);
+        // Only merge local transactions on the very first database load
+        const transactions = dbLoadedRef.current
+          ? dbTxs
+          : (() => {
+              const localPort = local.find(p => p.id === dbPort.id || (p.id === 'default' && dbPort.id === `default_${user.id}`));
+              const localTxs = localPort?.transactions || [];
+              return mergeTransactions(localTxs, dbTxs);
+            })();
         const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
         return { id: dbPort.id, name: dbPort.name, transactions, holdings, realizedPL };
       });
@@ -137,6 +148,7 @@ export function usePortfolio(addToast, user) {
       setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
     }
 
+    dbLoadedRef.current = true;
     setDbLoaded(true);
   }, [user]);
 
