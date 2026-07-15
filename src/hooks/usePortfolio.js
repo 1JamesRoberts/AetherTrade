@@ -79,10 +79,15 @@ export function usePortfolio(addToast, user) {
         .select('*')
         .order('date', { ascending: true });
 
+      const dbTransactionsWithTimestamp = (dbTransactions || []).map(tx => ({
+        ...tx,
+        timestamp: tx.date ? new Date(tx.date).getTime() : Date.now()
+      }));
+
       if (dbPortfolios && dbPortfolios.length > 0) {
         const local = loadLocalPortfolios();
         const txMap = {};
-        (dbTransactions || []).forEach(tx => {
+        dbTransactionsWithTimestamp.forEach(tx => {
           if (!txMap[tx.portfolio_id]) txMap[tx.portfolio_id] = [];
           txMap[tx.portfolio_id].push(tx);
         });
@@ -110,8 +115,13 @@ export function usePortfolio(addToast, user) {
             .select()
             .single();
 
-          if (newPort && port.transactions.length > 0) {
-            const txs = port.transactions.map(tx => ({
+          const transactionsWithIds = port.transactions.map(tx => ({
+            ...tx,
+            id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+          }));
+
+          if (newPort && transactionsWithIds.length > 0) {
+            const txs = transactionsWithIds.map(tx => ({
               id: tx.id,
               portfolio_id: dbPortId,
               ticker: tx.ticker,
@@ -123,7 +133,7 @@ export function usePortfolio(addToast, user) {
             }));
             await supabase.from('transactions').insert(txs);
           }
-          uploaded.push({ ...port, id: dbPortId });
+          uploaded.push({ ...port, id: dbPortId, transactions: transactionsWithIds });
         }
         setPortfolios(uploaded);
         setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
@@ -145,9 +155,12 @@ export function usePortfolio(addToast, user) {
   }, [activePortfolioId]);
 
   const addTransaction = useCallback(async (portfolioId, newTx) => {
+    const txId = newTx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const txWithId = { ...newTx, id: txId };
+
     const updated = portfolios.map(p => {
       if (p.id === portfolioId) {
-        const transactions = [...p.transactions, newTx];
+        const transactions = [...p.transactions, txWithId];
         const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
         return { ...p, transactions, holdings, realizedPL };
       }
@@ -159,7 +172,7 @@ export function usePortfolio(addToast, user) {
     // Persist to Supabase
     if (user) {
       const { error } = await supabase.from('transactions').insert({
-        id: newTx.id,
+        id: txId,
         portfolio_id: portfolioId,
         ticker: newTx.ticker,
         type: newTx.type,
