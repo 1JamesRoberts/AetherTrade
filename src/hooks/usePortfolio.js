@@ -89,7 +89,7 @@ export function usePortfolio(addToast, user) {
 
         const merged = dbPortfolios.map(dbPort => {
           const dbTxs = txMap[dbPort.id] || [];
-          const localPort = local.find(p => p.id === dbPort.id);
+          const localPort = local.find(p => p.id === dbPort.id || (p.id === 'default' && dbPort.id === `default_${user.id}`));
           const localTxs = localPort?.transactions || [];
           const transactions = mergeTransactions(localTxs, dbTxs);
           const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
@@ -97,20 +97,23 @@ export function usePortfolio(addToast, user) {
         });
 
         setPortfolios(merged);
+        setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
       } else {
         // First login — create default portfolio in DB
         const local = loadLocalPortfolios();
+        const uploaded = [];
         for (const port of local) {
+          const dbPortId = port.id === 'default' ? `default_${user.id}` : port.id;
           const { data: newPort } = await supabase
             .from('portfolios')
-            .insert({ id: port.id, user_id: user.id, name: port.name })
+            .insert({ id: dbPortId, user_id: user.id, name: port.name })
             .select()
             .single();
 
           if (newPort && port.transactions.length > 0) {
             const txs = port.transactions.map(tx => ({
               id: tx.id,
-              portfolio_id: port.id,
+              portfolio_id: dbPortId,
               ticker: tx.ticker,
               type: tx.type,
               shares: tx.shares,
@@ -120,8 +123,10 @@ export function usePortfolio(addToast, user) {
             }));
             await supabase.from('transactions').insert(txs);
           }
+          uploaded.push({ ...port, id: dbPortId });
         }
-        setPortfolios(local);
+        setPortfolios(uploaded);
+        setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
       }
 
       setDbLoaded(true);
