@@ -57,9 +57,19 @@ export default function ChartContainer({
     ...stocks[activeTicker]
   };
 
-  const timeframeChange = activeStock.timeframeChange || 0;
-  const isUp = timeframeChange >= 0;
-  const displayChange = timeframeChange;
+  const computedChange = useMemo(() => {
+    if (formattedData.length >= 2) {
+      const firstPrice = formattedData[0].close || formattedData[0].open;
+      const lastPrice = formattedData[formattedData.length - 1].close;
+      if (firstPrice > 0) {
+        return ((lastPrice - firstPrice) / firstPrice) * 100;
+      }
+    }
+    return activeStock.change || 0;
+  }, [formattedData, activeStock.change]);
+
+  const displayChange = range === '1D' ? computedChange : (activeStock.timeframeChange || computedChange || activeStock.change || 0);
+  const isUp = displayChange >= 0;
 
   // Handle Range modifications
   const handleRangeChange = (targetRange) => {
@@ -390,7 +400,7 @@ export default function ChartContainer({
               <span className="stock-price" id="activePrice">
                 ${activeStock.price.toFixed(2)}
               </span>
-              <span className={`stock-trend ${isUp ? 'positive' : 'negative'}`} id="activeChange">
+              <span className={`stock-trend ${isUp ? 'positive' : 'negative'}`} id="activeChange" title={range === '1D' ? 'Day change relative to Yesterday Close' : `${range} change`}>
                 {isUp ? '+' : ''}
                 {displayChange.toFixed(2)}%
               </span>
