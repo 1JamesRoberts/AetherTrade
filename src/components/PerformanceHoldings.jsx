@@ -109,8 +109,8 @@ export default function PerformanceHoldings({
       performanceChartRef.current = null;
     }
 
-    const txs = [...activePortfolio.transactions];
-    if (holdingsListLength() === 0) {
+    const txs = [...activePortfolio.transactions].sort((a, b) => a.timestamp - b.timestamp);
+    if (txs.length === 0) {
       return;
     }
 
@@ -213,53 +213,50 @@ export default function PerformanceHoldings({
     };
 
     const points = [];
+    const holdingsOnDate = {};
+    let txIdx = 0;
+
+    // Single chronological O(D + N) simulation pass
     timelineDates.forEach(D => {
-      const holdingsOnDate = {};
-      const lastPriceOnDate = {};
+      const endOfDayMs = D.getTime() + 86399999;
 
-      txs.forEach(tx => {
-        if (tx.timestamp <= D.getTime() + 86399999) {
-          const ticker = tx.ticker;
-          const txPrice = parseFloat(tx.price) || 0;
-          const txShares = parseFloat(tx.shares) || 0;
-          const txFees = parseFloat(tx.fees) || 0;
+      while (txIdx < txs.length && txs[txIdx].timestamp <= endOfDayMs) {
+        const tx = txs[txIdx];
+        const ticker = tx.ticker;
+        const txPrice = parseFloat(tx.price) || 0;
+        const txShares = parseFloat(tx.shares) || 0;
+        const txFees = parseFloat(tx.fees) || 0;
 
-          lastPriceOnDate[ticker] = txPrice;
-
-          if (tx.type === 'BUY') {
-            if (!holdingsOnDate[ticker]) {
-              holdingsOnDate[ticker] = { shares: 0, avgCost: 0, totalFees: 0 };
-            }
+        if (tx.type === 'BUY') {
+          if (!holdingsOnDate[ticker]) {
+            holdingsOnDate[ticker] = { shares: 0, avgCost: 0, totalFees: 0, lastPrice: txPrice };
+          }
+          const h = holdingsOnDate[ticker];
+          const newPureTotalCost = (h.shares * h.avgCost) + (txShares * txPrice);
+          h.shares += txShares;
+          h.avgCost = h.shares > 0 ? (newPureTotalCost / h.shares) : 0;
+          h.totalFees = (h.totalFees || 0) + txFees;
+          h.lastPrice = txPrice;
+        } else {
+          if (holdingsOnDate[ticker]) {
             const h = holdingsOnDate[ticker];
-            const newPureTotalCost = (h.shares * h.avgCost) + (txShares * txPrice);
-            h.shares += txShares;
-            h.avgCost = h.shares > 0 ? (newPureTotalCost / h.shares) : 0;
-            h.totalFees = (h.totalFees || 0) + txFees;
-          } else {
-            if (holdingsOnDate[ticker]) {
-              const h = holdingsOnDate[ticker];
-              const originalShares = h.shares;
-              h.shares = Math.max(0, h.shares - txShares);
-              
-              if (originalShares > 0) {
-                h.totalFees = (h.totalFees || 0) * (h.shares / originalShares);
-              } else {
-                h.totalFees = 0;
-              }
-
-              if (h.shares < 1e-9) {
-                delete holdingsOnDate[ticker];
-              }
+            const originalShares = h.shares;
+            h.shares = Math.max(0, h.shares - txShares);
+            h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
+            h.lastPrice = txPrice;
+            if (h.shares < 1e-9) {
+              delete holdingsOnDate[ticker];
             }
           }
         }
-      });
+        txIdx++;
+      }
 
       let unrealizedPLOnDate = 0;
       Object.keys(holdingsOnDate).forEach(t => {
         const h = holdingsOnDate[t];
         if (h.shares > 0) {
-          const price = getPriceOnDate(t, D, lastPriceOnDate[t] || h.avgCost || 0);
+          const price = getPriceOnDate(t, D, h.lastPrice || h.avgCost || 0);
           const totalCostOnDate = (h.shares * h.avgCost) + (h.totalFees || 0);
           const marketValueOnDate = h.shares * price;
           unrealizedPLOnDate += marketValueOnDate - totalCostOnDate;
@@ -541,13 +538,13 @@ export default function PerformanceHoldings({
           }}
         >
           <div className="metric-card-header">
-            <span className="title">Total Profit / Loss</span>
+            <span className="title">Unrealized Profit / Loss</span>
             <i className="fa-solid fa-money-bill-trend-up text-cyan"></i>
           </div>
           <div className={`metric-val ${netProfit > 0 ? 'text-green' : netProfit < 0 ? 'text-red' : ''}`}>
             {netProfit >= 0 ? '+' : ''}{formatCurrency(netProfit)}
           </div>
-          <div className="metric-subtext">Unrealized returns in US dollars</div>
+          <div className="metric-subtext">Unrealized returns on active holdings</div>
         </div>
 
         <div
@@ -575,12 +572,13 @@ export default function PerformanceHoldings({
           }}
         >
           <div className="metric-card-header">
-            <span className="title">Total Return Rate</span>
+            <span className="title">Unrealized Return Rate</span>
             <i className="fa-solid fa-percent text-cyan"></i>
           </div>
           <div className={`metric-val ${netProfit > 0 ? 'text-green' : netProfit < 0 ? 'text-red' : ''}`}>
             {netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%
           </div>
+          <div className="metric-subtext">Percentage return on active holdings</div>
         </div>
       </div>
 
@@ -588,7 +586,7 @@ export default function PerformanceHoldings({
       <div className="analysis-section" style={{ flex: 1.5, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '320px', padding: '12px 24px', borderBottom: '1px solid var(--border-color)' }}>
         <div className="section-subtitle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <span>Unrealized Performance Over Time</span>
-          {holdingsListLength() > 0 && (
+          {activePortfolio.transactions.length > 0 && (
             <button onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh chart data" aria-label="Refresh chart data" style={{ width: 'auto', padding: '0 10px', gap: '6px', fontSize: '11px' }}>
               <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
               <span>{isRefreshing ? 'Refreshing...' : 'Refresh Chart'}</span>
@@ -597,7 +595,7 @@ export default function PerformanceHoldings({
         </div>
         <div style={{ position: 'relative', height: '260px', width: '100%' }} id="performanceChartContainer">
           <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart" style={{ width: '100%', height: '100%' }}></canvas>
-          {holdingsListLength() === 0 && (
+          {activePortfolio.transactions.length === 0 && (
             <div id="performanceEmptyMsg" className="empty-pill-msg" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', width: '100%' }}>
               No performance history available yet. Record transactions to plot history.
             </div>
