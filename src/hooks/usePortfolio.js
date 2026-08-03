@@ -300,6 +300,58 @@ export function usePortfolio(addToast, user) {
     }
   }, [portfolios, activePortfolioId, user, addToast]);
 
+  const importCSVTransactions = useCallback(async (txsByPortfolio, isAppend) => {
+    const allInsertedTxs = [];
+
+    const updated = portfolios.map(port => {
+      const imported = txsByPortfolio[port.id];
+      if (!imported) return port;
+
+      const importedWithIds = imported.map(tx => ({
+        ...tx,
+        id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 6)}`
+      }));
+
+      allInsertedTxs.push(...importedWithIds.map(tx => ({ ...tx, portfolio_id: port.id })));
+
+      const existing = isAppend ? port.transactions : [];
+      const combined = [...existing, ...importedWithIds].sort((a, b) => a.timestamp - b.timestamp);
+      const { holdings, realizedPL } = rebuildPortfolioHoldings(combined);
+      return { ...port, transactions: combined, holdings, realizedPL };
+    });
+
+    setPortfolios(updated);
+
+    // Synchronize to Supabase database if logged in
+    if (user) {
+      for (const portId of Object.keys(txsByPortfolio)) {
+        if (!isAppend) {
+          // In REPLACE mode, clear old transactions for this portfolio in Supabase
+          const { error: delErr } = await supabase.from('transactions').delete().eq('portfolio_id', portId);
+          if (delErr) console.error('Supabase CSV replace delete error:', delErr);
+        }
+      }
+
+      if (allInsertedTxs.length > 0) {
+        const dbRows = allInsertedTxs.map(tx => ({
+          id: tx.id,
+          portfolio_id: tx.portfolio_id,
+          ticker: tx.ticker,
+          type: tx.type,
+          shares: tx.shares,
+          price: tx.price,
+          fees: tx.fees || 0,
+          date: new Date(tx.timestamp).toISOString()
+        }));
+
+        const { error: insErr } = await supabase.from('transactions').insert(dbRows);
+        if (insErr) console.error('Supabase batch CSV insert error:', insErr);
+      }
+    }
+
+    return updated;
+  }, [portfolios, user]);
+
   const createPortfolio = useCallback(async (name) => {
     const cleanName = name.trim();
     if (portfolios.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
