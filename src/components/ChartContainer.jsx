@@ -45,6 +45,7 @@ export default function ChartContainer({
   const isScaleUpdatingRef = useRef(false);
 
   const [hoverPrice, setHoverPrice] = useState(null);
+  const [hoverData, setHoverData] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
@@ -377,14 +378,22 @@ export default function ChartContainer({
     };
     chart.subscribeClick(handleChartClick);
 
-    // Subscribe to Crosshair Movement for guide lines preview
+    // Subscribe to Crosshair Movement for hover price tracking and guide lines preview
     const handleCrosshairMove = (param) => {
-      if (!showLevels || !param.point) {
+      if (!param || !param.point) {
         setHoverPrice(null);
+        setHoverData(null);
         return;
       }
       const price = series.coordinateToPrice(param.point.y);
       setHoverPrice(price !== null ? parseFloat(price.toFixed(2)) : null);
+
+      if (param.time && series) {
+        const pointData = param.seriesData.get(series);
+        setHoverData(pointData || null);
+      } else {
+        setHoverData(null);
+      }
     };
     chart.subscribeCrosshairMove(handleCrosshairMove);
 
@@ -479,8 +488,8 @@ export default function ChartContainer({
               {activeStock.name}
             </h1>
             <div className="stock-metrics">
-              <span className="stock-price" id="activePrice">
-                ${activeStock.price.toFixed(2)}
+              <span className="stock-price" id="activePrice" style={hoverPrice !== null ? { color: 'var(--cyan)' } : {}}>
+                ${hoverPrice !== null ? hoverPrice.toFixed(2) : activeStock.price.toFixed(2)}
               </span>
               <span className={`stock-trend ${isUp ? 'positive' : 'negative'}`} id="activeChange" title={range === '1D' ? 'Day change relative to Yesterday Close' : `${range} change`}>
                 {isUp ? '+' : ''}
@@ -611,6 +620,45 @@ export default function ChartContainer({
       <div className={`chart-container ${isLoading ? 'loading' : ''}`} style={isFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'none', height: '100%', overflow: 'hidden' } : {}}>
         <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative', height: isFullscreen ? '100%' : undefined }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
+
+          {/* Top Left Floating Hover Price Badge */}
+          <div style={{
+            position: 'absolute',
+            top: '12px',
+            left: '12px',
+            zIndex: 25,
+            background: 'rgba(6, 9, 18, 0.85)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            padding: '6px 12px',
+            fontSize: '12px',
+            fontWeight: 600,
+            color: '#94a3b8',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            pointerEvents: 'none',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <i className="fa-solid fa-crosshairs" style={{ color: 'var(--cyan)', fontSize: '11px' }}></i>
+              <span style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hover Price:</span>
+              <span style={{ color: hoverPrice !== null ? 'var(--cyan)' : '#ffffff', fontWeight: 700, fontSize: '13px' }}>
+                {hoverPrice !== null ? `$${hoverPrice.toFixed(2)}` : `$${activeStock.price.toFixed(2)}`}
+              </span>
+            </div>
+
+            {hoverData && (
+              <div style={{ display: 'flex', gap: '8px', fontSize: '11px', borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: '8px' }}>
+                {hoverData.open !== undefined && <span>O: <strong style={{ color: '#fff' }}>${hoverData.open.toFixed(2)}</strong></span>}
+                {hoverData.high !== undefined && <span>H: <strong style={{ color: '#00e676' }}>${hoverData.high.toFixed(2)}</strong></span>}
+                {hoverData.low !== undefined && <span>L: <strong style={{ color: '#ff1744' }}>${hoverData.low.toFixed(2)}</strong></span>}
+                {hoverData.close !== undefined && <span>C: <strong style={{ color: '#fff' }}>${hoverData.close.toFixed(2)}</strong></span>}
+                {hoverData.value !== undefined && hoverData.open === undefined && <span>Val: <strong style={{ color: '#fff' }}>${hoverData.value.toFixed(2)}</strong></span>}
+              </div>
+            )}
+          </div>
 
           {/* Bottom Right Fullscreen Toggle Button */}
           <button
