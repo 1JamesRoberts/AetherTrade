@@ -142,14 +142,14 @@ export default function ChartContainer({
 
     const sorted = result.sort((a, b) => a.time - b.time);
 
-    // If 1D intraday range and we have points, ensure the series starts from Yesterday's Close Price
+    // If 1D range and we have points, prepending starting price from Yesterday Close safely
     if (range === '1D' && sorted.length > 0) {
       const currentPrice = parseFloat(activeStock.price) || sorted[sorted.length - 1].close;
       const changePct = parseFloat(activeStock.change) || 0;
       const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : sorted[0].open;
       const startTime = sorted[0].time - 60; // 1 minute prior to first bar
 
-      if (!seenTimes.has(startTime)) {
+      if (!seenTimes.has(startTime) && startTime > 0 && startTime < sorted[0].time) {
         sorted.unshift({
           time: startTime,
           open: prevClose,
@@ -161,7 +161,7 @@ export default function ChartContainer({
       }
     }
 
-    return sorted;
+    return sorted.sort((a, b) => a.time - b.time);
   }, [activeStock.liveRawValues, activeStock.liveCloses, activeStock.liveLabels, activeStock.price, activeStock.change, range]);
 
   // Main Effect to manage Lightweight Charts instance and updates
@@ -248,7 +248,12 @@ export default function ChartContainer({
     }
 
     seriesRef.current = series;
-    series.setData(formattedData);
+
+    try {
+      series.setData(formattedData);
+    } catch (err) {
+      console.warn('Lightweight Charts setData skipped error:', err);
+    }
 
     // Add PREV CLOSE reference line
     const currentPrice = parseFloat(activeStock.price) || 0;
@@ -256,14 +261,18 @@ export default function ChartContainer({
     const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : 0;
 
     if (prevClose > 0) {
-      series.createPriceLine({
-        price: prevClose,
-        color: 'rgba(255, 255, 255, 0.45)',
-        lineWidth: 1.5,
-        lineStyle: 2, // Dashed
-        axisLabelVisible: true,
-        title: `PREV CLOSE $${prevClose.toFixed(2)}`,
-      });
+      try {
+        series.createPriceLine({
+          price: prevClose,
+          color: 'rgba(255, 255, 255, 0.45)',
+          lineWidth: 1.5,
+          lineStyle: 2, // Dashed
+          axisLabelVisible: true,
+          title: `PREV CLOSE $${prevClose.toFixed(2)}`,
+        });
+      } catch (err) {
+        console.warn('Lightweight Charts priceLine skipped error:', err);
+      }
     }
 
     // Apply initial zoom
