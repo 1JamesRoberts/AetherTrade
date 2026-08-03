@@ -657,13 +657,12 @@ export default function ChartContainer({
               </span>
             </div>
 
-            {hoverData && (
+            {hoverData && hoverData.open !== undefined && (
               <div style={{ display: 'flex', gap: '8px', fontSize: '11px', borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: '8px' }}>
-                {hoverData.open !== undefined && <span>O: <strong style={{ color: '#fff' }}>${hoverData.open.toFixed(2)}</strong></span>}
-                {hoverData.high !== undefined && <span>H: <strong style={{ color: '#00e676' }}>${hoverData.high.toFixed(2)}</strong></span>}
-                {hoverData.low !== undefined && <span>L: <strong style={{ color: '#ff1744' }}>${hoverData.low.toFixed(2)}</strong></span>}
-                {hoverData.close !== undefined && <span>C: <strong style={{ color: '#fff' }}>${hoverData.close.toFixed(2)}</strong></span>}
-                {hoverData.value !== undefined && hoverData.open === undefined && <span>Val: <strong style={{ color: '#fff' }}>${hoverData.value.toFixed(2)}</strong></span>}
+                <span>O: <strong style={{ color: '#fff' }}>${hoverData.open.toFixed(2)}</strong></span>
+                <span>H: <strong style={{ color: '#00e676' }}>${hoverData.high.toFixed(2)}</strong></span>
+                <span>L: <strong style={{ color: '#ff1744' }}>${hoverData.low.toFixed(2)}</strong></span>
+                <span>C: <strong style={{ color: '#fff' }}>${hoverData.close.toFixed(2)}</strong></span>
               </div>
             )}
           </div>
