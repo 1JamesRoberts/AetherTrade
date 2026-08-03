@@ -57,37 +57,6 @@ export default function ChartContainer({
     ...stocks[activeTicker]
   };
 
-  const computedChange = useMemo(() => {
-    if (formattedData.length >= 2) {
-      const firstPrice = formattedData[0].close || formattedData[0].open;
-      const lastPrice = formattedData[formattedData.length - 1].close;
-      if (firstPrice > 0) {
-        return ((lastPrice - firstPrice) / firstPrice) * 100;
-      }
-    }
-    return activeStock.change || 0;
-  }, [formattedData, activeStock.change]);
-
-  const displayChange = range === '1D' ? computedChange : (activeStock.timeframeChange || computedChange || activeStock.change || 0);
-  const isUp = displayChange >= 0;
-
-  // Handle Range modifications
-  const handleRangeChange = (targetRange) => {
-    setRange(targetRange);
-    setZoomLevel(100);
-
-    const rangeInfo = RANGE_INTERVALS[targetRange];
-    if (!rangeInfo.allowed.includes(interval)) {
-      setInterval(rangeInfo.default);
-    }
-  };
-
-  // Handle Interval modifications
-  const handleIntervalChange = (targetInterval) => {
-    setInterval(targetInterval);
-    setZoomLevel(100);
-  };
-
   // Convert Twelve Data stock history into format compatible with Lightweight Charts
   const formattedData = useMemo(() => {
     const rawValues = activeStock.liveRawValues || [];
@@ -163,6 +132,37 @@ export default function ChartContainer({
 
     return sorted.sort((a, b) => a.time - b.time);
   }, [activeStock.liveRawValues, activeStock.liveCloses, activeStock.liveLabels, activeStock.price, activeStock.change, range]);
+
+  const computedChange = useMemo(() => {
+    if (formattedData.length >= 2) {
+      const firstPrice = formattedData[0].close || formattedData[0].open;
+      const lastPrice = formattedData[formattedData.length - 1].close;
+      if (firstPrice > 0) {
+        return ((lastPrice - firstPrice) / firstPrice) * 100;
+      }
+    }
+    return activeStock.change || 0;
+  }, [formattedData, activeStock.change]);
+
+  const displayChange = range === '1D' ? computedChange : (activeStock.timeframeChange || computedChange || activeStock.change || 0);
+  const isUp = displayChange >= 0;
+
+  // Handle Range modifications
+  const handleRangeChange = (targetRange) => {
+    setRange(targetRange);
+    setZoomLevel(100);
+
+    const rangeInfo = RANGE_INTERVALS[targetRange];
+    if (!rangeInfo.allowed.includes(interval)) {
+      setInterval(rangeInfo.default);
+    }
+  };
+
+  // Handle Interval modifications
+  const handleIntervalChange = (targetInterval) => {
+    setInterval(targetInterval);
+    setZoomLevel(100);
+  };
 
   // Main Effect to manage Lightweight Charts instance and updates
   useEffect(() => {
