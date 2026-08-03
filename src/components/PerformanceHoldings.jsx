@@ -578,7 +578,15 @@ export default function PerformanceHoldings({
 
       {/* Performance Plot Chart */}
       <div className="analysis-section" style={{ flex: 1.5, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '320px', padding: '12px 24px', borderBottom: '1px solid var(--border-color)' }}>
-        <div className="section-subtitle" style={{ marginBottom: '8px' }}>Unrealized Performance Over Time</div>
+        <div className="section-subtitle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span>Unrealized Performance Over Time</span>
+          {holdingsListLength() > 0 && (
+            <button onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh chart data" aria-label="Refresh chart data" style={{ width: 'auto', padding: '0 10px', gap: '6px', fontSize: '11px' }}>
+              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh Chart'}</span>
+            </button>
+          )}
+        </div>
         <div style={{ position: 'relative', height: '260px', width: '100%' }} id="performanceChartContainer">
           <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart" style={{ width: '100%', height: '100%' }}></canvas>
           {holdingsListLength() === 0 && (
