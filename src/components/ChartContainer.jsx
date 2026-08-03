@@ -78,6 +78,14 @@ export default function ChartContainer({
       dataPoints = rawValues;
     }
 
+    if (range === '1D' && dataPoints.length > 0) {
+      const lastItem = dataPoints[dataPoints.length - 1];
+      if (lastItem && lastItem.datetime) {
+        const latestDateStr = lastItem.datetime.split(' ')[0];
+        dataPoints = dataPoints.filter(item => item.datetime && item.datetime.startsWith(latestDateStr));
+      }
+    }
+
     const seenTimes = new Set();
     const result = [];
 
@@ -111,19 +119,19 @@ export default function ChartContainer({
 
     const sorted = result.sort((a, b) => a.time - b.time);
 
-    // For 1D time frame: start with Yesterday Close price and end with Now price
-    if (range === '1D') {
-      const currentPrice = parseFloat(activeStock.price) || (sorted.length > 0 ? sorted[sorted.length - 1].close : 150.00);
+    // For 1D time frame: start with Yesterday Close price followed by all intraday bars of current day
+    if (range === '1D' && sorted.length > 0) {
+      const currentPrice = parseFloat(activeStock.price) || sorted[sorted.length - 1].close;
       const changePct = parseFloat(activeStock.change) || 0;
-      const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : (sorted.length > 0 ? sorted[0].open : currentPrice);
+      const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : sorted[0].open;
+      const startTime = sorted[0].time - 60; // 1 minute prior to first intraday bar of today
 
-      const nowTime = sorted.length > 0 ? sorted[sorted.length - 1].time : Math.floor(Date.now() / 1000);
-      const startTime = sorted.length > 0 && sorted[0].time < nowTime ? sorted[0].time : nowTime - 86400;
-
-      return [
-        { time: startTime, open: prevClose, high: prevClose, low: prevClose, close: prevClose, value: prevClose },
-        { time: nowTime, open: currentPrice, high: Math.max(prevClose, currentPrice), low: Math.min(prevClose, currentPrice), close: currentPrice, value: currentPrice }
-      ];
+      if (startTime > 0 && !seenTimes.has(startTime)) {
+        return [
+          { time: startTime, open: prevClose, high: prevClose, low: prevClose, close: prevClose, value: prevClose },
+          ...sorted
+        ];
+      }
     }
 
     return sorted;
@@ -175,6 +183,15 @@ export default function ChartContainer({
         textColor: '#94a3b8',
         fontFamily: '"Outfit", sans-serif',
       },
+      localization: {
+        timeFormatter: (timestamp) => {
+          if (range === '1D' && formattedData.length > 0 && timestamp === formattedData[0].time) {
+            return 'Prev Close';
+          }
+          const d = new Date(timestamp * 1000);
+          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+      },
       grid: {
         vertLines: { color: 'rgba(255, 255, 255, 0.02)' },
         horzLines: { color: 'rgba(255, 255, 255, 0.02)' },
@@ -187,6 +204,13 @@ export default function ChartContainer({
         borderColor: 'rgba(255, 255, 255, 0.06)',
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time) => {
+          if (range === '1D' && formattedData.length > 0 && time === formattedData[0].time) {
+            return 'Prev Close';
+          }
+          const d = new Date(time * 1000);
+          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
       },
       crosshair: {
         mode: 0,
