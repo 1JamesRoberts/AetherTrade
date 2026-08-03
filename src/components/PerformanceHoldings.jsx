@@ -432,7 +432,16 @@ export default function PerformanceHoldings({
     if (isRefreshing) return;
     setIsRefreshing(true);
     const heldTickers = holdingsKeys.filter(t => activePortfolio.holdings[t].shares > 0);
-    await Promise.all(heldTickers.map(async (t) => {
+    const allPortfolioTickers = [...new Set(activePortfolio.transactions.map(t => t.ticker))];
+    const tickersToRefresh = heldTickers.length > 0 ? heldTickers : allPortfolioTickers;
+
+    if (tickersToRefresh.length === 0) {
+      setIsRefreshing(false);
+      showNotification('No transaction history to refresh', 'info');
+      return;
+    }
+
+    await Promise.all(tickersToRefresh.map(async (t) => {
       if (onFetchPortfolioHistory) {
         await onFetchPortfolioHistory(t);
       }
