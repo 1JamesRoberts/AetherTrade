@@ -41,9 +41,36 @@ export default function ChartContainer({
   const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const seriesRef = useRef(null);
+  const panelRef = useRef(null);
   const isScaleUpdatingRef = useRef(false);
 
   const [hoverPrice, setHoverPrice] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!panelRef.current) return;
+    if (!document.fullscreenElement) {
+      if (panelRef.current.requestFullscreen) {
+        panelRef.current.requestFullscreen().catch(() => setIsFullscreen(prev => !prev));
+      } else {
+        setIsFullscreen(prev => !prev);
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else {
+        setIsFullscreen(false);
+      }
+    }
+  };
 
   const activeStock = {
     ticker: activeTicker,
@@ -386,7 +413,23 @@ export default function ChartContainer({
   }, [zoomLevel, formattedData.length]);
 
   return (
-    <section className="panel panel-center" aria-label="Interactive Charting Terminal">
+    <section
+      ref={panelRef}
+      className={`panel panel-center ${isFullscreen ? 'fullscreen-mode' : ''}`}
+      aria-label="Interactive Charting Terminal"
+      style={isFullscreen ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        zIndex: 99999,
+        background: '#060912',
+        padding: '16px',
+        borderRadius: 0,
+        boxSizing: 'border-box'
+      } : {}}
+    >
       <div className="chart-header">
         <div className="stock-info-block">
           <button
@@ -539,6 +582,39 @@ export default function ChartContainer({
       <div className={`chart-container ${isLoading ? 'loading' : ''}`}>
         <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
+
+          {/* Bottom Right Fullscreen Toggle Button */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="btn-fullscreen-toggle"
+            title={isFullscreen ? "Exit Fullscreen" : "Expand to Fullscreen"}
+            aria-label={isFullscreen ? "Exit Fullscreen" : "Expand to Fullscreen"}
+            style={{
+              position: 'absolute',
+              bottom: '12px',
+              right: '12px',
+              zIndex: 25,
+              background: 'rgba(6, 9, 18, 0.8)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid var(--border-color)',
+              color: 'var(--cyan)',
+              borderRadius: '6px',
+              padding: '6px 12px',
+              fontSize: '11px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+              transition: 'all var(--transition-fast)'
+            }}
+          >
+            <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`}></i>
+            <span>{isFullscreen ? 'Exit' : 'Full Screen'}</span>
+          </button>
+
           {formattedData.length === 0 && (
             <div className="chart-loading-overlay" style={{
               position: 'absolute',
