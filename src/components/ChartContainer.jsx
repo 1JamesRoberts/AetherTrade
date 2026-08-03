@@ -111,26 +111,22 @@ export default function ChartContainer({
 
     const sorted = result.sort((a, b) => a.time - b.time);
 
-    // If 1D range and we have points, prepending starting price from Yesterday Close safely
-    if (range === '1D' && sorted.length > 0) {
-      const currentPrice = parseFloat(activeStock.price) || sorted[sorted.length - 1].close;
+    // For 1D time frame: start with Yesterday Close price and end with Now price
+    if (range === '1D') {
+      const currentPrice = parseFloat(activeStock.price) || (sorted.length > 0 ? sorted[sorted.length - 1].close : 150.00);
       const changePct = parseFloat(activeStock.change) || 0;
-      const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : sorted[0].open;
-      const startTime = sorted[0].time - 60; // 1 minute prior to first bar
+      const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : (sorted.length > 0 ? sorted[0].open : currentPrice);
 
-      if (!seenTimes.has(startTime) && startTime > 0 && startTime < sorted[0].time) {
-        sorted.unshift({
-          time: startTime,
-          open: prevClose,
-          high: prevClose,
-          low: prevClose,
-          close: prevClose,
-          value: prevClose
-        });
-      }
+      const nowTime = sorted.length > 0 ? sorted[sorted.length - 1].time : Math.floor(Date.now() / 1000);
+      const startTime = sorted.length > 0 && sorted[0].time < nowTime ? sorted[0].time : nowTime - 86400;
+
+      return [
+        { time: startTime, open: prevClose, high: prevClose, low: prevClose, close: prevClose, value: prevClose },
+        { time: nowTime, open: currentPrice, high: Math.max(prevClose, currentPrice), low: Math.min(prevClose, currentPrice), close: currentPrice, value: currentPrice }
+      ];
     }
 
-    return sorted.sort((a, b) => a.time - b.time);
+    return sorted;
   }, [activeStock.liveRawValues, activeStock.liveCloses, activeStock.liveLabels, activeStock.price, activeStock.change, range]);
 
   const computedChange = useMemo(() => {
