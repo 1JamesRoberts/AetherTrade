@@ -453,7 +453,7 @@ export default function PerformanceHoldings({
   };
 
   const handleSellAll = (ticker, shares, price) => {
-    onAddTransaction(activePortfolioId, {
+    onAddTransaction(activePortfolio.id, {
       timestamp: Date.now(),
       ticker,
       type: 'SELL',
@@ -467,7 +467,7 @@ export default function PerformanceHoldings({
   const handleReset = () => {
     const confirmReset = confirm(`Are you absolutely sure you want to reset "${activePortfolio.name}"?\nThis will liquidate all holdings and delete all transaction audit history for this portfolio.`);
     if (confirmReset) {
-      onResetPortfolio(activePortfolioId);
+      onResetPortfolio(activePortfolio.id);
     }
   };
 
@@ -501,7 +501,7 @@ export default function PerformanceHoldings({
           <button onClick={() => fileInputRef.current.click()} className="btn" title="Import transactions from CSV" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', color: 'var(--cyan)', boxShadow: '0 0 8px rgba(0, 240, 255, 0.05)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
             <i className="fa-solid fa-file-import"></i> Import CSV
           </button>
-          <button onClick={() => onExportCSV(activePortfolioId)} className="btn" title="Export transactions as CSV" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--bullish)', boxShadow: '0 0 8px rgba(16, 185, 129, 0.05)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          <button onClick={() => onExportCSV(activePortfolio.id)} className="btn" title="Export transactions as CSV" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--bullish)', boxShadow: '0 0 8px rgba(16, 185, 129, 0.05)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
             <i className="fa-solid fa-file-export"></i> Export CSV
           </button>
           <button onClick={handleReset} className="btn btn-clear-lines" id="btnResetPortfolio" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', gap: '6px' }}>
@@ -691,7 +691,7 @@ export default function PerformanceHoldings({
                       <button onClick={() => {
                         const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings.");
                         if (confirmDelete) {
-                          onDeleteTransaction(activePortfolioId, actualIndex);
+                          onDeleteTransaction(activePortfolio.id, actualIndex);
                         }
                       }} className="btn-tx-delete" title="Delete transaction entry"><i className="fa-solid fa-xmark"></i></button>
                     </div>

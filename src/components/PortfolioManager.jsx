@@ -265,7 +265,7 @@ export default function PortfolioManager({
       account: accountName.trim() || 'Default'
     };
 
-    onAddTransaction(activePortfolioId, newTx);
+    onAddTransaction(activePortfolio.id, newTx);
 
     // Reset inputs
     setShares(10);

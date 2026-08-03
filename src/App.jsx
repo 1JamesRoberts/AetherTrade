@@ -44,7 +44,7 @@ export default function App() {
 
   const { watchlist, setWatchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist();
   const { stocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory } = useStockData(activeTicker, selectedRange, selectedInterval, addToast);
-  const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio } = usePortfolio(addToast, user);
+  const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio, importCSVTransactions } = usePortfolio(addToast, user);
 
   const loadStockDataRef = useRef(loadStockData);
   const fetchBackgroundPriceRef = useRef(fetchBackgroundPrice);
@@ -95,7 +95,7 @@ export default function App() {
   const handleRemoveTicker = (ticker) => removeTicker(ticker, addToast);
   const handleAddTicker = (ticker) => addTicker(ticker, addToast);
 
-  const handleImportCSV = (csvText) => {
+  const handleImportCSV = async (csvText) => {
     try {
       const importedTxs = importTransactionsFromCSV(csvText);
       if (importedTxs.length === 0) { addToast("No transactions found in CSV.", "error"); return; }
@@ -103,16 +103,7 @@ export default function App() {
       const choice = confirm(`Found ${importedTxs.length} valid transactions.\n\nOK = APPEND, CANCEL = REPLACE`);
       const txsByPortfolio = validateCSVImport(importedTxs, portfolios, activePortfolioId);
 
-      const updated = portfolios.map(port => {
-        const imported = txsByPortfolio[port.id];
-        if (!imported) return port;
-        const existing = choice ? port.transactions : [];
-        const combined = [...existing, ...imported].sort((a, b) => a.timestamp - b.timestamp);
-        const { holdings, realizedPL } = rebuildPortfolioHoldings(combined);
-        return { ...port, transactions: combined, holdings, realizedPL };
-      });
-
-      setPortfolios(updated);
+      await importCSVTransactions(txsByPortfolio, choice);
 
       // Fetch live prices for all imported tickers so the table updates
       const importedTickers = [...new Set(importedTxs.map(tx => tx.ticker))];

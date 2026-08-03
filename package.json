@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "python3 server/server.py",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

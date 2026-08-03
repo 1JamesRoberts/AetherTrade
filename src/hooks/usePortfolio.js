@@ -190,26 +190,58 @@ export function usePortfolio(addToast, user) {
     localStorage.setItem('aethertrade_active_portfolio_id', activePortfolioId);
   }, [activePortfolioId]);
 
+  // Keep activePortfolioId in sync with available portfolios
+  useEffect(() => {
+    if (portfolios.length > 0 && !portfolios.some(p => p.id === activePortfolioId)) {
+      setActivePortfolioId(portfolios[0].id);
+    }
+  }, [portfolios, activePortfolioId]);
+
   const addTransaction = useCallback(async (portfolioId, newTx) => {
     const txId = newTx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const txWithId = { ...newTx, id: txId };
 
-    const updated = portfolios.map(p => {
-      if (p.id === portfolioId) {
-        const transactions = [...p.transactions, txWithId];
-        const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
-        return { ...p, transactions, holdings, realizedPL };
+    // Resolve target portfolio ID: match requested portfolioId, fallback to activePortfolioId or first available portfolio
+    let targetPortId = portfolioId;
+    if (!portfolios.some(p => p.id === targetPortId)) {
+      if (portfolios.some(p => p.id === activePortfolioId)) {
+        targetPortId = activePortfolioId;
+      } else if (portfolios.length > 0) {
+        targetPortId = portfolios[0].id;
       }
-      return p;
-    });
-    setPortfolios(updated);
+    }
+
+    if (portfolios.length === 0) {
+      targetPortId = 'default';
+      const { holdings, realizedPL } = rebuildPortfolioHoldings([txWithId]);
+      const newPort = {
+        id: targetPortId,
+        name: 'Primary Portfolio',
+        transactions: [txWithId],
+        holdings,
+        realizedPL
+      };
+      setPortfolios([newPort]);
+      setActivePortfolioId(targetPortId);
+    } else {
+      const updated = portfolios.map(p => {
+        if (p.id === targetPortId) {
+          const transactions = [...p.transactions, txWithId];
+          const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
+          return { ...p, transactions, holdings, realizedPL };
+        }
+        return p;
+      });
+      setPortfolios(updated);
+    }
+
     addToast(`Recorded ${newTx.type} transaction for ${newTx.ticker}!`, 'success');
 
     // Persist to Supabase
     if (user) {
       const { error } = await supabase.from('transactions').insert({
         id: txId,
-        portfolio_id: portfolioId,
+        portfolio_id: targetPortId,
         ticker: newTx.ticker,
         type: newTx.type,
         shares: newTx.shares,
@@ -219,12 +251,17 @@ export function usePortfolio(addToast, user) {
       });
       if (error) console.error('Supabase insert error:', error);
     }
-  }, [portfolios, user, addToast]);
+  }, [portfolios, activePortfolioId, user, addToast]);
 
   const deleteTransaction = useCallback(async (portfolioId, index) => {
+    let targetPortId = portfolioId;
+    if (!portfolios.some(p => p.id === targetPortId)) {
+      targetPortId = activePortfolioId;
+    }
+
     let deletedTxId = null;
     const updated = portfolios.map(p => {
-      if (p.id === portfolioId) {
+      if (p.id === targetPortId) {
         const transactions = [...p.transactions];
         deletedTxId = transactions[index]?.id;
         transactions.splice(index, 1);
@@ -240,11 +277,16 @@ export function usePortfolio(addToast, user) {
       const { error } = await supabase.from('transactions').delete().eq('id', deletedTxId);
       if (error) console.error('Supabase delete error:', error);
     }
-  }, [portfolios, user, addToast]);
+  }, [portfolios, activePortfolioId, user, addToast]);
 
   const resetPortfolio = useCallback(async (portfolioId) => {
+    let targetPortId = portfolioId;
+    if (!portfolios.some(p => p.id === targetPortId)) {
+      targetPortId = activePortfolioId;
+    }
+
     const updated = portfolios.map(p => {
-      if (p.id === portfolioId) {
+      if (p.id === targetPortId) {
         return { ...p, transactions: [], holdings: {}, realizedPL: 0 };
       }
       return p;
@@ -253,10 +295,62 @@ export function usePortfolio(addToast, user) {
     addToast("Portfolio liquidated and logs cleared.", "info");
 
     if (user) {
-      const { error } = await supabase.from('transactions').delete().eq('portfolio_id', portfolioId);
+      const { error } = await supabase.from('transactions').delete().eq('portfolio_id', targetPortId);
       if (error) console.error('Supabase reset error:', error);
     }
-  }, [portfolios, user, addToast]);
+  }, [portfolios, activePortfolioId, user, addToast]);
+
+  const importCSVTransactions = useCallback(async (txsByPortfolio, isAppend) => {
+    const allInsertedTxs = [];
+
+    const updated = portfolios.map(port => {
+      const imported = txsByPortfolio[port.id];
+      if (!imported) return port;
+
+      const importedWithIds = imported.map(tx => ({
+        ...tx,
+        id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 6)}`
+      }));
+
+      allInsertedTxs.push(...importedWithIds.map(tx => ({ ...tx, portfolio_id: port.id })));
+
+      const existing = isAppend ? port.transactions : [];
+      const combined = [...existing, ...importedWithIds].sort((a, b) => a.timestamp - b.timestamp);
+      const { holdings, realizedPL } = rebuildPortfolioHoldings(combined);
+      return { ...port, transactions: combined, holdings, realizedPL };
+    });
+
+    setPortfolios(updated);
+
+    // Synchronize to Supabase database if logged in
+    if (user) {
+      for (const portId of Object.keys(txsByPortfolio)) {
+        if (!isAppend) {
+          // In REPLACE mode, clear old transactions for this portfolio in Supabase
+          const { error: delErr } = await supabase.from('transactions').delete().eq('portfolio_id', portId);
+          if (delErr) console.error('Supabase CSV replace delete error:', delErr);
+        }
+      }
+
+      if (allInsertedTxs.length > 0) {
+        const dbRows = allInsertedTxs.map(tx => ({
+          id: tx.id,
+          portfolio_id: tx.portfolio_id,
+          ticker: tx.ticker,
+          type: tx.type,
+          shares: tx.shares,
+          price: tx.price,
+          fees: tx.fees || 0,
+          date: new Date(tx.timestamp).toISOString()
+        }));
+
+        const { error: insErr } = await supabase.from('transactions').insert(dbRows);
+        if (insErr) console.error('Supabase batch CSV insert error:', insErr);
+      }
+    }
+
+    return updated;
+  }, [portfolios, user]);
 
   return {
     portfolios,
@@ -266,6 +360,7 @@ export function usePortfolio(addToast, user) {
     addTransaction,
     deleteTransaction,
     resetPortfolio,
+    importCSVTransactions,
     dbLoaded
   };
 }
