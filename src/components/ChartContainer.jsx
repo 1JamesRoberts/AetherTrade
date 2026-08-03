@@ -203,6 +203,14 @@ export default function ChartContainer({
     return activeStock.change || 0;
   }, [formattedData, activeStock.change]);
 
+  // Primary hovered price: prioritize the bar's actual close/value (val) at that timestamp
+  const activeHoverValue = useMemo(() => {
+    if (!hoverData) return hoverPrice;
+    if (hoverData.close !== undefined) return hoverData.close;
+    if (hoverData.value !== undefined) return hoverData.value;
+    return hoverPrice;
+  }, [hoverData, hoverPrice]);
+
   const displayChange = range === '1D' ? computedChange : (activeStock.timeframeChange || computedChange || activeStock.change || 0);
   const isUp = displayChange >= 0;
 
@@ -488,8 +496,8 @@ export default function ChartContainer({
               {activeStock.name}
             </h1>
             <div className="stock-metrics">
-              <span className="stock-price" id="activePrice" style={hoverPrice !== null ? { color: 'var(--cyan)' } : {}}>
-                ${hoverPrice !== null ? hoverPrice.toFixed(2) : activeStock.price.toFixed(2)}
+              <span className="stock-price" id="activePrice" style={activeHoverValue !== null ? { color: 'var(--cyan)' } : {}}>
+                ${activeHoverValue !== null ? activeHoverValue.toFixed(2) : activeStock.price.toFixed(2)}
               </span>
               <span className={`stock-trend ${isUp ? 'positive' : 'negative'}`} id="activeChange" title={range === '1D' ? 'Day change relative to Yesterday Close' : `${range} change`}>
                 {isUp ? '+' : ''}
@@ -643,9 +651,9 @@ export default function ChartContainer({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <i className="fa-solid fa-crosshairs" style={{ color: 'var(--cyan)', fontSize: '11px' }}></i>
-              <span style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hover Price:</span>
-              <span style={{ color: hoverPrice !== null ? 'var(--cyan)' : '#ffffff', fontWeight: 700, fontSize: '13px' }}>
-                {hoverPrice !== null ? `$${hoverPrice.toFixed(2)}` : `$${activeStock.price.toFixed(2)}`}
+              <span style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hover Val:</span>
+              <span style={{ color: activeHoverValue !== null ? 'var(--cyan)' : '#ffffff', fontWeight: 700, fontSize: '13px' }}>
+                {activeHoverValue !== null ? `$${activeHoverValue.toFixed(2)}` : `$${activeStock.price.toFixed(2)}`}
               </span>
             </div>
 
