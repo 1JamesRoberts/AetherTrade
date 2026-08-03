@@ -255,25 +255,6 @@ export default function ChartContainer({
       console.warn('Lightweight Charts setData skipped error:', err);
     }
 
-    // Add PREV CLOSE reference line
-    const currentPrice = parseFloat(activeStock.price) || 0;
-    const changePct = parseFloat(activeStock.change) || 0;
-    const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : 0;
-
-    if (prevClose > 0) {
-      try {
-        series.createPriceLine({
-          price: prevClose,
-          color: 'rgba(255, 255, 255, 0.45)',
-          lineWidth: 1.5,
-          lineStyle: 2, // Dashed
-          axisLabelVisible: true,
-          title: `PREV CLOSE $${prevClose.toFixed(2)}`,
-        });
-      } catch (err) {
-        console.warn('Lightweight Charts priceLine skipped error:', err);
-      }
-    }
 
     // Apply initial zoom
     const totalLength = formattedData.length;
