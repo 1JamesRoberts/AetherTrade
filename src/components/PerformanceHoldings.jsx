@@ -13,6 +13,7 @@ export default function PerformanceHoldings({
   onImportCSV,
   onExportCSV,
   onRefreshPrices,
+  onFetchPortfolioHistory,
   showNotification
 }) {
   const performanceCanvasRef = useRef(null);
@@ -434,9 +435,16 @@ export default function PerformanceHoldings({
     if (isRefreshing) return;
     setIsRefreshing(true);
     const heldTickers = holdingsKeys.filter(t => activePortfolio.holdings[t].shares > 0);
-    await Promise.all(heldTickers.map(t => onRefreshPrices(t)));
+    await Promise.all(heldTickers.map(async (t) => {
+      if (onFetchPortfolioHistory) {
+        await onFetchPortfolioHistory(t);
+      }
+      if (onRefreshPrices) {
+        await onRefreshPrices(t);
+      }
+    }));
     setIsRefreshing(false);
-    showNotification('Stock prices refreshed', 'success');
+    showNotification('Chart history & live prices refreshed', 'success');
   };
 
   const handleSellAll = (ticker, shares, price) => {

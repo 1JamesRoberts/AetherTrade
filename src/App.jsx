@@ -222,7 +222,7 @@ export default function App() {
         ) : (
           <div id="viewPortfolio" className="workspace-view active">
             <PortfolioManager portfolios={portfolios} setPortfolios={setPortfolios} activePortfolioId={activePortfolioId} setActivePortfolioId={setActivePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onCreatePortfolio={createPortfolio} onRenamePortfolio={renamePortfolio} onDeletePortfolio={deletePortfolio} showNotification={addToast} onFetchPrice={fetchBackgroundPrice} />
-            <PerformanceHoldings portfolios={portfolios} activePortfolioId={activePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onDeleteTransaction={deleteTransaction} onResetPortfolio={resetPortfolio} onImportCSV={handleImportCSV} onExportCSV={handleExportCSV} onRefreshPrices={fetchBackgroundPrice} showNotification={addToast} />
+            <PerformanceHoldings portfolios={portfolios} activePortfolioId={activePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onDeleteTransaction={deleteTransaction} onResetPortfolio={resetPortfolio} onImportCSV={handleImportCSV} onExportCSV={handleExportCSV} onRefreshPrices={fetchBackgroundPrice} onFetchPortfolioHistory={fetchPortfolioHistory} showNotification={addToast} />
           </div>
         )}
       </main>
