@@ -163,40 +163,30 @@ export default function PerformanceHoldings({
         return new Date(y, m - 1, d);
       };
 
-      const validatePrice = (price) => {
-        if (!price || !livePrice || livePrice <= 0) return price;
-        const ratio = price / livePrice;
-        return (ratio > 3 || ratio < 0.33) ? livePrice : price;
-      };
-
-      if (closes.length > 0) {
+      if (closes.length > 0 && labels.length === closes.length) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         const compareDate = new Date(targetDate.getTime());
         compareDate.setHours(0, 0, 0, 0);
 
-        if (compareDate.getTime() === today.getTime()) {
-          return livePrice || parseFloat(closes[closes.length - 1]) || fallbackPrice;
+        if (compareDate.getTime() === today.getTime() && livePrice > 0) {
+          return livePrice;
         }
 
-        let rawPrice = null;
-
-        if (labels.length === closes.length) {
-          let exactIndex = -1;
-          labels.forEach((label, idx) => {
-            const parts = label.split('-');
-            if (parts.length === 3) {
-              const labelDate = parseLocalDate(label);
-              if (labelDate.getTime() === compareDate.getTime()) {
-                exactIndex = idx;
-              }
+        let exactIndex = -1;
+        labels.forEach((label, idx) => {
+          const parts = label.split('-');
+          if (parts.length === 3) {
+            const labelDate = parseLocalDate(label);
+            if (labelDate.getTime() === compareDate.getTime()) {
+              exactIndex = idx;
             }
-          });
-          if (exactIndex !== -1) {
-            rawPrice = parseFloat(closes[exactIndex]) || fallbackPrice;
-            return validatePrice(rawPrice);
           }
+        });
+        if (exactIndex !== -1) {
+          const p = parseFloat(closes[exactIndex]);
+          return (p && !isNaN(p) && p > 0) ? p : fallbackPrice;
         }
 
         let bestIdx = -1;
@@ -213,14 +203,11 @@ export default function PerformanceHoldings({
           }
         });
         if (bestIdx !== -1) {
-          rawPrice = parseFloat(closes[bestIdx]) || fallbackPrice;
-          return validatePrice(rawPrice);
-        }
-        if (closes.length > 0) {
-          rawPrice = parseFloat(closes[0]) || fallbackPrice;
-          return validatePrice(rawPrice);
+          const p = parseFloat(closes[bestIdx]);
+          return (p && !isNaN(p) && p > 0) ? p : fallbackPrice;
         }
       }
+
       return fallbackPrice;
     };
 
