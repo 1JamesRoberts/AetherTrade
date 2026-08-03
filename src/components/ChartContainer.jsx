@@ -49,7 +49,14 @@ export default function ChartContainer({
 
   useEffect(() => {
     const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const fsActive = !!document.fullscreenElement;
+      setIsFullscreen(fsActive);
+      setTimeout(() => {
+        if (chartInstanceRef.current && chartContainerRef.current) {
+          const { clientWidth, clientHeight } = chartContainerRef.current;
+          chartInstanceRef.current.applyOptions({ width: clientWidth, height: clientHeight });
+        }
+      }, 100);
     };
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
@@ -59,15 +66,35 @@ export default function ChartContainer({
     if (!panelRef.current) return;
     if (!document.fullscreenElement) {
       if (panelRef.current.requestFullscreen) {
-        panelRef.current.requestFullscreen().catch(() => setIsFullscreen(prev => !prev));
+        panelRef.current.requestFullscreen().catch(() => {
+          setIsFullscreen(prev => !prev);
+          setTimeout(() => {
+            if (chartInstanceRef.current && chartContainerRef.current) {
+              const { clientWidth, clientHeight } = chartContainerRef.current;
+              chartInstanceRef.current.applyOptions({ width: clientWidth, height: clientHeight });
+            }
+          }, 100);
+        });
       } else {
         setIsFullscreen(prev => !prev);
+        setTimeout(() => {
+          if (chartInstanceRef.current && chartContainerRef.current) {
+            const { clientWidth, clientHeight } = chartContainerRef.current;
+            chartInstanceRef.current.applyOptions({ width: clientWidth, height: clientHeight });
+          }
+        }, 100);
       }
     } else {
       if (document.exitFullscreen) {
         document.exitFullscreen();
       } else {
         setIsFullscreen(false);
+        setTimeout(() => {
+          if (chartInstanceRef.current && chartContainerRef.current) {
+            const { clientWidth, clientHeight } = chartContainerRef.current;
+            chartInstanceRef.current.applyOptions({ width: clientWidth, height: clientHeight });
+          }
+        }, 100);
       }
     }
   };
@@ -581,7 +608,7 @@ export default function ChartContainer({
       </div>
 
       {/* Chart Container */}
-      <div className={`chart-container ${isLoading ? 'loading' : ''}`} style={isFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' } : {}}>
+      <div className={`chart-container ${isLoading ? 'loading' : ''}`} style={isFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'none', height: '100%', overflow: 'hidden' } : {}}>
         <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative', height: isFullscreen ? '100%' : undefined }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
 
