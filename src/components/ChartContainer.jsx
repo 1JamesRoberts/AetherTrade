@@ -427,7 +427,9 @@ export default function ChartContainer({
         background: '#060912',
         padding: '16px',
         borderRadius: 0,
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column'
       } : {}}
     >
       <div className="chart-header">
@@ -579,8 +581,8 @@ export default function ChartContainer({
       </div>
 
       {/* Chart Container */}
-      <div className={`chart-container ${isLoading ? 'loading' : ''}`}>
-        <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+      <div className={`chart-container ${isLoading ? 'loading' : ''}`} style={isFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' } : {}}>
+        <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative', height: isFullscreen ? '100%' : undefined }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
 
           {/* Bottom Right Fullscreen Toggle Button */}
