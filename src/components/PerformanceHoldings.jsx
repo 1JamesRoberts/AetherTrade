@@ -24,6 +24,7 @@ export default function PerformanceHoldings({
   const [sortColumn, setSortColumn] = useState('marketValue');
   const [sortDirection, setSortDirection] = useState('desc');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [chartMode, setChartMode] = useState('total'); // 'total' | 'unrealized'
 
   const activePortfolio = portfolios.find(p => p.id === activePortfolioId) || {
     id: 'default',
@@ -214,6 +215,7 @@ export default function PerformanceHoldings({
 
     const points = [];
     const holdingsOnDate = {};
+    let cumulativeRealizedPL = 0;
     let txIdx = 0;
 
     // Single chronological O(D + N) simulation pass
@@ -241,6 +243,12 @@ export default function PerformanceHoldings({
           if (holdingsOnDate[ticker]) {
             const h = holdingsOnDate[ticker];
             const originalShares = h.shares;
+
+            // Compute realized P&L on this sale before modifying h.shares:
+            // Realized Gain = (Sale Price - Pure Avg Cost) * Shares Sold - Sale Transaction Fees
+            const saleRealizedGain = (txPrice - h.avgCost) * txShares - txFees;
+            cumulativeRealizedPL += saleRealizedGain;
+
             h.shares = Math.max(0, h.shares - txShares);
             h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
             h.lastPrice = txPrice;
@@ -263,12 +271,19 @@ export default function PerformanceHoldings({
         }
       });
 
-      points.push({ x: D, y: unrealizedPLOnDate });
+      const totalPLOnDate = cumulativeRealizedPL + unrealizedPLOnDate;
+
+      points.push({
+        x: D,
+        y: chartMode === 'total' ? totalPLOnDate : unrealizedPLOnDate,
+        totalPL: totalPLOnDate,
+        unrealizedPL: unrealizedPLOnDate
+      });
     });
 
     if (points.length === 1) {
       const prevDate = new Date(points[0].x.getTime() - 24 * 60 * 60 * 1000);
-      points.unshift({ x: prevDate, y: 0 });
+      points.unshift({ x: prevDate, y: 0, totalPL: 0, unrealizedPL: 0 });
     }
 
     points.sort((a, b) => a.x.getTime() - b.x.getTime());
@@ -280,12 +295,14 @@ export default function PerformanceHoldings({
     gradient.addColorStop(0, 'rgba(0, 229, 255, 0.15)');
     gradient.addColorStop(1, 'rgba(2, 4, 10, 0)');
 
+    const datasetLabel = chartMode === 'total' ? 'Total P&L' : 'Unrealized P&L';
+
     performanceChartRef.current = new Chart(ctx, {
       type: 'line',
       data: {
         labels: labels,
         datasets: [{
-          label: 'Unrealized P&L',
+          label: datasetLabel,
           data: data,
           borderColor: '#00e5ff',
           borderWidth: 2,
@@ -359,7 +376,10 @@ export default function PerformanceHoldings({
               },
               label: (context) => {
                 const val = context.parsed.y;
-                return val >= 0 ? ` Unrealized P&L: +$${val.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ` Unrealized P&L: -$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+                const modeText = chartMode === 'total' ? 'Total P&L' : 'Unrealized P&L';
+                return val >= 0
+                  ? ` ${modeText}: +$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : ` ${modeText}: -$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
               }
             }
           }
@@ -422,7 +442,7 @@ export default function PerformanceHoldings({
         performanceChartRef.current = null;
       }
     };
-  }, [activePortfolio, stocks]);
+  }, [activePortfolio, stocks, chartMode]);
 
   const holdingsListLength = () => {
     return holdingsKeys.filter(t => activePortfolio.holdings[t].shares > 0).length;
@@ -593,8 +613,46 @@ export default function PerformanceHoldings({
 
       {/* Performance Plot Chart */}
       <div className="analysis-section" style={{ flex: 1.5, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '320px', padding: '12px 24px', borderBottom: '1px solid var(--border-color)' }}>
-        <div className="section-subtitle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span>Unrealized Performance Over Time</span>
+        <div className="section-subtitle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span>{chartMode === 'total' ? 'Total Performance Over Time' : 'Unrealized Performance Over Time'}</span>
+            <div style={{ display: 'inline-flex', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', padding: '2px', border: '1px solid var(--border-color)' }}>
+              <button
+                type="button"
+                onClick={() => setChartMode('total')}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: '10px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: chartMode === 'total' ? 'var(--cyan)' : 'transparent',
+                  color: chartMode === 'total' ? '#000' : 'var(--text-muted)',
+                  fontWeight: chartMode === 'total' ? '700' : '500',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                Total P&L
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartMode('unrealized')}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: '10px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: chartMode === 'unrealized' ? 'var(--cyan)' : 'transparent',
+                  color: chartMode === 'unrealized' ? '#000' : 'var(--text-muted)',
+                  fontWeight: chartMode === 'unrealized' ? '700' : '500',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                Unrealized P&L
+              </button>
+            </div>
+          </div>
           {activePortfolio.transactions.length > 0 && (
             <button onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh chart data" aria-label="Refresh chart data" style={{ width: 'auto', padding: '0 10px', gap: '6px', fontSize: '11px' }}>
               <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
