@@ -300,57 +300,82 @@ export function usePortfolio(addToast, user) {
     }
   }, [portfolios, activePortfolioId, user, addToast]);
 
-  const importCSVTransactions = useCallback(async (txsByPortfolio, isAppend) => {
-    const allInsertedTxs = [];
-
-    const updated = portfolios.map(port => {
-      const imported = txsByPortfolio[port.id];
-      if (!imported) return port;
-
-      const importedWithIds = imported.map(tx => ({
-        ...tx,
-        id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 6)}`
-      }));
-
-      allInsertedTxs.push(...importedWithIds.map(tx => ({ ...tx, portfolio_id: port.id })));
-
-      const existing = isAppend ? port.transactions : [];
-      const combined = [...existing, ...importedWithIds].sort((a, b) => a.timestamp - b.timestamp);
-      const { holdings, realizedPL } = rebuildPortfolioHoldings(combined);
-      return { ...port, transactions: combined, holdings, realizedPL };
-    });
-
-    setPortfolios(updated);
-
-    // Synchronize to Supabase database if logged in
-    if (user) {
-      for (const portId of Object.keys(txsByPortfolio)) {
-        if (!isAppend) {
-          // In REPLACE mode, clear old transactions for this portfolio in Supabase
-          const { error: delErr } = await supabase.from('transactions').delete().eq('portfolio_id', portId);
-          if (delErr) console.error('Supabase CSV replace delete error:', delErr);
-        }
-      }
-
-      if (allInsertedTxs.length > 0) {
-        const dbRows = allInsertedTxs.map(tx => ({
-          id: tx.id,
-          portfolio_id: tx.portfolio_id,
-          ticker: tx.ticker,
-          type: tx.type,
-          shares: tx.shares,
-          price: tx.price,
-          fees: tx.fees || 0,
-          date: new Date(tx.timestamp).toISOString()
-        }));
-
-        const { error: insErr } = await supabase.from('transactions').insert(dbRows);
-        if (insErr) console.error('Supabase batch CSV insert error:', insErr);
-      }
+  const createPortfolio = useCallback(async (name) => {
+    const cleanName = name.trim();
+    if (portfolios.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
+      addToast(`A portfolio named "${cleanName}" already exists!`, 'error');
+      return false;
     }
 
-    return updated;
-  }, [portfolios, user]);
+    const newId = 'portfolio_' + Date.now();
+    const newPort = {
+      id: newId,
+      name: cleanName,
+      holdings: {},
+      transactions: [],
+      realizedPL: 0
+    };
+
+    const updated = [...portfolios, newPort];
+    setPortfolios(updated);
+    setActivePortfolioId(newId);
+    addToast(`Created portfolio "${cleanName}" successfully!`, 'success');
+
+    if (user) {
+      const { error } = await supabase.from('portfolios').insert({
+        id: newId,
+        user_id: user.id,
+        name: cleanName
+      });
+      if (error) console.error('Supabase create portfolio error:', error);
+    }
+    return true;
+  }, [portfolios, user, addToast]);
+
+  const renamePortfolio = useCallback(async (portfolioId, newName) => {
+    const cleanName = newName.trim();
+    if (portfolios.some(p => p.id !== portfolioId && p.name.toLowerCase() === cleanName.toLowerCase())) {
+      addToast(`A portfolio named "${cleanName}" already exists!`, 'error');
+      return false;
+    }
+
+    const updated = portfolios.map(p => {
+      if (p.id === portfolioId) return { ...p, name: cleanName };
+      return p;
+    });
+    setPortfolios(updated);
+    addToast(`Renamed portfolio to "${cleanName}" successfully!`, 'success');
+
+    if (user) {
+      const { error } = await supabase.from('portfolios').update({ name: cleanName }).eq('id', portfolioId);
+      if (error) console.error('Supabase rename portfolio error:', error);
+    }
+    return true;
+  }, [portfolios, user, addToast]);
+
+  const deletePortfolio = useCallback(async (portfolioId) => {
+    if (portfolios.length <= 1) {
+      addToast("You must keep at least one portfolio!", "error");
+      return false;
+    }
+
+    const deletedPort = portfolios.find(p => p.id === portfolioId);
+    const remaining = portfolios.filter(p => p.id !== portfolioId);
+    setPortfolios(remaining);
+    if (activePortfolioId === portfolioId) {
+      setActivePortfolioId(remaining[0].id);
+    }
+    addToast(`Deleted portfolio "${deletedPort?.name || ''}" successfully.`, "success");
+
+    if (user) {
+      const { error: txErr } = await supabase.from('transactions').delete().eq('portfolio_id', portfolioId);
+      if (txErr) console.error('Supabase delete portfolio transactions error:', txErr);
+
+      const { error: portErr } = await supabase.from('portfolios').delete().eq('id', portfolioId);
+      if (portErr) console.error('Supabase delete portfolio error:', portErr);
+    }
+    return true;
+  }, [portfolios, activePortfolioId, user, addToast]);
 
   return {
     portfolios,
@@ -361,6 +386,9 @@ export function usePortfolio(addToast, user) {
     deleteTransaction,
     resetPortfolio,
     importCSVTransactions,
+    createPortfolio,
+    renamePortfolio,
+    deletePortfolio,
     dbLoaded
   };
 }

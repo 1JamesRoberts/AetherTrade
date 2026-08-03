@@ -44,7 +44,7 @@ export default function App() {
 
   const { watchlist, setWatchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist();
   const { stocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory } = useStockData(activeTicker, selectedRange, selectedInterval, addToast);
-  const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio, importCSVTransactions } = usePortfolio(addToast, user);
+  const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio, importCSVTransactions, createPortfolio, renamePortfolio, deletePortfolio } = usePortfolio(addToast, user);
 
   const loadStockDataRef = useRef(loadStockData);
   const fetchBackgroundPriceRef = useRef(fetchBackgroundPrice);
@@ -221,7 +221,7 @@ export default function App() {
           </div>
         ) : (
           <div id="viewPortfolio" className="workspace-view active">
-            <PortfolioManager portfolios={portfolios} setPortfolios={setPortfolios} activePortfolioId={activePortfolioId} setActivePortfolioId={setActivePortfolioId} stocks={stocks} onAddTransaction={addTransaction} showNotification={addToast} onFetchPrice={fetchBackgroundPrice} />
+            <PortfolioManager portfolios={portfolios} setPortfolios={setPortfolios} activePortfolioId={activePortfolioId} setActivePortfolioId={setActivePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onCreatePortfolio={createPortfolio} onRenamePortfolio={renamePortfolio} onDeletePortfolio={deletePortfolio} showNotification={addToast} onFetchPrice={fetchBackgroundPrice} />
             <PerformanceHoldings portfolios={portfolios} activePortfolioId={activePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onDeleteTransaction={deleteTransaction} onResetPortfolio={resetPortfolio} onImportCSV={handleImportCSV} onExportCSV={handleExportCSV} onRefreshPrices={fetchBackgroundPrice} showNotification={addToast} />
           </div>
         )}

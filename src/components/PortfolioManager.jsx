@@ -19,6 +19,9 @@ export default function PortfolioManager({
   setActivePortfolioId,
   stocks,
   onAddTransaction,
+  onCreatePortfolio,
+  onRenamePortfolio,
+  onDeletePortfolio,
   showNotification,
   onFetchPrice
 }) {
@@ -74,49 +77,18 @@ export default function PortfolioManager({
   const handleCreatePortfolio = () => {
     const name = prompt("Enter a unique name for the new portfolio:");
     if (!name || name.trim() === '') return;
-    const cleanName = name.trim();
-
-    if (portfolios.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
-      showNotification(`A portfolio named "${cleanName}" already exists!`, 'error');
-      return;
+    if (onCreatePortfolio) {
+      onCreatePortfolio(name);
     }
-
-    const newId = 'portfolio_' + Date.now();
-    const newPort = {
-      id: newId,
-      name: cleanName,
-      holdings: {},
-      transactions: [],
-      realizedPL: 0
-    };
-
-    setPortfolios([...portfolios, newPort]);
-    setActivePortfolioId(newId);
-    showNotification(`Created portfolio "${cleanName}" successfully!`, 'success');
   };
 
   // Rename Portfolio
   const handleRenamePortfolio = () => {
     const name = prompt("Enter a new name for the portfolio:", activePortfolio.name);
     if (!name || name.trim() === '') return;
-    const cleanName = name.trim();
-
-    if (activePortfolio.name === cleanName) return;
-
-    if (portfolios.some(p => p.id !== activePortfolioId && p.name.toLowerCase() === cleanName.toLowerCase())) {
-      showNotification(`A portfolio named "${cleanName}" already exists!`, 'error');
-      return;
+    if (onRenamePortfolio) {
+      onRenamePortfolio(activePortfolio.id, name);
     }
-
-    const updated = portfolios.map(p => {
-      if (p.id === activePortfolioId) {
-        return { ...p, name: cleanName };
-      }
-      return p;
-    });
-
-    setPortfolios(updated);
-    showNotification(`Renamed portfolio "${activePortfolio.name}" to "${cleanName}" successfully!`, 'success');
   };
 
   // Delete Portfolio
@@ -129,10 +101,9 @@ export default function PortfolioManager({
     const confirmDelete = confirm(`Are you sure you want to permanently delete the portfolio "${activePortfolio.name}"?\nThis will erase all its holdings and transaction logs.`);
     if (!confirmDelete) return;
 
-    const remaining = portfolios.filter(p => p.id !== activePortfolioId);
-    setPortfolios(remaining);
-    setActivePortfolioId(remaining[0].id);
-    showNotification(`Deleted portfolio "${activePortfolio.name}" successfully.`, "success");
+    if (onDeletePortfolio) {
+      onDeletePortfolio(activePortfolio.id);
+    }
   };
 
   // Autocomplete filter search
