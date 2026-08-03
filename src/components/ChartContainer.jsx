@@ -146,8 +146,8 @@ export default function ChartContainer({
 
     const sorted = result.sort((a, b) => a.time - b.time);
 
-    // For 1D time frame: start with Yesterday Close price followed by all intraday bars of current day
-    if (range === '1D' && sorted.length > 0) {
+    // For 1D time frame on line charts: start with Yesterday Close price followed by all intraday bars of current day
+    if (range === '1D' && chartType === 'line' && sorted.length > 0) {
       const currentPrice = parseFloat(activeStock.price) || sorted[sorted.length - 1].close;
       const changePct = parseFloat(activeStock.change) || 0;
       const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : sorted[0].open;
@@ -162,7 +162,7 @@ export default function ChartContainer({
     }
 
     return sorted;
-  }, [activeStock.liveRawValues, activeStock.liveCloses, activeStock.liveLabels, activeStock.price, activeStock.change, range]);
+  }, [activeStock.liveRawValues, activeStock.liveCloses, activeStock.liveLabels, activeStock.price, activeStock.change, range, chartType]);
 
   const computedChange = useMemo(() => {
     if (formattedData.length >= 2) {
