@@ -741,8 +741,9 @@ export default function PerformanceHoldings({
             ) : (
               [...activePortfolio.transactions].reverse().map((tx, idx) => {
                 const actualIndex = activePortfolio.transactions.length - 1 - idx;
+                const gross = tx.shares * tx.price;
                 const txFees = parseFloat(tx.fees) || 0;
-                const feesStr = txFees > 0 ? ` | Fee: ${formatCurrency(txFees)}` : '';
+                const net = tx.type === 'BUY' ? (gross + txFees) : Math.max(0, gross - txFees);
                 const accountStr = tx.account && tx.account !== 'Default' ? ` | Account: ${tx.account}` : '';
 
                 return (
@@ -751,7 +752,7 @@ export default function PerformanceHoldings({
                       <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
                       <strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatCurrency(tx.price)}
                       <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
-                        Gross: {formatCurrency(tx.shares * tx.price)}{feesStr}{accountStr}
+                        Gross: {formatCurrency(gross)} | Fee: {formatCurrency(txFees)} | Net: {formatCurrency(net)}{accountStr}
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

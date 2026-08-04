@@ -89,7 +89,6 @@ export function usePortfolio(addToast, user) {
     }));
 
     if (dbPortfolios && dbPortfolios.length > 0) {
-      const local = loadLocalPortfolios();
       const txMap = {};
       dbTransactionsWithTimestamp.forEach(tx => {
         if (!txMap[tx.portfolio_id]) txMap[tx.portfolio_id] = [];
@@ -98,19 +97,14 @@ export function usePortfolio(addToast, user) {
 
       const merged = dbPortfolios.map(dbPort => {
         const dbTxs = txMap[dbPort.id] || [];
-        // Only merge local transactions on the very first database load
-        const transactions = dbLoadedRef.current
-          ? dbTxs
-          : (() => {
-              const localPort = local.find(p => p.id === dbPort.id || (p.id === 'default' && dbPort.id === `default_${user.id}`));
-              const localTxs = localPort?.transactions || [];
-              return mergeTransactions(localTxs, dbTxs);
-            })();
-        const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
-        return { id: dbPort.id, name: dbPort.name, transactions, holdings, realizedPL };
+        const { holdings, realizedPL } = rebuildPortfolioHoldings(dbTxs);
+        return { id: dbPort.id, name: dbPort.name, transactions: dbTxs, holdings, realizedPL };
       });
 
       setPortfolios(merged);
+      try {
+        localStorage.setItem('aethertrade_portfolios_list', JSON.stringify(merged));
+      } catch (e) { console.error('LocalStorage update error:', e); }
       setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
     } else {
       // First login — create default portfolio in DB
@@ -157,22 +151,21 @@ export function usePortfolio(addToast, user) {
     loadFromDB();
   }, [user, loadFromDB]);
 
-  // Supabase Real-time Sync subscription
+  // Supabase Real-time Sync subscription for transactions and portfolios
   useEffect(() => {
     if (!user) return;
 
     const channel = supabase
-      .channel('realtime_transactions_sync')
+      .channel('realtime_portfolio_sync')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transactions'
-        },
-        () => {
-          loadFromDB();
-        }
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => { loadFromDB(); }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'portfolios' },
+        () => { loadFromDB(); }
       )
       .subscribe();
 
@@ -180,6 +173,25 @@ export function usePortfolio(addToast, user) {
       supabase.removeChannel(channel);
     };
   }, [user, loadFromDB]);
+
+  // Cross-tab window storage synchronization
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'aethertrade_portfolios_list' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setPortfolios(parsed);
+        } catch (err) {
+          console.error('Cross-tab storage sync error:', err);
+        }
+      }
+      if (e.key === 'aethertrade_active_portfolio_id' && e.newValue) {
+        setActivePortfolioId(e.newValue);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Persist to localStorage
   useEffect(() => {

@@ -38,18 +38,34 @@ export function importTransactionsFromCSV(csvText) {
     throw new Error("CSV file is empty or missing data rows.");
   }
 
-  const headers = rows[0].map(h => h.toLowerCase());
+  const headers = rows[0].map(h => h.toLowerCase().trim());
   const dateIdx = headers.findIndex(h => h.includes("date"));
-  const typeIdx = headers.findIndex(h => h.includes("type"));
-  const symbolIdx = headers.findIndex(h => h.includes("symbol") || h.includes("ticker") || h.includes("stock"));
-  const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("unit"));
-  const priceIdx = headers.findIndex(h => h.includes("price") || h.includes("amount"));
-  const feesIdx = headers.findIndex(h => (h.includes("fee") || h.includes("commission")) && !h.includes("before"));
-  const accountIdx = headers.findIndex(h => h.includes("account"));
+  const typeIdx = headers.findIndex(h => h.includes("type") || h.includes("transaction") || h.includes("action") || h.includes("side"));
+  const symbolIdx = headers.findIndex(h => h.includes("symbol") || h.includes("ticker") || h.includes("stock") || h.includes("etf") || h.includes("asset"));
+  const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("unit") || h.includes("shares"));
+  const priceIdx = headers.findIndex(h => 
+    h.includes("price") || 
+    h.includes("amount per") || 
+    h.includes("per unit") || 
+    h.includes("per share") ||
+    (h.includes("amount") && !h.includes("total") && !h.includes("before"))
+  );
+  const feesIdx = headers.findIndex(h => 
+    (h.includes("fee") || h.includes("fees") || h.includes("commission") || h.includes("brokerage") || h.includes("charge")) && 
+    !h.includes("before")
+  );
+  const accountIdx = headers.findIndex(h => h.includes("account") || h.includes("portfolio"));
 
   if (dateIdx === -1 || typeIdx === -1 || symbolIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
-    throw new Error("CSV Import Failed: Missing required columns.\n\nRequired:\n- Date\n- Type (BUY/SELL)\n- Symbol\n- Quantity\n- Price");
+    throw new Error("CSV Import Failed: Missing required columns.\n\nRequired:\n- Date\n- Type (BUY/SELL)\n- Symbol\n- Quantity\n- Price / Amount per unit");
   }
+
+  const parseNumber = (val) => {
+    if (val === undefined || val === null) return 0;
+    const cleaned = String(val).replace(/[^0-9.-]/g, '').trim();
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  };
 
   const importedTxs = [];
   const today = new Date();
@@ -71,22 +87,23 @@ export function importTransactionsFromCSV(csvText) {
     }
 
     const ticker = symbolVal.toUpperCase().trim();
-    const type = typeVal.toUpperCase().trim();
+    const rawType = typeVal.toUpperCase().trim();
+    const type = rawType.includes('BUY') ? 'BUY' : (rawType.includes('SELL') ? 'SELL' : rawType);
     if (type !== 'BUY' && type !== 'SELL') {
       throw new Error(`Row ${rowNum}: Type must be BUY or SELL. Found: "${typeVal}"`);
     }
 
-    const shares = parseFloat(String(qtyVal).replace(/,/g, '').trim());
-    if (isNaN(shares) || shares <= 0) {
+    const shares = parseNumber(qtyVal);
+    if (shares <= 0) {
       throw new Error(`Row ${rowNum}: Quantity must be positive. Found: "${qtyVal}"`);
     }
 
-    const price = parseFloat(String(priceVal).replace(/,/g, '').trim());
-    if (isNaN(price) || price <= 0) {
+    const price = parseNumber(priceVal);
+    if (price <= 0) {
       throw new Error(`Row ${rowNum}: Price must be positive. Found: "${priceVal}"`);
     }
 
-    const dateParts = dateVal.split(/[-/]/);
+    const dateParts = dateVal.split(/[-/.]/);
     if (dateParts.length !== 3) {
       throw new Error(`Row ${rowNum}: Date format must be DD-MM-YYYY. Found: "${dateVal}"`);
     }
@@ -99,8 +116,8 @@ export function importTransactionsFromCSV(csvText) {
     }
 
     const feesVal = feesIdx !== -1 ? row[feesIdx] : "0";
-    const fees = parseFloat(String(feesVal).replace(/,/g, '').trim()) || 0;
-    if (isNaN(fees) || fees < 0) {
+    const fees = parseNumber(feesVal);
+    if (fees < 0) {
       throw new Error(`Row ${rowNum}: Fees must be non-negative.`);
     }
 
