@@ -105,21 +105,38 @@ export default function ChartContainer({
   };
 
   const updateLineCoords = useCallback(() => {
-    if (!seriesRef.current || !chartContainerRef.current) return;
-    const currentLines = linesMap[activeTicker] || [];
-    const containerHeight = chartContainerRef.current.clientHeight || 400;
+    try {
+      if (!seriesRef.current || !chartContainerRef.current || !chartInstanceRef.current) {
+        setLineCoordinates([]);
+        return;
+      }
+      const currentLines = linesMap[activeTicker] || [];
+      if (!currentLines.length) {
+        setLineCoordinates([]);
+        return;
+      }
+      const containerHeight = chartContainerRef.current.clientHeight || 400;
 
-    const coords = currentLines.map(price => {
-      const y = seriesRef.current.priceToCoordinate(price);
-      return {
-        price,
-        y,
-        isRes: price > activeStock.price
-      };
-    }).filter(item => item.y !== null && item.y >= 5 && item.y <= containerHeight - 15);
-
-    setLineCoordinates(coords);
-  }, [linesMap, activeTicker, activeStock.price]);
+      const coords = [];
+      for (const price of currentLines) {
+        try {
+          const y = seriesRef.current.priceToCoordinate(price);
+          if (y !== null && y !== undefined && !isNaN(y) && y >= 5 && y <= containerHeight - 15) {
+            coords.push({
+              price,
+              y,
+              isRes: price > (activeStock?.price || 0)
+            });
+          }
+        } catch (_) {
+          // ignore single line error
+        }
+      }
+      setLineCoordinates(coords);
+    } catch (_) {
+      // safe fallback
+    }
+  }, [linesMap, activeTicker, activeStock?.price]);
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -637,8 +654,7 @@ export default function ChartContainer({
     interval,
     indicators.volume,
     indicators.ema20,
-    indicators.sma50,
-    updateLineCoords
+    indicators.sma50
   ]);
 
   // Synchronize line coordinates whenever levels, zoom or active asset change

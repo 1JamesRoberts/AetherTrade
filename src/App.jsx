@@ -6,6 +6,7 @@ import PortfolioManager from './components/PortfolioManager';
 import PerformanceHoldings from './components/PerformanceHoldings';
 import ToastContainer from './components/ToastContainer';
 import AuthPage from './components/AuthPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
 import { usePortfolio, rebuildPortfolioHoldings } from './hooks/usePortfolio';
@@ -278,8 +279,12 @@ export default function App() {
               </select>
             </div>
             <Watchlist watchlist={watchlist} activeTicker={activeTicker} setActiveTicker={setActiveTicker} stocks={stocks} onRemoveTicker={handleRemoveTicker} onAddTicker={handleAddTicker} isCollapsed={isWatchlistCollapsed} onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)} />
-            <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} />
-            <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} activeTickerHoldings={activeTickerHoldings} activeStockPrice={activeStockPrice} liveRawValues={stocks[activeTicker]?.liveRawValues || []} />
+            <ErrorBoundary>
+              <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} />
+            </ErrorBoundary>
+            <ErrorBoundary>
+              <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} activeTickerHoldings={activeTickerHoldings} activeStockPrice={activeStockPrice} liveRawValues={stocks[activeTicker]?.liveRawValues || []} />
+            </ErrorBoundary>
           </div>
         ) : (
           <div id="viewPortfolio" className="workspace-view active">
