@@ -20,6 +20,42 @@ function loadLinesMap() {
   return {};
 }
 
+function getMarketStatus() {
+  try {
+    const now = new Date();
+    const nyTimeStr = now.toLocaleString("en-US", { timeZone: "America/New_York" });
+    const nyDate = new Date(nyTimeStr);
+    const day = nyDate.getDay();
+    const hour = nyDate.getHours();
+    const minute = nyDate.getMinutes();
+    const timeInMinutes = hour * 60 + minute;
+    const isWeekday = day >= 1 && day <= 5;
+
+    // NYSE hours: 9:30 AM (570m) - 4:00 PM (960m)
+    const isOpen = isWeekday && timeInMinutes >= 570 && timeInMinutes < 960;
+    const isPre = isWeekday && timeInMinutes >= 240 && timeInMinutes < 570;
+    const isPost = isWeekday && timeInMinutes >= 960 && timeInMinutes < 1200;
+
+    let label = 'Market Closed';
+    let statusClass = 'closed';
+    if (isOpen) {
+      label = 'US Market Open';
+      statusClass = 'open';
+    } else if (isPre) {
+      label = 'Pre-Market';
+      statusClass = 'pre';
+    } else if (isPost) {
+      label = 'After-Hours';
+      statusClass = 'post';
+    }
+
+    const timeStr = nyDate.toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    return { label, statusClass, timeStr: `${timeStr} EST` };
+  } catch (e) {
+    return { label: 'US Market Live', statusClass: 'open', timeStr: 'EST' };
+  }
+}
+
 export default function App() {
   const { user, loading: authLoading, signUp, signIn, signInWithGitHub, signInWithGoogle, signOut } = useAuth();
   const [view, setView] = useState('terminal');
@@ -32,6 +68,29 @@ export default function App() {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [linesMap, setLinesMap] = useState(loadLinesMap);
   const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
+  const [marketStatus, setMarketStatus] = useState(getMarketStatus);
+
+  // Live Market Status Clock
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMarketStatus(getMarketStatus());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Global Keyboard Shortcuts: T for Terminal, P for Portfolio
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      if (e.key === 't' || e.key === 'T' || e.key === '1') {
+        setView('terminal');
+      } else if (e.key === 'p' || e.key === 'P' || e.key === '2') {
+        setView('portfolio');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const addToast = useCallback((message, type = 'success') => {
     const id = Date.now() + Math.random().toString(36).substr(2, 9);
@@ -155,24 +214,54 @@ export default function App() {
       <div className="glow-sphere glow-sphere-2"></div>
 
       <header className="app-header">
-        <div className="header-logo">
-          <div className="logo-icon"><i className="fa-solid fa-chart-line"></i></div>
-          <div className="logo-text">
-            <span className="logo-brand">AETHER</span>
-            <span className="logo-sub">TRADE</span>
+        <div className="header-left">
+          <div className="header-logo" onClick={() => setView('terminal')} title="AetherTrade">
+            <div className="logo-icon"><i className="fa-solid fa-chart-line"></i></div>
+            <div className="logo-text">
+              <span className="logo-brand">AETHER</span>
+              <span className="logo-sub">TRADE</span>
+            </div>
+          </div>
+
+          <div className="market-status-pill" title={`NYSE / NASDAQ Status: ${marketStatus.label}`}>
+            <span className={`pulse-indicator ${marketStatus.statusClass}`}></span>
+            <span className="market-status-label">{marketStatus.label}</span>
+            <span className="market-time-sep">•</span>
+            <span className="market-time tabular-nums">{marketStatus.timeStr}</span>
           </div>
         </div>
-        <nav className="app-nav">
-          <button onClick={() => setView('terminal')} className={`nav-btn ${view === 'terminal' ? 'active' : ''}`}>
-            <i className="fa-solid fa-chart-line"></i> Terminal
-          </button>
-          <button onClick={() => setView('portfolio')} className={`nav-btn ${view === 'portfolio' ? 'active' : ''}`}>
-            <i className="fa-solid fa-briefcase"></i> Portfolio
-          </button>
-        </nav>
-        <div className="header-user">
-          <span className="user-email">{user.email}</span>
-          <button className="btn-signout" onClick={signOut} title="Sign out">
+
+        <div className="header-center">
+          <nav className="app-nav">
+            <button
+              onClick={() => setView('terminal')}
+              className={`nav-btn ${view === 'terminal' ? 'active' : ''}`}
+              title="Terminal View (Shortcut: T or 1)"
+            >
+              <i className="fa-solid fa-chart-line"></i>
+              <span>Terminal</span>
+              <span className="nav-shortcut">T</span>
+            </button>
+            <button
+              onClick={() => setView('portfolio')}
+              className={`nav-btn ${view === 'portfolio' ? 'active' : ''}`}
+              title="Portfolio View (Shortcut: P or 2)"
+            >
+              <i className="fa-solid fa-briefcase"></i>
+              <span>Portfolio</span>
+              <span className="nav-shortcut">P</span>
+            </button>
+          </nav>
+        </div>
+
+        <div className="header-right">
+          <div className="user-profile-badge" title={`Signed in as ${user.email}`}>
+            <div className="user-avatar">
+              {(user.email || 'U')[0].toUpperCase()}
+            </div>
+            <span className="user-email-text">{user.email}</span>
+          </div>
+          <button className="btn-signout" onClick={signOut} title="Sign out of account">
             <i className="fa-solid fa-right-from-bracket"></i>
           </button>
         </div>
@@ -190,34 +279,7 @@ export default function App() {
             </div>
             <Watchlist watchlist={watchlist} activeTicker={activeTicker} setActiveTicker={setActiveTicker} stocks={stocks} onRemoveTicker={handleRemoveTicker} onAddTicker={handleAddTicker} isCollapsed={isWatchlistCollapsed} onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)} />
             <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} />
-            <div className="panel panel-right">
-              {activeTickerHoldings.length > 0 && (
-                <div className="holding-panel">
-                  <div className="holding-panel-header">
-                    <i className="fa-solid fa-briefcase"></i> Holdings — {activeTicker}
-                  </div>
-                  {activeTickerHoldings.map(h => {
-                    const pnl = (activeStockPrice - h.avgCost) * h.shares;
-                    const pnlPct = h.avgCost ? ((activeStockPrice - h.avgCost) / h.avgCost * 100) : 0;
-                    return (
-                      <div key={h.portfolioId} className="holding-row">
-                        <div className="holding-row-header">
-                          <span className="holding-row-name">{h.portfolioName}</span>
-                          <span className={`holding-row-pnl ${pnl >= 0 ? 'positive' : 'negative'}`}>
-                            {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ({pnlPct.toFixed(1)}%)
-                          </span>
-                        </div>
-                        <div className="holding-row-details">
-                          <span>{parseFloat(h.shares.toFixed(4))} shares @ ${h.avgCost.toFixed(2)}</span>
-                          <span>Value: ${(h.shares * activeStockPrice).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} />
-            </div>
+            <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} activeTickerHoldings={activeTickerHoldings} activeStockPrice={activeStockPrice} />
           </div>
         ) : (
           <div id="viewPortfolio" className="workspace-view active">

@@ -105,17 +105,36 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
 
   const fetchBackgroundPrice = useCallback(async (ticker) => {
     try {
-      const res = await fetch(`/api/stock?ticker=${ticker}&range=1M&interval=1d`);
-      if (!res.ok) return false;
-      const json = await res.json();
-      if (json.status !== 'ok') return false;
+      // Fetch daily close for price + 1-day % change
+      const [dailyRes, intradayRes] = await Promise.allSettled([
+        fetch(`/api/stock?ticker=${ticker}&range=1M&interval=1d`),
+        fetch(`/api/stock?ticker=${ticker}&range=1D&interval=15m`)
+      ]);
 
-      const values = json.values || [];
-      if (values.length === 0) return false;
+      let fetchedPrice = null;
+      let change = 0;
+      let sparklinePoints = null;
 
-      const fetchedPrice = parseFloat(values[values.length - 1].close);
-      const prevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : fetchedPrice;
-      const change = prevPrice ? ((fetchedPrice - prevPrice) / prevPrice) * 100 : 0;
+      // Parse daily data for price and change
+      if (dailyRes.status === 'fulfilled' && dailyRes.value.ok) {
+        const json = await dailyRes.value.json();
+        if (json.status === 'ok' && json.values?.length > 0) {
+          const values = json.values;
+          fetchedPrice = parseFloat(values[values.length - 1].close);
+          const prevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : fetchedPrice;
+          change = prevPrice ? ((fetchedPrice - prevPrice) / prevPrice) * 100 : 0;
+        }
+      }
+
+      // Parse intraday 15m data for sparkline close points (1-day session shape)
+      if (intradayRes.status === 'fulfilled' && intradayRes.value.ok) {
+        const json = await intradayRes.value.json();
+        if (json.status === 'ok' && json.values?.length > 1) {
+          sparklinePoints = json.values.map(v => parseFloat(v.close));
+        }
+      }
+
+      if (fetchedPrice === null) return false;
 
       setStocks(prev => ({
         ...prev,
@@ -125,6 +144,7 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
           name: prev[ticker]?.name || `${ticker} Stock`,
           price: fetchedPrice,
           change,
+          sparklinePoints: sparklinePoints || prev[ticker]?.sparklinePoints || null,
           isLive: true
         }
       }));

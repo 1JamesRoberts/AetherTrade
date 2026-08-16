@@ -7,7 +7,9 @@ export default function AnalysisEngine({
   setLinesMap,
   linesMap,
   currentCapital,
-  setCurrentCapital
+  setCurrentCapital,
+  activeTickerHoldings = [],
+  activeStockPrice = 0
 }) {
   const supports = [];
   const resistances = [];
@@ -57,6 +59,33 @@ export default function AnalysisEngine({
           <i className="fa-solid fa-layer-group"></i> Analysis Engine
         </h2>
       </div>
+
+      {/* Holdings Section — only shown when user holds this ticker */}
+      {activeTickerHoldings.length > 0 && (
+        <div className="analysis-section">
+          <div className="section-subtitle">
+            <span><i className="fa-solid fa-briefcase" style={{ marginRight: '6px', color: 'var(--cyan)' }}></i>Holdings — {activeTicker}</span>
+          </div>
+          {activeTickerHoldings.map(h => {
+            const pnl = (activeStockPrice - h.avgCost) * h.shares;
+            const pnlPct = h.avgCost ? ((activeStockPrice - h.avgCost) / h.avgCost * 100) : 0;
+            return (
+              <div key={h.portfolioId} className="holding-row">
+                <div className="holding-row-header">
+                  <span className="holding-row-name">{h.portfolioName}</span>
+                  <span className={`holding-row-pnl ${pnl >= 0 ? 'positive' : 'negative'}`}>
+                    {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ({pnlPct.toFixed(1)}%)
+                  </span>
+                </div>
+                <div className="holding-row-details">
+                  <span>{parseFloat(h.shares.toFixed(4))} shares @ ${h.avgCost.toFixed(2)}</span>
+                  <span>Value: ${(h.shares * activeStockPrice).toFixed(2)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Identified Price Levels Tracker */}
       <div className="analysis-section">
