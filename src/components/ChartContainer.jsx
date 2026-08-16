@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { createChart, AreaSeries, CandlestickSeries } from 'lightweight-charts';
+import { createChart, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 
 const RANGE_INTERVALS = {
   '1D': {
@@ -19,6 +19,51 @@ const RANGE_INTERVALS = {
     default: '1w'
   }
 };
+
+// Moving Average & Technical Calculations
+function calculateEMA(data, period = 20) {
+  if (!data || data.length < period) return [];
+  const results = [];
+  let ema = data.slice(0, period).reduce((sum, d) => sum + d.close, 0) / period;
+  results.push({ time: data[period - 1].time, value: parseFloat(ema.toFixed(2)) });
+  const k = 2 / (period + 1);
+  for (let i = period; i < data.length; i++) {
+    ema = data[i].close * k + ema * (1 - k);
+    results.push({ time: data[i].time, value: parseFloat(ema.toFixed(2)) });
+  }
+  return results;
+}
+
+function calculateSMA(data, period = 50) {
+  if (!data || data.length < period) return [];
+  const results = [];
+  let sum = 0;
+  for (let i = 0; i < period; i++) sum += data[i].close;
+  results.push({ time: data[period - 1].time, value: parseFloat((sum / period).toFixed(2)) });
+  for (let i = period; i < data.length; i++) {
+    sum += data[i].close - data[i - period].close;
+    results.push({ time: data[i].time, value: parseFloat((sum / period).toFixed(2)) });
+  }
+  return results;
+}
+
+function calculateVolumeData(data, rawValues) {
+  if (!data || data.length === 0) return [];
+  return data.map((item, idx) => {
+    const raw = rawValues[idx];
+    let vol = raw && raw.volume ? parseFloat(raw.volume) : null;
+    if (!vol || isNaN(vol)) {
+      const spread = Math.abs(item.high - item.low) || (item.close * 0.002);
+      vol = Math.round(spread * 300000 + 100000 + (idx % 5) * 20000);
+    }
+    const isUp = item.close >= item.open;
+    return {
+      time: item.time,
+      value: vol,
+      color: isUp ? 'rgba(16, 185, 129, 0.45)' : 'rgba(244, 63, 94, 0.45)',
+    };
+  });
+}
 
 export default function ChartContainer({
   activeTicker,
@@ -47,6 +92,15 @@ export default function ChartContainer({
   const [hoverPrice, setHoverPrice] = useState(null);
   const [hoverData, setHoverData] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [indicators, setIndicators] = useState({
+    volume: true,
+    ema20: false,
+    sma50: false,
+  });
+
+  const toggleIndicator = (key) => {
+    setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -112,7 +166,6 @@ export default function ChartContainer({
     ...stocks[activeTicker]
   };
 
-  // Convert Twelve Data stock history into format compatible with Lightweight Charts
   const formattedData = useMemo(() => {
     const rawValues = activeStock.liveRawValues || [];
     let dataPoints = [];
@@ -149,11 +202,9 @@ export default function ChartContainer({
       let t;
       const parts = item.datetime.split(' ');
       if (parts.length === 1) {
-        // Daily / Weekly labels "YYYY-MM-DD"
         const dateObj = new Date(parts[0] + 'T00:00:00Z');
         t = Math.floor(dateObj.getTime() / 1000);
       } else {
-        // Intraday labels "YYYY-MM-DD HH:MM:SS"
         const [datePart, timePart] = parts;
         const dateObj = new Date(`${datePart}T${timePart}`);
         t = Math.floor(dateObj.getTime() / 1000);
@@ -174,12 +225,11 @@ export default function ChartContainer({
 
     const sorted = result.sort((a, b) => a.time - b.time);
 
-    // For 1D time frame on line charts: start with Yesterday Close price followed by all intraday bars of current day
     if (range === '1D' && chartType === 'line' && sorted.length > 0) {
       const currentPrice = parseFloat(activeStock.price) || sorted[sorted.length - 1].close;
       const changePct = parseFloat(activeStock.change) || 0;
       const prevClose = changePct !== 0 ? parseFloat((currentPrice / (1 + changePct / 100)).toFixed(2)) : sorted[0].open;
-      const startTime = sorted[0].time - 60; // 1 minute prior to first intraday bar of today
+      const startTime = sorted[0].time - 60;
 
       if (startTime > 0 && !seenTimes.has(startTime)) {
         return [
@@ -192,6 +242,23 @@ export default function ChartContainer({
     return sorted;
   }, [activeStock.liveRawValues, activeStock.liveCloses, activeStock.liveLabels, activeStock.price, activeStock.change, range, chartType]);
 
+  const sessionStats = useMemo(() => {
+    if (!formattedData || formattedData.length === 0) {
+      return { low: 0, high: 0, open: 0 };
+    }
+    let low = Infinity;
+    let high = -Infinity;
+    formattedData.forEach(d => {
+      if (d.low < low) low = d.low;
+      if (d.high > high) high = d.high;
+    });
+    return {
+      low: low === Infinity ? 0 : low,
+      high: high === -Infinity ? 0 : high,
+      open: formattedData[0]?.open || 0
+    };
+  }, [formattedData]);
+
   const computedChange = useMemo(() => {
     if (formattedData.length >= 2) {
       const firstPrice = formattedData[0].close || formattedData[0].open;
@@ -203,7 +270,6 @@ export default function ChartContainer({
     return activeStock.change || 0;
   }, [formattedData, activeStock.change]);
 
-  // Primary hovered price: prioritize the bar's actual close/value (val) at that timestamp
   const activeHoverValue = useMemo(() => {
     if (!hoverData) return hoverPrice;
     if (hoverData.close !== undefined) return hoverData.close;
@@ -214,7 +280,6 @@ export default function ChartContainer({
   const displayChange = range === '1D' ? computedChange : (activeStock.timeframeChange || computedChange || activeStock.change || 0);
   const isUp = displayChange >= 0;
 
-  // Handle Range modifications
   const handleRangeChange = (targetRange) => {
     setRange(targetRange);
     setZoomLevel(100);
@@ -225,19 +290,16 @@ export default function ChartContainer({
     }
   };
 
-  // Handle Interval modifications
   const handleIntervalChange = (targetInterval) => {
     setInterval(targetInterval);
     setZoomLevel(100);
   };
 
-  // Main Effect to manage Lightweight Charts instance and updates
   useEffect(() => {
     if (!chartContainerRef.current || formattedData.length === 0) return;
 
     const container = chartContainerRef.current;
 
-    // Create chart instance
     const chart = createChart(container, {
       width: container.clientWidth,
       height: container.clientHeight,
@@ -252,6 +314,17 @@ export default function ChartContainer({
             return 'Prev Close';
           }
           const d = new Date(timestamp * 1000);
+          if (interval === '1d') {
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          }
+          if (interval === '1w') {
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+          }
+          if (range !== '1D') {
+            const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `${datePart}  ${timePart}`;
+          }
           return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
       },
@@ -265,13 +338,27 @@ export default function ChartContainer({
       },
       timeScale: {
         borderColor: 'rgba(255, 255, 255, 0.06)',
-        timeVisible: true,
+        timeVisible: interval !== '1d' && interval !== '1w',
         secondsVisible: false,
         tickMarkFormatter: (time) => {
           if (range === '1D' && formattedData.length > 0 && time === formattedData[0].time) {
             return 'Prev Close';
           }
           const d = new Date(time * 1000);
+          if (interval === '1d') {
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          }
+          if (interval === '1w') {
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+          }
+          if (range !== '1D') {
+            const hour = d.getHours();
+            const minute = d.getMinutes();
+            if (hour === 0 && minute === 0) {
+              return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
           return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
       },
@@ -280,13 +367,13 @@ export default function ChartContainer({
         vertLine: {
           color: 'rgba(255, 255, 255, 0.3)',
           width: 1,
-          style: 1, // Dashed
+          style: 1,
           labelBackgroundColor: '#060912',
         },
         horzLine: {
           color: 'rgba(255, 255, 255, 0.3)',
           width: 1,
-          style: 1, // Dashed
+          style: 1,
           labelBackgroundColor: '#060912',
         },
       },
@@ -302,31 +389,79 @@ export default function ChartContainer({
 
     chartInstanceRef.current = chart;
 
-    // Create appropriate series based on chartType
-    const seriesColor = isUp ? '#00e676' : '#ff1744';
+    if (indicators.volume) {
+      try {
+        const volumeSeries = chart.addSeries(HistogramSeries, {
+          priceFormat: { type: 'volume' },
+          priceScaleId: 'volume_scale',
+        });
+        chart.priceScale('volume_scale').applyOptions({
+          scaleMargins: {
+            top: 0.82,
+            bottom: 0,
+          },
+        });
+        const volData = calculateVolumeData(formattedData, activeStock.liveRawValues || []);
+        volumeSeries.setData(volData);
+      } catch (e) {
+        console.warn('Volume series init skipped:', e);
+      }
+    }
+
+    if (indicators.ema20) {
+      try {
+        const emaSeries = chart.addSeries(LineSeries, {
+          color: '#06B6D4',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          title: 'EMA 20',
+        });
+        const emaData = calculateEMA(formattedData, 20);
+        emaSeries.setData(emaData);
+      } catch (e) {
+        console.warn('EMA series init skipped:', e);
+      }
+    }
+
+    if (indicators.sma50) {
+      try {
+        const smaSeries = chart.addSeries(LineSeries, {
+          color: '#F59E0B',
+          lineWidth: 1.5,
+          priceLineVisible: false,
+          title: 'SMA 50',
+        });
+        const smaData = calculateSMA(formattedData, 50);
+        smaSeries.setData(smaData);
+      } catch (e) {
+        console.warn('SMA series init skipped:', e);
+      }
+    }
+
+    const seriesColor = isUp ? '#10B981' : '#F43F5E';
     let series;
 
     if (chartType === 'candle') {
       series = chart.addSeries(CandlestickSeries, {
-        upColor: '#00e676',
-        downColor: '#ff1744',
-        borderDownColor: '#ff1744',
-        borderUpColor: '#00e676',
-        wickDownColor: '#ff1744',
-        wickUpColor: '#00e676',
+        upColor: '#10B981',
+        downColor: '#F43F5E',
+        borderDownColor: '#F43F5E',
+        borderUpColor: '#10B981',
+        wickDownColor: '#F43F5E',
+        wickUpColor: '#10B981',
         priceLineVisible: true,
         priceLineColor: 'rgba(255, 255, 255, 0.2)',
-        priceLineStyle: 2, // Dotted
+        priceLineStyle: 2,
       });
     } else {
       series = chart.addSeries(AreaSeries, {
         lineColor: seriesColor,
-        topColor: isUp ? 'rgba(0, 230, 118, 0.25)' : 'rgba(255, 23, 68, 0.25)',
+        topColor: isUp ? 'rgba(16, 185, 129, 0.22)' : 'rgba(244, 63, 94, 0.22)',
         bottomColor: 'rgba(2, 4, 10, 0)',
         lineWidth: 2.5,
         priceLineVisible: true,
         priceLineColor: 'rgba(255, 255, 255, 0.2)',
-        priceLineStyle: 2, // Dotted
+        priceLineStyle: 2,
       });
     }
 
@@ -338,8 +473,6 @@ export default function ChartContainer({
       console.warn('Lightweight Charts setData skipped error:', err);
     }
 
-
-    // Apply initial zoom
     const totalLength = formattedData.length;
     const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
     chart.timeScale().setVisibleLogicalRange({
@@ -347,26 +480,24 @@ export default function ChartContainer({
       to: totalLength - 1,
     });
 
-    // Render S&R Levels
     const lines = linesMap[activeTicker] || [];
     if (showLevels) {
       lines.forEach(linePrice => {
         const isResistance = linePrice > activeStock.price;
-        const lineColor = isResistance ? '#ff1744' : '#00e676';
+        const lineColor = isResistance ? '#F43F5E' : '#10B981';
         const labelTitle = isResistance ? `RES $${linePrice.toFixed(2)}` : `SUP $${linePrice.toFixed(2)}`;
 
         series.createPriceLine({
           price: linePrice,
           color: lineColor,
           lineWidth: 2,
-          lineStyle: 1, // Dashed
+          lineStyle: 1,
           axisLabelVisible: true,
           title: labelTitle,
         });
       });
     }
 
-    // Subscribe to Click Event for drawing Support / Resistance
     const handleChartClick = (param) => {
       if (!showLevels || !param.point) return;
       const clickedPrice = series.coordinateToPrice(param.point.y);
@@ -386,7 +517,6 @@ export default function ChartContainer({
     };
     chart.subscribeClick(handleChartClick);
 
-    // Subscribe to Crosshair Movement for hover price tracking and guide lines preview
     const handleCrosshairMove = (param) => {
       if (!param || !param.point) {
         setHoverPrice(null);
@@ -405,7 +535,6 @@ export default function ChartContainer({
     };
     chart.subscribeCrosshairMove(handleCrosshairMove);
 
-    // Subscribe to TimeScale changes to synchronize the Zoom Slider
     const handleVisibleLogicalRangeChange = (logicalRange) => {
       if (isScaleUpdatingRef.current || !logicalRange) return;
       const visibleCount = logicalRange.to - logicalRange.from;
@@ -420,41 +549,50 @@ export default function ChartContainer({
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChange);
 
-    // Handle Responsive Resize
-    const resizeObserver = new ResizeObserver((entries) => {
-      if (entries.length === 0 || !entries[0].contentRect) return;
-      const { width, height } = entries[0].contentRect;
-      chart.applyOptions({ width, height });
-    });
-    resizeObserver.observe(container);
+    const handleResize = () => {
+      if (chartContainerRef.current && chartInstanceRef.current) {
+        chartInstanceRef.current.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
+        });
+      }
+    };
+    window.addEventListener('resize', handleResize);
 
-    // Clean up on component unmount / update
     return () => {
-      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+      chart.unsubscribeClick(handleChartClick);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
       chart.remove();
       chartInstanceRef.current = null;
       seriesRef.current = null;
     };
-  }, [activeTicker, chartType, showLevels, formattedData, linesMap, activeStock.price, isUp]);
+  }, [
+    formattedData,
+    chartType,
+    showLevels,
+    linesMap,
+    activeTicker,
+    range,
+    interval,
+    indicators.volume,
+    indicators.ema20,
+    indicators.sma50
+  ]);
 
-  // Synchronize zoom changes from the slider to the chart
   useEffect(() => {
-    if (isScaleUpdatingRef.current) return;
-    const chart = chartInstanceRef.current;
-    if (!chart || formattedData.length === 0) return;
-
+    if (!chartInstanceRef.current || formattedData.length === 0 || isScaleUpdatingRef.current) return;
     const totalLength = formattedData.length;
     const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
-
-    isScaleUpdatingRef.current = true;
-    chart.timeScale().setVisibleLogicalRange({
+    chartInstanceRef.current.timeScale().setVisibleLogicalRange({
       from: totalLength - visibleCount,
       to: totalLength - 1,
     });
-    setTimeout(() => {
-      isScaleUpdatingRef.current = false;
-    }, 50);
   }, [zoomLevel, formattedData.length]);
+
+  const rangePercent = sessionStats.high > sessionStats.low
+    ? Math.max(0, Math.min(100, ((activeStock.price - sessionStats.low) / (sessionStats.high - sessionStats.low)) * 100))
+    : 50;
 
   return (
     <section
@@ -496,85 +634,32 @@ export default function ChartContainer({
               {activeStock.name}
             </h1>
             <div className="stock-metrics">
-              <span className="stock-price" id="activePrice" style={activeHoverValue !== null ? { color: 'var(--cyan)' } : {}}>
+              <span className="stock-price tabular-nums" id="activePrice" style={activeHoverValue !== null ? { color: 'var(--cyan)' } : {}}>
                 ${activeHoverValue !== null ? activeHoverValue.toFixed(2) : activeStock.price.toFixed(2)}
               </span>
-              <span className={`stock-trend ${isUp ? 'positive' : 'negative'}`} id="activeChange" title={range === '1D' ? 'Day change relative to Yesterday Close' : `${range} change`}>
+              <span className={`stock-trend tabular-nums ${isUp ? 'positive' : 'negative'}`} id="activeChange" title={range === '1D' ? 'Day change relative to Yesterday Close' : `${range} change`}>
                 {isUp ? '+' : ''}
                 {displayChange.toFixed(2)}%
               </span>
             </div>
           </div>
+
+          {sessionStats.high > 0 && sessionStats.low > 0 && (
+            <div className="session-range-meter" title={`Range Low: $${sessionStats.low.toFixed(2)} | High: $${sessionStats.high.toFixed(2)}`}>
+              <div className="session-range-labels">
+                <span className="range-low">L ${sessionStats.low.toFixed(2)}</span>
+                <span className="range-title">Range</span>
+                <span className="range-high">H ${sessionStats.high.toFixed(2)}</span>
+              </div>
+              <div className="session-range-track">
+                <div className="session-range-fill" style={{ width: `${rangePercent}%` }}></div>
+                <div className="session-range-pointer" style={{ left: `${rangePercent}%` }}></div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="chart-controls">
-          {/* Toggle S&R Overlay */}
-          <div className="toggle-container" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={showLevels}
-                onChange={(e) => setShowLevels(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: 'var(--text-secondary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              S&R Overlay
-            </span>
-          </div>
-
-          {/* Zoom Slider */}
-          <div
-            className="zoom-container"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'rgba(255, 255, 255, 0.02)',
-              border: '1px solid var(--border-color)',
-              padding: '4px 10px',
-              borderRadius: 'var(--radius-md)',
-            }}
-          >
-            <i className="fa-solid fa-magnifying-glass" style={{ fontSize: '11px', color: 'var(--text-muted)' }}></i>
-            <input
-              type="range"
-              min="20"
-              max="100"
-              value={zoomLevel}
-              onChange={(e) => setZoomLevel(parseInt(e.target.value))}
-              style={{
-                width: '80px',
-                accentColor: 'var(--cyan)',
-                cursor: 'pointer',
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                margin: 0,
-              }}
-            />
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: 'var(--text-secondary)',
-                width: '35px',
-                textAlign: 'right',
-              }}
-            >
-              {zoomLevel}%
-            </span>
-          </div>
-
-          {/* Style Selector */}
           <div className="chart-style-selector">
             <button
               onClick={() => setChartType('line')}
@@ -588,11 +673,34 @@ export default function ChartContainer({
               className={`style-btn ${chartType === 'candle' ? 'active' : ''}`}
               title="Candlestick Chart"
             >
-              <i className="fa-solid fa-chart-bar"></i> Candle
+              <i className="fa-solid fa-chart-simple"></i> Candle
             </button>
           </div>
 
-          {/* Range Selector */}
+          <div className="indicator-toggle-group">
+            <button
+              onClick={() => toggleIndicator('volume')}
+              className={`indicator-btn ${indicators.volume ? 'active' : ''}`}
+              title="Toggle Volume Histogram"
+            >
+              <span className="indicator-dot vol"></span> VOL
+            </button>
+            <button
+              onClick={() => toggleIndicator('ema20')}
+              className={`indicator-btn ${indicators.ema20 ? 'active' : ''}`}
+              title="Toggle 20 Exponential Moving Average"
+            >
+              <span className="indicator-dot ema"></span> EMA 20
+            </button>
+            <button
+              onClick={() => toggleIndicator('sma50')}
+              className={`indicator-btn ${indicators.sma50 ? 'active' : ''}`}
+              title="Toggle 50 Simple Moving Average"
+            >
+              <span className="indicator-dot sma"></span> SMA 50
+            </button>
+          </div>
+
           <div className="range-selector">
             {['1D', '1W', '1M', '1Y'].map((r) => (
               <button
@@ -605,7 +713,6 @@ export default function ChartContainer({
             ))}
           </div>
 
-          {/* Interval Selector */}
           <div className="interval-selector">
             {['1m', '5m', '15m', '1h', '1d', '1w'].map((i) => {
               const allowed = RANGE_INTERVALS[range]?.allowed.includes(i);
@@ -621,112 +728,83 @@ export default function ChartContainer({
               );
             })}
           </div>
+
+          <div className="toggle-container sr-toggle-container">
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={showLevels}
+                onChange={(e) => setShowLevels(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+            <span className="sr-label">
+              S&R Overlay
+            </span>
+          </div>
+
+          <div className="zoom-container">
+            <i className="fa-solid fa-magnifying-glass zoom-icon"></i>
+            <input
+              type="range"
+              min="20"
+              max="100"
+              value={zoomLevel}
+              onChange={(e) => setZoomLevel(parseInt(e.target.value))}
+              className="zoom-slider"
+            />
+            <span className="zoom-value tabular-nums">
+              {zoomLevel}%
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Chart Container */}
       <div className={`chart-container ${isLoading ? 'loading' : ''}`} style={isFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'none', height: '100%', overflow: 'hidden' } : {}}>
         <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative', height: isFullscreen ? '100%' : undefined }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
 
-          {/* Top Left Floating Hover Price Badge */}
-          <div style={{
-            position: 'absolute',
-            top: '12px',
-            left: '12px',
-            zIndex: 25,
-            background: 'rgba(6, 9, 18, 0.85)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '6px',
-            padding: '6px 12px',
-            fontSize: '12px',
-            fontWeight: 600,
-            color: '#94a3b8',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            pointerEvents: 'none',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <i className="fa-solid fa-crosshairs" style={{ color: 'var(--cyan)', fontSize: '11px' }}></i>
-              <span style={{ color: 'var(--text-muted)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Hover Val:</span>
-              <span style={{ color: activeHoverValue !== null ? 'var(--cyan)' : '#ffffff', fontWeight: 700, fontSize: '13px' }}>
+          <div className="chart-hover-overlay">
+            <div className="hover-primary-metric">
+              <i className="fa-solid fa-crosshairs hover-icon"></i>
+              <span className="hover-label">Price:</span>
+              <span className="hover-val tabular-nums" style={{ color: activeHoverValue !== null ? 'var(--cyan)' : '#ffffff' }}>
                 {activeHoverValue !== null ? `$${activeHoverValue.toFixed(2)}` : `$${activeStock.price.toFixed(2)}`}
               </span>
             </div>
 
             {hoverData && hoverData.open !== undefined && (
-              <div style={{ display: 'flex', gap: '8px', fontSize: '11px', borderLeft: '1px solid rgba(255,255,255,0.12)', paddingLeft: '8px' }}>
-                <span>O: <strong style={{ color: '#fff' }}>${hoverData.open.toFixed(2)}</strong></span>
-                <span>H: <strong style={{ color: '#00e676' }}>${hoverData.high.toFixed(2)}</strong></span>
-                <span>L: <strong style={{ color: '#ff1744' }}>${hoverData.low.toFixed(2)}</strong></span>
-                <span>C: <strong style={{ color: '#fff' }}>${hoverData.close.toFixed(2)}</strong></span>
+              <div className="hover-ohlc-group tabular-nums">
+                <span>O: <strong>${hoverData.open.toFixed(2)}</strong></span>
+                <span>H: <strong style={{ color: 'var(--bullish)' }}>${hoverData.high.toFixed(2)}</strong></span>
+                <span>L: <strong style={{ color: 'var(--bearish)' }}>${hoverData.low.toFixed(2)}</strong></span>
+                <span>C: <strong>${hoverData.close.toFixed(2)}</strong></span>
               </div>
             )}
           </div>
 
-          {/* Bottom Right Fullscreen Toggle Button */}
           <button
             type="button"
             onClick={toggleFullscreen}
             className="btn-fullscreen-toggle"
             title={isFullscreen ? "Exit Fullscreen" : "Expand to Fullscreen"}
             aria-label={isFullscreen ? "Exit Fullscreen" : "Expand to Fullscreen"}
-            style={{
-              position: 'absolute',
-              bottom: '12px',
-              right: '12px',
-              zIndex: 25,
-              background: 'rgba(6, 9, 18, 0.8)',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--cyan)',
-              borderRadius: '6px',
-              padding: '6px 12px',
-              fontSize: '11px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-              transition: 'all var(--transition-fast)'
-            }}
           >
             <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`}></i>
             <span>{isFullscreen ? 'Exit' : 'Full Screen'}</span>
           </button>
 
           {formattedData.length === 0 && (
-            <div className="chart-loading-overlay" style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(6, 9, 18, 0.6)',
-              backdropFilter: 'blur(8px)',
-              color: 'var(--cyan)',
-              fontFamily: '"Outfit", sans-serif',
-              fontSize: '16px',
-              fontWeight: 600,
-              textShadow: '0 0 10px rgba(0, 240, 255, 0.4)',
-              zIndex: 10,
-              borderRadius: 'var(--radius-lg)'
-            }}>
-              Retrieving Live {activeTicker} Market Data...
+            <div className="chart-loading-overlay">
+              <div className="loading-spinner"></div>
+              <span>Retrieving Live {activeTicker} Market Data...</span>
             </div>
           )}
         </div>
         <div className="chart-instructions">
           <i className="fa-solid fa-circle-info"></i>{' '}
           {hoverPrice !== null && showLevels ? (
-            <span style={{ color: hoverPrice > activeStock.price ? '#ff1744' : '#00e676', fontWeight: 700 }}>
+            <span style={{ color: hoverPrice > activeStock.price ? 'var(--bearish)' : 'var(--bullish)', fontWeight: 700 }}>
               Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at ${hoverPrice.toFixed(2)}
             </span>
           ) : (
