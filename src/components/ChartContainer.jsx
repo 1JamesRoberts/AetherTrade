@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { createChart, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 
 const RANGE_INTERVALS = {
@@ -92,6 +92,7 @@ export default function ChartContainer({
   const [hoverPrice, setHoverPrice] = useState(null);
   const [hoverData, setHoverData] = useState(null);
   const [hoveredExistingLine, setHoveredExistingLine] = useState(null);
+  const [lineCoordinates, setLineCoordinates] = useState([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [indicators, setIndicators] = useState({
     volume: true,
@@ -102,6 +103,23 @@ export default function ChartContainer({
   const toggleIndicator = (key) => {
     setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const updateLineCoords = useCallback(() => {
+    if (!seriesRef.current || !chartContainerRef.current) return;
+    const currentLines = linesMap[activeTicker] || [];
+    const containerHeight = chartContainerRef.current.clientHeight || 400;
+
+    const coords = currentLines.map(price => {
+      const y = seriesRef.current.priceToCoordinate(price);
+      return {
+        price,
+        y,
+        isRes: price > activeStock.price
+      };
+    }).filter(item => item.y !== null && item.y >= 5 && item.y <= containerHeight - 15);
+
+    setLineCoordinates(coords);
+  }, [linesMap, activeTicker, activeStock.price]);
 
   useEffect(() => {
     const handleFsChange = () => {
@@ -579,6 +597,7 @@ export default function ChartContainer({
       
       isScaleUpdatingRef.current = true;
       setZoomLevel(boundedPercent);
+      updateLineCoords();
       setTimeout(() => {
         isScaleUpdatingRef.current = false;
       }, 50);
@@ -591,11 +610,16 @@ export default function ChartContainer({
           width: chartContainerRef.current.clientWidth,
           height: chartContainerRef.current.clientHeight,
         });
+        updateLineCoords();
       }
     };
     window.addEventListener('resize', handleResize);
 
+    // Initial line coords calculation
+    const initTimer = setTimeout(updateLineCoords, 60);
+
     return () => {
+      clearTimeout(initTimer);
       window.removeEventListener('resize', handleResize);
       chart.unsubscribeClick(handleChartClick);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
@@ -613,8 +637,15 @@ export default function ChartContainer({
     interval,
     indicators.volume,
     indicators.ema20,
-    indicators.sma50
+    indicators.sma50,
+    updateLineCoords
   ]);
+
+  // Synchronize line coordinates whenever levels, zoom or active asset change
+  useEffect(() => {
+    const timer = setTimeout(updateLineCoords, 50);
+    return () => clearTimeout(timer);
+  }, [linesMap, activeTicker, zoomLevel, showLevels, updateLineCoords]);
 
   useEffect(() => {
     if (!chartInstanceRef.current || formattedData.length === 0 || isScaleUpdatingRef.current) return;
@@ -624,7 +655,8 @@ export default function ChartContainer({
       from: totalLength - visibleCount,
       to: totalLength - 1,
     });
-  }, [zoomLevel, formattedData.length]);
+    updateLineCoords();
+  }, [zoomLevel, formattedData.length, updateLineCoords]);
 
   const rangePercent = sessionStats.high > sessionStats.low
     ? Math.max(0, Math.min(100, ((activeStock.price - sessionStats.low) / (sessionStats.high - sessionStats.low)) * 100))
@@ -818,6 +850,38 @@ export default function ChartContainer({
               </div>
             )}
           </div>
+
+          {/* Direct On-Line Delete Action Buttons on Right Edge of Each Line */}
+          {showLevels && lineCoordinates.map(({ price, y, isRes }) => (
+            <div
+              key={`line-del-btn-${price}`}
+              className={`on-line-delete-badge ${isRes ? 'res' : 'sup'}`}
+              style={{
+                position: 'absolute',
+                top: `${y}px`,
+                right: '65px',
+                transform: 'translateY(-50%)',
+                zIndex: 25,
+              }}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const newLines = (linesMap[activeTicker] || []).filter(p => p !== price);
+                  setLinesMap({
+                    ...linesMap,
+                    [activeTicker]: newLines
+                  });
+                }}
+                className="btn-line-right-delete"
+                title={`Delete ${isRes ? 'Resistance' : 'Support'} line $${price.toFixed(2)}`}
+                aria-label={`Delete ${isRes ? 'Resistance' : 'Support'} line $${price.toFixed(2)}`}
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          ))}
 
           {/* On-Chart Active Levels Quick-Delete Tags */}
           {showLevels && (linesMap[activeTicker] || []).length > 0 && (

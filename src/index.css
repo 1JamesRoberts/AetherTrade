@@ -1377,6 +1377,57 @@ body {
   50% { opacity: 0.7; }
 }
 
+/* On-Line Direct Delete Button Badges (Pinned to Right Edge of Lines) */
+.on-line-delete-badge {
+  pointer-events: auto;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.btn-line-right-delete {
+  background: rgba(6, 9, 18, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: all var(--transition-fast) ease;
+}
+
+.on-line-delete-badge.sup .btn-line-right-delete {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--bullish);
+}
+
+.on-line-delete-badge.res .btn-line-right-delete {
+  border-color: rgba(244, 63, 94, 0.4);
+  color: var(--bearish);
+}
+
+.on-line-delete-badge.sup .btn-line-right-delete:hover {
+  background: var(--bearish);
+  color: #fff;
+  border-color: var(--bearish);
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.6);
+}
+
+.on-line-delete-badge.res .btn-line-right-delete:hover {
+  background: var(--bearish);
+  color: #fff;
+  border-color: var(--bearish);
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.6);
+}
+
 /* Auto Detect Levels Button */
 .levels-actions-group {
   display: flex;
