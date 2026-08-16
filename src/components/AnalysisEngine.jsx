@@ -277,7 +277,7 @@ export default function AnalysisEngine({
       </div>
 
       {/* Trade Projections Matrix */}
-      <div className="analysis-section" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div className="analysis-section matrix-section">
         <div className="section-subtitle">
           <span>Profit Projections Matrix</span>
           <div className="capital-input-wrapper">

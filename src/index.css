@@ -1680,16 +1680,34 @@ body {
    ========================================================================== */
 
 .panel-right {
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  height: 100%;
+}
+
+.panel-right .panel-header {
+  position: sticky;
+  top: 0;
+  background: rgba(13, 19, 33, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 20;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .analysis-section {
-  padding: 20px 24px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
-.analysis-section:last-of-type {
+.analysis-section:last-of-type,
+.analysis-section.matrix-section {
   border-bottom: none;
+  flex-shrink: 0;
 }
 
 .section-subtitle {
@@ -1856,14 +1874,12 @@ body {
 /* Profit Matrix Table */
 .projection-table-wrapper {
   position: relative;
-  flex: 1;
   overflow: auto;
-  /* Enable both horizontal and vertical scrolling */
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: rgba(6, 9, 18, 0.5);
-  min-height: 180px;
-  max-height: 300px;
+  min-height: 160px;
+  max-height: 380px;
 }
 
 .projection-table {
