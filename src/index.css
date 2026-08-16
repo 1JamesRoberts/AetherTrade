@@ -1716,24 +1716,62 @@ body {
   border-radius: 6px;
 }
 
-/* Scroller containing support and resistance pills */
-.levels-scroller {
-  max-height: 180px;
-  overflow-y: auto;
+/* Structured Support & Resistance Level Groups */
+.levels-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-right: 4px;
+  gap: 10px;
 }
 
-.levels-sub-header {
+.level-group-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all var(--transition-fast) ease;
+}
+
+.level-group-box.sup-group {
+  border-left: 3px solid var(--bullish);
+}
+
+.level-group-box.res-group {
+  border-left: 3px solid var(--bearish);
+}
+
+.level-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.level-group-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
+}
+
+.level-count-tag {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+}
+
+.level-pills-scroll {
+  max-height: 95px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .level-pills-list {
@@ -1742,47 +1780,56 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   min-height: 20px;
+  padding: 0;
+  margin: 0;
 }
 
 .empty-pill-msg {
   font-size: 11px;
   color: var(--text-muted);
   width: 100%;
+  padding: 4px 0;
 }
 
 .level-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   border: 1px solid transparent;
+  flex: 1 1 calc(50% - 6px);
+  min-width: 110px;
+  box-sizing: border-box;
   transition: all var(--transition-fast) ease;
 }
 
 .level-pill.sup {
-  background: rgba(0, 230, 118, 0.06);
-  border-color: rgba(0, 230, 118, 0.2);
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
   color: var(--bullish);
 }
 
 .level-pill.sup:hover {
-  background: rgba(0, 230, 118, 0.12);
+  background: rgba(16, 185, 129, 0.15);
   border-color: var(--bullish);
+  transform: translateY(-1px);
 }
 
 .level-pill.res {
-  background: rgba(255, 23, 68, 0.06);
-  border-color: rgba(255, 23, 68, 0.2);
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.25);
   color: var(--bearish);
 }
 
 .level-pill.res:hover {
-  background: rgba(255, 23, 68, 0.12);
+  background: rgba(244, 63, 94, 0.15);
   border-color: var(--bearish);
+  transform: translateY(-1px);
 }
 
 .pill-delete-btn {
@@ -1792,15 +1839,17 @@ body {
   opacity: 0.6;
   cursor: pointer;
   font-size: 10px;
-  padding: 2px;
+  padding: 2px 4px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 3px;
   transition: var(--transition-fast);
 }
 
 .pill-delete-btn:hover {
   opacity: 1;
+  background: rgba(255, 255, 255, 0.15);
   transform: scale(1.1);
 }
 

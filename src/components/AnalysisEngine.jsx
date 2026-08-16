@@ -194,66 +194,85 @@ export default function AnalysisEngine({
           </div>
         </div>
 
-        <div className="levels-scroller">
-          {/* Support Levels */}
-          <div className="levels-sub-header text-green">
-            <i className="fa-solid fa-circle-chevron-up"></i> Support Levels
+        {/* Dedicated Support & Resistance Level Groups */}
+        <div className="levels-container">
+          {/* Support Group */}
+          <div className="level-group-box sup-group">
+            <div className="level-group-header text-green">
+              <div className="level-group-title">
+                <i className="fa-solid fa-circle-chevron-up"></i>
+                <span>Support Levels</span>
+              </div>
+              <span className="level-count-tag tabular-nums">{supports.length}</span>
+            </div>
+            <div className="level-pills-scroll">
+              <ul className="level-pills-list">
+                {supports.length === 0 ? (
+                  <li className="empty-pill-msg">No support lines set. Click on chart below price or click Auto Levels.</li>
+                ) : (
+                  supports.map((price) => {
+                    const diff = currentPrice - price;
+                    const pct = currentPrice > 0 ? (diff / currentPrice) * 100 : 0;
+                    return (
+                      <li key={`sup-${price}`} className="level-pill sup">
+                        <div className="level-pill-info">
+                          <span className="level-price tabular-nums">${price.toFixed(2)}</span>
+                          <span className="level-diff tabular-nums">-${diff.toFixed(2)} (-{pct.toFixed(1)}%)</span>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveLine(price)}
+                          className="pill-delete-btn"
+                          title={`Delete support level $${price}`}
+                          aria-label={`Delete support level $${price}`}
+                        >
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>
           </div>
-          <ul className="level-pills-list">
-            {supports.length === 0 ? (
-              <li className="empty-pill-msg">No support lines set. Click on chart below current price or click Auto Levels.</li>
-            ) : (
-              supports.map((price) => {
-                const diff = currentPrice - price;
-                const pct = currentPrice > 0 ? (diff / currentPrice) * 100 : 0;
-                return (
-                  <li key={`sup-${price}`} className="level-pill sup">
-                    <div className="level-pill-info">
-                      <span className="level-price tabular-nums">${price.toFixed(2)}</span>
-                      <span className="level-diff tabular-nums">-${diff.toFixed(2)} (-{pct.toFixed(1)}%)</span>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveLine(price)}
-                      className="pill-delete-btn"
-                      title={`Delete support level $${price}`}
-                    >
-                      <i className="fa-solid fa-trash"></i>
-                    </button>
-                  </li>
-                );
-              })
-            )}
-          </ul>
 
-          {/* Resistance Levels */}
-          <div className="levels-sub-header text-red" style={{ marginTop: '14px' }}>
-            <i className="fa-solid fa-circle-chevron-down"></i> Resistance Levels
+          {/* Resistance Group */}
+          <div className="level-group-box res-group">
+            <div className="level-group-header text-red">
+              <div className="level-group-title">
+                <i className="fa-solid fa-circle-chevron-down"></i>
+                <span>Resistance Levels</span>
+              </div>
+              <span className="level-count-tag tabular-nums">{resistances.length}</span>
+            </div>
+            <div className="level-pills-scroll">
+              <ul className="level-pills-list">
+                {resistances.length === 0 ? (
+                  <li className="empty-pill-msg">No resistance lines set. Click on chart above price or click Auto Levels.</li>
+                ) : (
+                  resistances.map((price) => {
+                    const diff = price - currentPrice;
+                    const pct = currentPrice > 0 ? (diff / currentPrice) * 100 : 0;
+                    return (
+                      <li key={`res-${price}`} className="level-pill res">
+                        <div className="level-pill-info">
+                          <span className="level-price tabular-nums">${price.toFixed(2)}</span>
+                          <span className="level-diff tabular-nums">+${diff.toFixed(2)} (+{pct.toFixed(1)}%)</span>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveLine(price)}
+                          className="pill-delete-btn"
+                          title={`Delete resistance level $${price}`}
+                          aria-label={`Delete resistance level $${price}`}
+                        >
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>
           </div>
-          <ul className="level-pills-list">
-            {resistances.length === 0 ? (
-              <li className="empty-pill-msg">No resistance lines set. Click on chart above current price or click Auto Levels.</li>
-            ) : (
-              resistances.map((price) => {
-                const diff = price - currentPrice;
-                const pct = currentPrice > 0 ? (diff / currentPrice) * 100 : 0;
-                return (
-                  <li key={`res-${price}`} className="level-pill res">
-                    <div className="level-pill-info">
-                      <span className="level-price tabular-nums">${price.toFixed(2)}</span>
-                      <span className="level-diff tabular-nums">+${diff.toFixed(2)} (+{pct.toFixed(1)}%)</span>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveLine(price)}
-                      className="pill-delete-btn"
-                      title={`Delete resistance level $${price}`}
-                    >
-                      <i className="fa-solid fa-trash"></i>
-                    </button>
-                  </li>
-                );
-              })
-            )}
-          </ul>
         </div>
       </div>
 
