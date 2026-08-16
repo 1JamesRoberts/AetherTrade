@@ -1287,6 +1287,96 @@ body {
   transform: translateY(-1px);
 }
 
+/* On-Chart Active Levels Quick-Delete Bar */
+.chart-levels-quick-bar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(6, 9, 18, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  max-width: calc(100% - 280px);
+}
+
+.quick-bar-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.quick-bar-tags-scroll {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  padding: 2px 0;
+}
+
+.chart-level-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.chart-level-tag.sup {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: var(--bullish);
+}
+
+.chart-level-tag.res {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.3);
+  color: var(--bearish);
+}
+
+.chart-level-tag-del {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 9px;
+  opacity: 0.65;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.chart-level-tag-del:hover {
+  opacity: 1;
+  color: #fff;
+}
+
+.text-delete-hint {
+  display: inline-flex;
+  align-items: center;
+  animation: pulseDelete 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseDelete {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 /* Auto Detect Levels Button */
 .levels-actions-group {
   display: flex;

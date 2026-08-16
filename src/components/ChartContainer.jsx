@@ -91,6 +91,7 @@ export default function ChartContainer({
 
   const [hoverPrice, setHoverPrice] = useState(null);
   const [hoverData, setHoverData] = useState(null);
+  const [hoveredExistingLine, setHoveredExistingLine] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [indicators, setIndicators] = useState({
     volume: true,
@@ -498,6 +499,7 @@ export default function ChartContainer({
       });
     }
 
+    // Click Event for adding OR deleting Support / Resistance levels
     const handleChartClick = (param) => {
       if (!showLevels || !param.point) return;
       const clickedPrice = series.coordinateToPrice(param.point.y);
@@ -505,9 +507,26 @@ export default function ChartContainer({
 
       const roundedPrice = parseFloat(clickedPrice.toFixed(2));
       const existingLines = linesMap[activeTicker] || [];
-      const isDuplicate = existingLines.some(price => Math.abs(price - roundedPrice) < (activeStock.price * 0.003));
 
-      if (!isDuplicate) {
+      // Check if clicked directly on or near an existing line to delete it
+      const matchedIndex = existingLines.findIndex(price => {
+        const lineCoord = series.priceToCoordinate(price);
+        if (lineCoord !== null && param.point.y !== undefined) {
+          return Math.abs(lineCoord - param.point.y) <= 14; // 14px click target
+        }
+        return Math.abs(price - roundedPrice) < (activeStock.price * 0.008);
+      });
+
+      if (matchedIndex !== -1) {
+        // Delete this level
+        const newLines = existingLines.filter((_, idx) => idx !== matchedIndex);
+        setLinesMap({
+          ...linesMap,
+          [activeTicker]: newLines
+        });
+        setHoveredExistingLine(null);
+      } else {
+        // Add new level
         const newLines = [...existingLines, roundedPrice];
         setLinesMap({
           ...linesMap,
@@ -517,14 +536,31 @@ export default function ChartContainer({
     };
     chart.subscribeClick(handleChartClick);
 
+    // Crosshair Movement for hover price tracking and line deletion hint
     const handleCrosshairMove = (param) => {
       if (!param || !param.point) {
         setHoverPrice(null);
         setHoverData(null);
+        setHoveredExistingLine(null);
         return;
       }
       const price = series.coordinateToPrice(param.point.y);
       setHoverPrice(price !== null ? parseFloat(price.toFixed(2)) : null);
+
+      // Check if cursor is hovering over an existing level
+      const currentLines = linesMap[activeTicker] || [];
+      if (price !== null && currentLines.length > 0 && showLevels) {
+        const matched = currentLines.find(l => {
+          const lineCoord = series.priceToCoordinate(l);
+          if (lineCoord !== null && param.point.y !== undefined) {
+            return Math.abs(lineCoord - param.point.y) <= 14;
+          }
+          return Math.abs(l - price) < (activeStock.price * 0.008);
+        });
+        setHoveredExistingLine(matched !== undefined ? matched : null);
+      } else {
+        setHoveredExistingLine(null);
+      }
 
       if (param.time && series) {
         const pointData = param.seriesData.get(series);
@@ -783,6 +819,36 @@ export default function ChartContainer({
             )}
           </div>
 
+          {/* On-Chart Active Levels Quick-Delete Tags */}
+          {showLevels && (linesMap[activeTicker] || []).length > 0 && (
+            <div className="chart-levels-quick-bar">
+              <span className="quick-bar-label">Active Levels:</span>
+              <div className="quick-bar-tags-scroll">
+                {(linesMap[activeTicker] || []).map(p => {
+                  const isRes = p > activeStock.price;
+                  return (
+                    <span key={`quick-lvl-${p}`} className={`chart-level-tag ${isRes ? 'res' : 'sup'} tabular-nums`}>
+                      {isRes ? 'RES' : 'SUP'} ${p.toFixed(2)}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const newLines = (linesMap[activeTicker] || []).filter(l => l !== p);
+                          setLinesMap({ ...linesMap, [activeTicker]: newLines });
+                        }}
+                        className="chart-level-tag-del"
+                        title={`Delete level $${p.toFixed(2)}`}
+                        aria-label={`Delete level $${p.toFixed(2)}`}
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={toggleFullscreen}
@@ -803,12 +869,17 @@ export default function ChartContainer({
         </div>
         <div className="chart-instructions">
           <i className="fa-solid fa-circle-info"></i>{' '}
-          {hoverPrice !== null && showLevels ? (
+          {hoveredExistingLine !== null ? (
+            <span className="text-delete-hint" style={{ color: 'var(--bearish)', fontWeight: 700 }}>
+              <i className="fa-solid fa-trash-can" style={{ marginRight: '5px' }}></i>
+              Click line to DELETE level at ${hoveredExistingLine.toFixed(2)}
+            </span>
+          ) : hoverPrice !== null && showLevels ? (
             <span style={{ color: hoverPrice > activeStock.price ? 'var(--bearish)' : 'var(--bullish)', fontWeight: 700 }}>
-              Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at ${hoverPrice.toFixed(2)}
+              Click on chart to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at ${hoverPrice.toFixed(2)}
             </span>
           ) : (
-            "Click anywhere on the chart canvas to add a Support or Resistance level"
+            "Click on chart to add Support/Resistance, or click directly on any line to delete it"
           )}
         </div>
       </div>
