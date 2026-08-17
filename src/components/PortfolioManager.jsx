@@ -4,12 +4,14 @@ import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables);
 
 const ALLOCATION_COLORS = [
-  '#00f0ff', // Neon cyan
-  '#8b5cf6', // Indigo violet
-  '#10b981', // Emerald green
-  '#f43f5e', // Rose red
-  '#f59e0b', // Amber orange
-  '#ec4899'  // Neon pink
+  '#06B6D4', // Cyan
+  '#8B5CF6', // Purple/Indigo
+  '#10B981', // Emerald
+  '#F43F5E', // Coral
+  '#F59E0B', // Amber
+  '#EC4899', // Pink
+  '#3B82F6', // Blue
+  '#14B8A6', // Teal
 ];
 
 export default function PortfolioManager({
@@ -34,7 +36,7 @@ export default function PortfolioManager({
   const [txType, setTxType] = useState('BUY'); // 'BUY' | 'SELL'
   const [shares, setShares] = useState(10);
   const [price, setPrice] = useState(185.50);
-  
+
   // Get today's local date YYYY-MM-DD
   const getTodayDateString = () => {
     const today = new Date();
@@ -117,7 +119,6 @@ export default function PortfolioManager({
       return;
     }
 
-    // Filter stocks from state stocks cache
     const matches = Object.values(stocks).filter(stock =>
       (stock.ticker && stock.ticker.toLowerCase().includes(val.toLowerCase())) ||
       (stock.name && stock.name.toLowerCase().includes(val.toLowerCase()))
@@ -205,7 +206,6 @@ export default function PortfolioManager({
       return;
     }
 
-    // Check future date restriction
     if (txDate) {
       const selectedDate = new Date(txDate + 'T00:00:00');
       const today = new Date();
@@ -216,7 +216,6 @@ export default function PortfolioManager({
       }
     }
 
-    // Validate SELL sufficiency checks using delta bounds
     if (txType === 'SELL') {
       const holding = activePortfolio.holdings[selectedTicker];
       if (!holding || holding.shares + 1e-9 < sharesQty) {
@@ -257,14 +256,23 @@ export default function PortfolioManager({
 
   const { holdingsList, totalAssetValue } = useMemo(() => {
     let total = 0;
-    const list = holdingsKeys.map(ticker => {
-      const holding = activePortfolio.holdings[ticker];
-      const stockMeta = stocks[ticker] || { price: holding.avgCost };
-      const stockPrice = stockMeta.price || holding.avgCost;
-      const marketValue = holding.shares * stockPrice;
-      total += marketValue;
-      return { ticker, shares: holding.shares, price: stockPrice, marketValue };
-    }).sort((a, b) => b.marketValue - a.marketValue);
+    const list = holdingsKeys
+      .filter(t => (activePortfolio.holdings[t]?.shares || 0) > 0)
+      .map(ticker => {
+        const holding = activePortfolio.holdings[ticker];
+        const stockMeta = stocks[ticker] || { price: holding.avgCost, name: `${ticker} Stock` };
+        const stockPrice = stockMeta.price || holding.avgCost;
+        const marketValue = holding.shares * stockPrice;
+        total += marketValue;
+        return {
+          ticker,
+          name: stockMeta.name || `${ticker} Stock`,
+          shares: holding.shares,
+          price: stockPrice,
+          marketValue
+        };
+      })
+      .sort((a, b) => b.marketValue - a.marketValue);
     return { holdingsList: list, totalAssetValue: total };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePortfolio.holdings, stocks, ...holdingsKeys]);
@@ -290,9 +298,9 @@ export default function PortfolioManager({
         datasets: [{
           data: holdingsList.map(h => parseFloat(h.marketValue.toFixed(2))),
           backgroundColor: ALLOCATION_COLORS.slice(0, holdingsList.length),
-          borderColor: 'rgba(2, 4, 10, 0.85)',
-          borderWidth: 2,
-          hoverOffset: 4
+          borderColor: 'rgba(13, 19, 33, 0.95)',
+          borderWidth: 3,
+          hoverOffset: 6
         }]
       },
       options: {
@@ -302,25 +310,25 @@ export default function PortfolioManager({
           legend: { display: false },
           tooltip: {
             backgroundColor: '#060912',
-            titleColor: '#00e5ff',
-            bodyColor: '#fff',
-            borderColor: 'rgba(255, 255, 255, 0.06)',
+            titleColor: '#06B6D4',
+            bodyColor: '#ffffff',
+            borderColor: 'rgba(255, 255, 255, 0.12)',
             borderWidth: 1,
             titleFont: { family: 'Outfit', weight: '700', size: 12 },
             bodyFont: { family: 'JetBrains Mono', size: 11 },
-            padding: 8,
-            cornerRadius: 6,
+            padding: 10,
+            cornerRadius: 8,
             displayColors: false,
             callbacks: {
               label: function (context) {
                 const val = context.parsed;
                 const pct = (val / totalAssetValue) * 100;
-                return ` ${context.label}: $${val.toLocaleString('en-US', { minimumFractionDigits: 2 })} (${pct.toFixed(1)}%)`;
+                return ` ${context.label}: $${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pct.toFixed(1)}%)`;
               }
             }
           }
         },
-        cutout: '70%'
+        cutout: '72%'
       }
     });
 
@@ -335,7 +343,7 @@ export default function PortfolioManager({
   // Click outside listener for autocomplete closing
   useEffect(() => {
     const handleOutsideClick = (e) => {
-      if (!e.target.closest('.search-box')) {
+      if (!e.target.closest('.portfolio-search-box')) {
         setShowDropdown(false);
       }
     };
@@ -344,70 +352,156 @@ export default function PortfolioManager({
   }, []);
 
   return (
-    <section className="panel panel-portfolio-left" aria-label="Portfolio Allocations" style={{ height: '100%', overflowY: 'auto' }}>
-      <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-        <h2 className="panel-title" style={{ margin: 0 }}>
+    <section className="panel panel-portfolio-left" aria-label="Portfolio Allocations">
+      {/* Portfolio Header with Account Switcher */}
+      <div className="panel-header portfolio-header-bar">
+        <h2 className="panel-title">
           <i className="fa-solid fa-briefcase"></i> Portfolio Manager
         </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div className="select-wrapper" style={{ position: 'relative' }}>
+        <div className="portfolio-actions-cluster">
+          <div className="portfolio-select-wrap">
             <select
               id="portfolioSelector"
               value={activePortfolioId}
               onChange={handlePortfolioSelect}
-              style={{
-                background: 'rgba(10, 15, 30, 0.6)',
-                border: '1px solid var(--border-color)',
-                color: '#fff',
-                padding: '6px 30px 6px 12px',
-                borderRadius: 'var(--radius-md)',
-                fontFamily: 'var(--font-body)',
-                fontWeight: 600,
-                fontSize: '12px',
-                outline: 'none',
-                transition: 'all var(--transition-fast) ease',
-                appearance: 'none',
-                cursor: 'pointer',
-                minWidth: '140px',
-                boxShadow: '0 0 10px rgba(0, 240, 255, 0.05)',
-              }}
+              className="portfolio-account-select"
+              title="Select Active Portfolio"
             >
               {portfolios.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            <i className="fa-solid fa-chevron-down" style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px', color: 'var(--text-muted)', pointerEvents: 'none' }}></i>
+            <i className="fa-solid fa-chevron-down select-caret"></i>
           </div>
-          <button onClick={handleCreatePortfolio} id="btnCreatePortfolio" className="btn" title="Create new portfolio" style={{ padding: '6px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', color: 'var(--cyan)', boxShadow: '0 0 8px rgba(0, 240, 255, 0.1)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center' }}>
+          <button
+            type="button"
+            onClick={handleCreatePortfolio}
+            id="btnCreatePortfolio"
+            className="btn-portfolio-action btn-add-portfolio"
+            title="Create new portfolio"
+            aria-label="Create new portfolio"
+          >
             <i className="fa-solid fa-plus"></i>
           </button>
-          <button onClick={handleRenamePortfolio} id="btnRenamePortfolio" className="btn" title="Rename current portfolio" style={{ padding: '6px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#f59e0b', boxShadow: '0 0 8px rgba(245, 158, 11, 0.1)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center' }}>
+          <button
+            type="button"
+            onClick={handleRenamePortfolio}
+            id="btnRenamePortfolio"
+            className="btn-portfolio-action btn-edit-portfolio"
+            title="Rename active portfolio"
+            aria-label="Rename active portfolio"
+          >
             <i className="fa-solid fa-pen"></i>
           </button>
-          <button onClick={handleDeletePortfolio} id="btnDeletePortfolio" className="btn" title="Delete current portfolio" style={{ padding: '6px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', color: 'var(--red)', boxShadow: '0 0 8px rgba(244, 63, 94, 0.1)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center' }}>
+          <button
+            type="button"
+            onClick={handleDeletePortfolio}
+            id="btnDeletePortfolio"
+            className="btn-portfolio-action btn-delete-portfolio"
+            title="Delete active portfolio"
+            aria-label="Delete active portfolio"
+          >
             <i className="fa-solid fa-trash-can"></i>
           </button>
         </div>
       </div>
 
-      {/* Record Transaction Section */}
-      <div className="analysis-section" style={{ position: 'relative' }}>
-        <div className="section-subtitle">Record Transaction</div>
+      {/* Section 1: Asset Allocation Donut Chart */}
+      <div className="analysis-section allocation-section">
+        <div className="section-subtitle">
+          <span>Asset Allocation</span>
+          <span className="allocation-count-badge tabular-nums">
+            {holdingsList.length} {holdingsList.length === 1 ? 'Asset' : 'Assets'}
+          </span>
+        </div>
+
+        {holdingsList.length > 0 && totalAssetValue > 0 ? (
+          <>
+            <div className="donut-chart-container">
+              <canvas ref={allocationCanvasRef}></canvas>
+              <div className="donut-center-info">
+                <span className="donut-center-label">Total Value</span>
+                <span className="donut-center-value tabular-nums">
+                  ${totalAssetValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="donut-center-sub">{holdingsList.length} Active Holdings</span>
+              </div>
+            </div>
+
+            {/* Allocation Legend List */}
+            <div className="allocation-legend-list">
+              {holdingsList.map((item, idx) => {
+                const weight = totalAssetValue > 0 ? (item.marketValue / totalAssetValue) * 100 : 0;
+                const color = ALLOCATION_COLORS[idx % ALLOCATION_COLORS.length];
+                return (
+                  <div key={item.ticker} className="allocation-legend-item">
+                    <div className="legend-left">
+                      <span className="legend-color-dot" style={{ backgroundColor: color }}></span>
+                      <span className="legend-ticker">{item.ticker}</span>
+                      <span className="legend-shares tabular-nums">{parseFloat(item.shares.toFixed(4))} sh</span>
+                    </div>
+                    <div className="legend-right">
+                      <span className="legend-value tabular-nums">
+                        ${item.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="legend-weight-pill tabular-nums">
+                        {weight.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="empty-allocation-card">
+            <i className="fa-solid fa-chart-pie empty-donut-icon"></i>
+            <span className="empty-title">No Active Holdings</span>
+            <span className="empty-desc">Record your first BUY transaction below to build your asset allocation.</span>
+          </div>
+        )}
+      </div>
+
+      {/* Section 2: Record Transaction Form */}
+      <div className="analysis-section transaction-section">
+        <div className="section-subtitle">
+          <span>Record Transaction</span>
+          <span className="tx-target-account">{activePortfolio.name}</span>
+        </div>
+
+        {/* Order Type Toggle (BUY / SELL) */}
+        <div className="tx-type-toggle-group">
+          <button
+            type="button"
+            onClick={() => setTxType('BUY')}
+            className={`tx-type-btn buy ${txType === 'BUY' ? 'active' : ''}`}
+          >
+            <i className="fa-solid fa-arrow-trend-up"></i> BUY
+          </button>
+          <button
+            type="button"
+            onClick={() => setTxType('SELL')}
+            className={`tx-type-btn sell ${txType === 'SELL' ? 'active' : ''}`}
+          >
+            <i className="fa-solid fa-arrow-trend-down"></i> SELL
+          </button>
+        </div>
 
         {/* Autocomplete Ticker Search */}
-        <div className="search-box" style={{ padding: 0, marginBottom: '12px', position: 'relative' }}>
+        <div className="portfolio-search-box">
           <div className="search-input-container">
             <i className="fa-solid fa-magnifying-glass search-icon"></i>
             <input
               type="text"
-              placeholder="Search ticker (e.g. AAPL, NVDA)..."
+              placeholder="Search ticker (e.g. AAPL, NVDA, TSLA)..."
               value={searchQuery}
               onChange={handleSearchChange}
               autoComplete="off"
-              style={{ width: '100%', boxSizing: 'border-box' }}
+              className="portfolio-search-input"
             />
             {searchQuery.length > 0 && (
               <button
+                type="button"
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedTicker(null);
@@ -415,29 +509,31 @@ export default function PortfolioManager({
                 }}
                 className="clear-btn"
                 style={{ display: 'block' }}
+                aria-label="Clear search"
               >
                 <i className="fa-solid fa-xmark"></i>
               </button>
             )}
           </div>
 
-          {/* suggestions list */}
+          {/* Autocomplete Dropdown */}
           {showDropdown && searchQuery.trim().length > 0 && (
             <div id="portfolioSearchDropdown" className="portfolio-search-dropdown" style={{ display: 'block' }}>
               {searchResults.slice(0, 5).map(stock => (
-                  <div key={stock.ticker} onClick={() => handleSelectStock(stock)} className="portfolio-search-item">
-                    <div>
-                      <span className="ticker">{stock.ticker}</span>
-                      <span className="name">{stock.name || `${stock.ticker} Stock`}</span>
-                    </div>
-                    <span className="price">${(stock.price ?? 0).toFixed(2)}</span>
+                <div key={stock.ticker} onClick={() => handleSelectStock(stock)} className="portfolio-search-item">
+                  <div className="item-meta">
+                    <span className="ticker">{stock.ticker}</span>
+                    <span className="name">{stock.name || `${stock.ticker} Stock`}</span>
                   </div>
-                ))
-              }
-              <div onClick={handleAddCustomSymbol} className="portfolio-search-item" style={{ borderTop: searchResults.length > 0 ? '1px solid var(--border-color)' : 'none' }}>
-                <div>
-                  <span className="ticker" style={{ color: 'var(--cyan)' }}><i className="fa-solid fa-circle-plus"></i> {searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Fetch Price' : `ADD '${searchQuery.toUpperCase().trim()}'`}</span>
-                  <span className="name">{searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Refresh live price for this stock' : 'Add custom symbol'}</span>
+                  <span className="price tabular-nums">${(stock.price ?? 0).toFixed(2)}</span>
+                </div>
+              ))}
+              <div onClick={handleAddCustomSymbol} className="portfolio-search-item custom-add">
+                <div className="item-meta">
+                  <span className="ticker custom-text">
+                    <i className="fa-solid fa-circle-plus"></i> {searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Fetch Price' : `ADD '${searchQuery.toUpperCase().trim()}'`}
+                  </span>
+                  <span className="name">Fetch market data for this symbol</span>
                 </div>
               </div>
             </div>
@@ -446,166 +542,125 @@ export default function PortfolioManager({
 
         {/* Selected Stock Preview Info Card */}
         {selectedTicker && (
-          <div id="portfolioStockPreview" className="portfolio-stock-preview" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: 'var(--radius-md)', marginBottom: '14px' }}>
-            <div>
-              <span id="previewTicker" style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--cyan)', fontSize: '14px', paddingRight: '6px' }}>{selectedTicker}</span>
-              <span id="previewName" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{(stocks[selectedTicker]?.name) || `${selectedTicker} Stock`}</span>
+          <div id="portfolioStockPreview" className="portfolio-stock-preview">
+            <div className="preview-left">
+              <span className="preview-ticker-badge">{selectedTicker}</span>
+              <span className="preview-name">{stocks[selectedTicker]?.name || `${selectedTicker} Stock`}</span>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <span id="previewPrice" style={{ fontWeight: 700, color: '#fff', fontSize: '13px' }}>${(stocks[selectedTicker]?.price || price).toFixed(2)}</span>
-              <div id="previewChange" style={{ fontSize: '10px', fontWeight: 700 }} className={(stocks[selectedTicker]?.change || 0) >= 0 ? 'text-green' : 'text-red'}>
-                {((stocks[selectedTicker]?.change) || 0) >= 0 ? '+' : ''}{((stocks[selectedTicker]?.change) || 0).toFixed(2)}%
-              </div>
+            <div className="preview-right">
+              <span className="preview-price tabular-nums">
+                ${(stocks[selectedTicker]?.price || price || 0).toFixed(2)}
+              </span>
+              {activePortfolio.holdings[selectedTicker]?.shares > 0 && (
+                <span className="preview-owned tabular-nums">
+                  Owned: {parseFloat(activePortfolio.holdings[selectedTicker].shares.toFixed(4))} sh
+                </span>
+              )}
             </div>
           </div>
         )}
 
-        {/* Transaction Fields Form */}
-        <div className="transaction-form" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* BUY/SELL Toggle */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Transaction Type</label>
-            <div className="action-toggle-group" style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border-color)', padding: '3px', borderRadius: 'var(--radius-md)', gap: '2px' }}>
-              <button onClick={() => setTxType('BUY')} className={`tx-toggle-btn ${txType === 'BUY' ? 'active' : ''}`} data-tx="BUY" style={{ flex: 1 }}>BUY</button>
-              <button onClick={() => setTxType('SELL')} className={`tx-toggle-btn ${txType === 'SELL' ? 'active' : ''}`} data-tx="SELL" style={{ flex: 1 }}>SELL</button>
-            </div>
-          </div>
-
-          {/* Shares & Price inputs */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label htmlFor="txShares" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Shares Quantity</label>
+        {/* Transaction Inputs Grid */}
+        <div className="tx-fields-grid">
+          <div className="tx-field">
+            <label htmlFor="txShares">Shares Quantity</label>
+            <div className="field-input-wrapper">
               <input
-                type="number"
                 id="txShares"
-                min="0.000001"
-                step="any"
+                type="number"
                 value={shares}
                 onChange={(e) => setShares(e.target.value)}
-                style={{ background: 'rgba(10, 15, 30, 0.4)', border: '1px solid var(--border-color)', color: '#fff', padding: '8px 12px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', fontWeight: 600, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                min="0.0001"
+                step="any"
+                placeholder="10"
+                className="tabular-nums"
               />
+              <span className="field-suffix">SH</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label htmlFor="txPrice" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price Per Share</label>
+          </div>
+
+          <div className="tx-field">
+            <label htmlFor="txPrice">Execution Price</label>
+            <div className="field-input-wrapper">
+              <span className="field-prefix">$</span>
               <input
-                type="number"
                 id="txPrice"
-                min="0.01"
-                step="0.01"
+                type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                style={{ background: 'rgba(10, 15, 30, 0.4)', border: '1px solid var(--border-color)', color: '#fff', padding: '8px 12px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', fontWeight: 600, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                min="0.01"
+                step="0.01"
+                placeholder="150.00"
+                className="tabular-nums"
               />
             </div>
           </div>
 
-          {/* Date Picker */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label htmlFor="txDate" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Transaction Date</label>
+          <div className="tx-field">
+            <label htmlFor="txDate">Transaction Date</label>
             <input
-              type="date"
               id="txDate"
+              type="date"
               value={txDate}
               onChange={(e) => setTxDate(e.target.value)}
-              style={{ background: 'rgba(10, 15, 30, 0.4)', border: '1px solid var(--border-color)', color: '#fff', padding: '8px 12px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', fontWeight: 600, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+              className="tabular-nums"
             />
           </div>
 
-          {/* Fees & Account */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label htmlFor="txFees" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Trading Fees</label>
+          <div className="tx-field">
+            <label htmlFor="txFees">Brokerage Fees</label>
+            <div className="field-input-wrapper">
+              <span className="field-prefix">$</span>
               <input
-                type="number"
                 id="txFees"
-                min="0"
-                step="0.01"
+                type="number"
                 value={fees}
                 onChange={(e) => setFees(e.target.value)}
-                style={{ background: 'rgba(10, 15, 30, 0.4)', border: '1px solid var(--border-color)', color: '#fff', padding: '8px 12px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', fontWeight: 600, outline: 'none', width: '100%', boxSizing: 'border-box' }}
-              />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label htmlFor="txAccount" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Investment Account</label>
-              <input
-                type="text"
-                id="txAccount"
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                placeholder="e.g. Roth IRA, Taxable"
-                style={{ background: 'rgba(10, 15, 30, 0.4)', border: '1px solid var(--border-color)', color: '#fff', padding: '8px 12px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-body)', fontWeight: 600, outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                className="tabular-nums"
               />
             </div>
           </div>
+        </div>
 
-          {/* Estimated Value Preview */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(0, 240, 255, 0.03)', border: '1px dashed rgba(0, 240, 255, 0.2)', padding: '10px 14px', borderRadius: 'var(--radius-md)', marginTop: '4px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Estimated Value</span>
-            <span id="txTotalEst" style={{ fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--cyan)', fontSize: '12px', textAlign: 'right' }}>
-              ${net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({txType === 'BUY' ? 'Total Cost' : 'Net Proceeds'}, gross: ${gross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+        {/* Investment Account Label */}
+        <div className="tx-field account-field">
+          <label htmlFor="txAccount">Investment Account</label>
+          <input
+            id="txAccount"
+            type="text"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            placeholder="e.g. Primary Taxable, Roth IRA"
+          />
+        </div>
+
+        {/* Live Calculation Estimation Banner */}
+        <div className="tx-estimate-banner">
+          <div className="estimate-row">
+            <span className="estimate-label">Gross Value:</span>
+            <span className="estimate-val tabular-nums">${gross.toFixed(2)}</span>
+          </div>
+          <div className="estimate-row total-row">
+            <span className="estimate-label">Net Settlement Total:</span>
+            <span className={`estimate-val total-val tabular-nums ${txType === 'BUY' ? 'buy' : 'sell'}`}>
+              ${net.toFixed(2)}
             </span>
           </div>
+        </div>
 
-          {/* Submit Button */}
-          <button
-            onClick={handleRecordTransaction}
-            id="btnAddTransaction"
-            className="btn"
-            style={{
-              background: txType === 'BUY' ? 'linear-gradient(135deg, var(--cyan), var(--cyan-glow))' : 'linear-gradient(135deg, var(--bearish), var(--bearish-glow))',
-              color: txType === 'BUY' ? '#000' : '#fff',
-              border: 'none',
-              padding: '10px 16px',
-              fontWeight: 700,
-              fontSize: '13px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              borderRadius: 'var(--radius-md)',
-              justifyContent: 'center',
-              boxShadow: txType === 'BUY' ? '0 4px 15px rgba(0, 240, 255, 0.2)' : '0 4px 15px var(--bearish-glow)',
-              cursor: 'pointer',
-              transition: 'all var(--transition-fast)',
-              marginTop: '6px'
-            }}
-          >
-            <i className={txType === 'BUY' ? "fa-solid fa-circle-plus" : "fa-solid fa-circle-minus"}></i> Record {txType} Transaction
-          </button>
-        </div>
-      </div>
-
-      {/* Asset Allocation progress bars & pie chart */}
-      <div className="analysis-section" style={{ flex: 1.2, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '550px' }}>
-        <div className="section-subtitle">Asset Allocations</div>
-        <div style={{ position: 'relative', height: '180px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '4px 0 10px 0' }} id="allocationChartContainer">
-          <canvas ref={allocationCanvasRef} id="portfolioAllocationChart" style={{ maxHeight: '170px', maxWidth: '170px', display: holdingsList.length > 0 ? 'block' : 'none' }}></canvas>
-          {holdingsList.length === 0 && (
-            <div id="allocationEmptyMsg" className="empty-pill-msg" style={{ position: 'absolute', textAlign: 'center', display: 'block' }}>No holdings active yet.</div>
-          )}
-        </div>
-        <div className="levels-scroller" id="portfolioAllocationContainer" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', paddingRight: '4px', maxHeight: '350px' }}>
-          {holdingsList.length === 0 ? (
-            <div className="empty-pill-msg" style={{ textAlign: 'center', marginTop: '20px' }}>No holdings active yet. Record a transaction to view allocation distribution.</div>
-          ) : (
-            holdingsList.map((holding, idx) => {
-              const allocationPct = totalAssetValue > 0 ? (holding.marketValue / totalAssetValue) * 100 : 0;
-              const barColor = ALLOCATION_COLORS[idx % ALLOCATION_COLORS.length];
-              return (
-                <div key={holding.ticker} className="allocation-bar-wrapper">
-                  <div className="allocation-bar-header">
-                    <span className="allocation-bar-ticker">{holding.ticker}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                      {parseFloat(holding.shares.toFixed(6))} shares @ ${holding.price.toFixed(2)}
-                    </span>
-                    <span className="allocation-bar-pct" style={{ color: barColor }}>{allocationPct.toFixed(1)}%</span>
-                  </div>
-                  <div className="allocation-bar-track">
-                    <div className="allocation-bar-fill" style={{ width: `${allocationPct}%`, background: barColor, boxShadow: `0 0 8px ${barColor}` }}></div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+        {/* Submit Button */}
+        <button
+          type="button"
+          onClick={handleRecordTransaction}
+          id="btnRecordTx"
+          className={`btn-record-tx ${txType === 'BUY' ? 'buy' : 'sell'}`}
+        >
+          <i className={`fa-solid ${txType === 'BUY' ? 'fa-circle-plus' : 'fa-circle-minus'}`}></i>
+          <span>Record {txType === 'BUY' ? 'Buy Order' : 'Sell Order'}</span>
+        </button>
       </div>
     </section>
   );

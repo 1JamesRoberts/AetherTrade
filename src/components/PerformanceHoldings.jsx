@@ -39,40 +39,40 @@ export default function PerformanceHoldings({
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
   };
 
-  // Calculate values
   let totalAssetValue = 0;
   let totalCostBasis = 0;
 
   const holdingsKeys = Object.keys(activePortfolio.holdings || {});
-  const rawHoldings = holdingsKeys.map(ticker => {
-    const holding = activePortfolio.holdings[ticker];
-    const stockMeta = stocks[ticker] || { price: holding.avgCost, name: `${ticker} Stock` };
-    const stockPrice = stockMeta.price || holding.avgCost;
-    const totalCost = (holding.shares * holding.avgCost) + (holding.totalFees || 0);
-    const marketValue = holding.shares * stockPrice;
-    const pnlVal = marketValue - totalCost;
-    const pnlPct = totalCost > 0 ? (pnlVal / totalCost) * 100 : 0;
+  const rawHoldings = holdingsKeys
+    .filter(ticker => (activePortfolio.holdings[ticker]?.shares || 0) > 0)
+    .map(ticker => {
+      const holding = activePortfolio.holdings[ticker];
+      const stockMeta = stocks[ticker] || { price: holding.avgCost, name: `${ticker} Stock` };
+      const stockPrice = stockMeta.price || holding.avgCost;
+      const totalCost = (holding.shares * holding.avgCost) + (holding.totalFees || 0);
+      const marketValue = holding.shares * stockPrice;
+      const pnlVal = marketValue - totalCost;
+      const pnlPct = totalCost > 0 ? (pnlVal / totalCost) * 100 : 0;
 
-    totalAssetValue += marketValue;
-    totalCostBasis += totalCost;
+      totalAssetValue += marketValue;
+      totalCostBasis += totalCost;
 
-    return {
-      ticker,
-      name: stockMeta.name || `${ticker} Stock`,
-      shares: holding.shares,
-      avgCost: holding.avgCost,
-      currentPrice: stockPrice,
-      totalCost,
-      marketValue,
-      pnlVal,
-      pnlPct
-    };
-  });
+      return {
+        ticker,
+        name: stockMeta.name || `${ticker} Stock`,
+        shares: holding.shares,
+        avgCost: holding.avgCost,
+        currentPrice: stockPrice,
+        totalCost,
+        marketValue,
+        pnlVal,
+        pnlPct
+      };
+    });
 
   const netProfit = totalAssetValue - totalCostBasis;
   const netReturnPct = totalCostBasis > 0 ? (netProfit / totalCostBasis) * 100 : 0;
 
-  // Sorting logic
   const sortedHoldings = [...rawHoldings].sort((a, b) => {
     let valA = a[sortColumn];
     let valB = b[sortColumn];
@@ -97,11 +97,12 @@ export default function PerformanceHoldings({
   };
 
   const renderSortIcon = (col) => {
-    if (sortColumn !== col) return <i className="fa-solid fa-sort"></i>;
-    return sortDirection === 'asc' ? <i className="fa-solid fa-sort-up"></i> : <i className="fa-solid fa-sort-down"></i>;
+    if (sortColumn !== col) return <i className="fa-solid fa-sort sort-icon-muted"></i>;
+    return sortDirection === 'asc'
+      ? <i className="fa-solid fa-sort-up sort-icon-active"></i>
+      : <i className="fa-solid fa-sort-down sort-icon-active"></i>;
   };
 
-  // Reconstruct performance curve over time using transaction audit logs
   useEffect(() => {
     if (!performanceCanvasRef.current) return;
 
@@ -111,32 +112,21 @@ export default function PerformanceHoldings({
     }
 
     const txs = [...activePortfolio.transactions].sort((a, b) => a.timestamp - b.timestamp);
-    if (txs.length === 0) {
-      return;
-    }
+    if (txs.length === 0) return;
 
-    // Earliest BUY transaction marks inception
     let earliestActiveTimestamp = Infinity;
     txs.forEach(tx => {
-      if (tx.type === 'BUY') {
-        if (tx.timestamp < earliestActiveTimestamp) {
-          earliestActiveTimestamp = tx.timestamp;
-        }
+      if (tx.type === 'BUY' && tx.timestamp < earliestActiveTimestamp) {
+        earliestActiveTimestamp = tx.timestamp;
       }
     });
 
-    if (earliestActiveTimestamp === Infinity) {
-      earliestActiveTimestamp = txs[0] ? txs[0].timestamp : Date.now();
-    }
+    if (earliestActiveTimestamp === Infinity) earliestActiveTimestamp = txs[0].timestamp;
 
     const startDate = new Date(earliestActiveTimestamp);
     const endDate = new Date();
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(0, 0, 0, 0);
-
-    if (startDate > endDate) {
-      startDate.setTime(endDate.getTime());
-    }
 
     const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
     const stepDays = (diffDays <= 30) ? 1 : 7;
@@ -172,19 +162,12 @@ export default function PerformanceHoldings({
         const compareDate = new Date(targetDate.getTime());
         compareDate.setHours(0, 0, 0, 0);
 
-        if (compareDate.getTime() === today.getTime() && livePrice > 0) {
-          return livePrice;
-        }
+        if (compareDate.getTime() === today.getTime() && livePrice > 0) return livePrice;
 
         let exactIndex = -1;
         labels.forEach((label, idx) => {
-          const parts = label.split('-');
-          if (parts.length === 3) {
-            const labelDate = parseLocalDate(label);
-            if (labelDate.getTime() === compareDate.getTime()) {
-              exactIndex = idx;
-            }
-          }
+          const labelDate = parseLocalDate(label);
+          if (labelDate.getTime() === compareDate.getTime()) exactIndex = idx;
         });
         if (exactIndex !== -1) {
           const p = parseFloat(closes[exactIndex]);
@@ -194,14 +177,11 @@ export default function PerformanceHoldings({
         let bestIdx = -1;
         let bestDiff = Infinity;
         labels.forEach((label, idx) => {
-          const parts = label.split('-');
-          if (parts.length === 3) {
-            const labelDate = parseLocalDate(label);
-            const diff = compareDate.getTime() - labelDate.getTime();
-            if (diff >= 0 && diff < bestDiff) {
-              bestDiff = diff;
-              bestIdx = idx;
-            }
+          const labelDate = parseLocalDate(label);
+          const diff = compareDate.getTime() - labelDate.getTime();
+          if (diff >= 0 && diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = idx;
           }
         });
         if (bestIdx !== -1) {
@@ -209,7 +189,6 @@ export default function PerformanceHoldings({
           return (p && !isNaN(p) && p > 0) ? p : fallbackPrice;
         }
       }
-
       return fallbackPrice;
     };
 
@@ -218,7 +197,6 @@ export default function PerformanceHoldings({
     let cumulativeRealizedPL = 0;
     let txIdx = 0;
 
-    // Single chronological O(D + N) simulation pass
     timelineDates.forEach(D => {
       const endOfDayMs = D.getTime() + 86399999;
 
@@ -243,18 +221,13 @@ export default function PerformanceHoldings({
           if (holdingsOnDate[ticker]) {
             const h = holdingsOnDate[ticker];
             const originalShares = h.shares;
-
-            // Compute realized P&L on this sale before modifying h.shares:
-            // Realized Gain = (Sale Price - Pure Avg Cost) * Shares Sold - Sale Transaction Fees
             const saleRealizedGain = (txPrice - h.avgCost) * txShares - txFees;
             cumulativeRealizedPL += saleRealizedGain;
 
             h.shares = Math.max(0, h.shares - txShares);
             h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
             h.lastPrice = txPrice;
-            if (h.shares < 1e-9) {
-              delete holdingsOnDate[ticker];
-            }
+            if (h.shares < 1e-9) delete holdingsOnDate[ticker];
           }
         }
         txIdx++;
@@ -272,18 +245,15 @@ export default function PerformanceHoldings({
       });
 
       const totalPLOnDate = cumulativeRealizedPL + unrealizedPLOnDate;
-
       points.push({
         x: D,
-        y: chartMode === 'total' ? totalPLOnDate : unrealizedPLOnDate,
-        totalPL: totalPLOnDate,
-        unrealizedPL: unrealizedPLOnDate
+        y: chartMode === 'total' ? totalPLOnDate : unrealizedPLOnDate
       });
     });
 
     if (points.length === 1) {
       const prevDate = new Date(points[0].x.getTime() - 24 * 60 * 60 * 1000);
-      points.unshift({ x: prevDate, y: 0, totalPL: 0, unrealizedPL: 0 });
+      points.unshift({ x: prevDate, y: 0 });
     }
 
     points.sort((a, b) => a.x.getTime() - b.x.getTime());
@@ -291,9 +261,12 @@ export default function PerformanceHoldings({
     const data = points.map(p => parseFloat(p.y.toFixed(2)) || 0);
 
     const ctx = performanceCanvasRef.current.getContext('2d');
-    const gradient = ctx.createLinearGradient(0, 0, 0, 150);
-    gradient.addColorStop(0, 'rgba(0, 229, 255, 0.15)');
-    gradient.addColorStop(1, 'rgba(2, 4, 10, 0)');
+    const isOverallGain = data.length > 0 && data[data.length - 1] >= 0;
+    const accentColor = isOverallGain ? '#10B981' : '#F43F5E';
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+    gradient.addColorStop(0, isOverallGain ? 'rgba(16, 185, 129, 0.25)' : 'rgba(244, 63, 94, 0.25)');
+    gradient.addColorStop(1, 'rgba(13, 19, 33, 0)');
 
     const datasetLabel = chartMode === 'total' ? 'Total P&L' : 'Unrealized P&L';
 
@@ -304,136 +277,48 @@ export default function PerformanceHoldings({
         datasets: [{
           label: datasetLabel,
           data: data,
-          borderColor: '#00e5ff',
-          borderWidth: 2,
-          pointBackgroundColor: '#00e5ff',
-          pointBorderColor: 'rgba(2, 4, 10, 0.85)',
-          pointBorderWidth: 1.5,
-          pointRadius: 0,
-          pointHoverRadius: 8,
-          pointHoverBackgroundColor: '#00e5ff',
-          pointHoverBorderColor: '#fff',
-          pointHoverBorderWidth: 2.5,
-          pointHitRadius: 10,
-          fill: true,
+          borderColor: accentColor,
+          borderWidth: 2.5,
           backgroundColor: gradient,
-          tension: 0.2
+          fill: true,
+          tension: 0.35,
+          pointRadius: data.length > 30 ? 0 : 3,
+          pointHoverRadius: 6,
+          pointBackgroundColor: accentColor,
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1.5,
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        layout: {
-          padding: { right: 90 }
-        },
-        interaction: {
-          mode: 'index',
-          intersect: false,
-        },
-        scales: {
-          x: {
-            display: true,
-            grid: { display: false, drawBorder: false },
-            ticks: {
-              color: '#94a3b8',
-              font: { family: 'Plus Jakarta Sans', size: 9, weight: '500' },
-              maxRotation: 0,
-              autoSkip: true,
-              maxTicksLimit: 5
-            }
-          },
-          y: {
-            position: 'right',
-            grid: {
-              color: (context) => (context.tick && context.tick.value === 0) ? 'rgba(0, 229, 255, 0.35)' : 'rgba(255, 255, 255, 0.02)',
-              borderDash: (context) => (context.tick && context.tick.value === 0) ? [5, 5] : [],
-              drawBorder: false
-            },
-            ticks: {
-              color: '#94a3b8',
-              font: { family: 'JetBrains Mono', size: 9, weight: '500' },
-              callback: (value) => value >= 0 ? '+$' + value.toLocaleString() : '-$' + Math.abs(value).toLocaleString()
-            }
-          }
-        },
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: '#060912',
-            titleColor: '#00e5ff',
-            bodyColor: '#fff',
-            borderColor: 'rgba(255, 255, 255, 0.06)',
+            titleColor: '#06B6D4',
+            bodyColor: '#ffffff',
+            borderColor: 'rgba(255, 255, 255, 0.12)',
             borderWidth: 1,
-            titleFont: { family: 'Outfit', weight: '700', size: 11 },
+            titleFont: { family: 'Outfit', weight: '700', size: 12 },
             bodyFont: { family: 'JetBrains Mono', size: 11 },
-            padding: 8,
-            cornerRadius: 6,
-            displayColors: false,
+            padding: 10,
+            cornerRadius: 8,
             callbacks: {
-              title: (context) => {
-                const idx = context[0].dataIndex;
-                return points[idx].x.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-              },
-              label: (context) => {
+              label: function (context) {
                 const val = context.parsed.y;
-                const modeText = chartMode === 'total' ? 'Total P&L' : 'Unrealized P&L';
-                return val >= 0
-                  ? ` ${modeText}: +$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : ` ${modeText}: -$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const sign = val >= 0 ? '+' : '';
+                return ` ${context.dataset.label}: ${sign}$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
               }
             }
           }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+          y: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, callback: function (val) { const sign = val >= 0 ? '+' : ''; return `${sign}$${val.toLocaleString('en-US', { notation: 'compact' })}`; } } }
         }
-      },
-      plugins: [{
-        id: 'zeroLinePlugin',
-        afterDraw: (chart) => {
-          const { ctx, scales: { y }, chartArea: { left, right, top, bottom } } = chart;
-          if (!y) return;
-
-          const zeroY = y.getPixelForValue(0);
-          if (zeroY >= top && zeroY <= bottom) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([5, 5]);
-            ctx.moveTo(left, zeroY);
-            ctx.lineTo(right, zeroY);
-            ctx.stroke();
-            ctx.restore();
-          }
-
-          const dataset = chart.data.datasets[0];
-          if (dataset && dataset.data && dataset.data.length > 0) {
-            const currentPL = dataset.data[dataset.data.length - 1];
-            const currentPLY = y.getPixelForValue(currentPL);
-
-            if (currentPLY >= top && currentPLY <= bottom) {
-              ctx.save();
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-              ctx.lineWidth = 1;
-              ctx.setLineDash([3, 3]);
-              ctx.beginPath();
-              ctx.moveTo(left, currentPLY);
-              ctx.lineTo(right, currentPLY);
-              ctx.stroke();
-
-              const isGain = currentPL >= 0;
-              ctx.fillStyle = isGain ? 'rgba(16, 185, 129, 0.9)' : 'rgba(244, 63, 94, 0.9)';
-              ctx.beginPath();
-              ctx.roundRect(right + 5, currentPLY - 10, 80, 20, 4);
-              ctx.fill();
-
-              ctx.fillStyle = '#ffffff';
-              ctx.font = '700 9px var(--font-display)';
-              const formattedPL = `${isGain ? '+' : '-'}$${Math.abs(currentPL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-              ctx.fillText(`NOW: ${formattedPL}`, right + 10, currentPLY + 4);
-              ctx.restore();
-            }
-          }
-        }
-      }]
+      }
     });
 
     return () => {
@@ -444,14 +329,10 @@ export default function PerformanceHoldings({
     };
   }, [activePortfolio, stocks, chartMode]);
 
-  const holdingsListLength = () => {
-    return holdingsKeys.filter(t => activePortfolio.holdings[t].shares > 0).length;
-  };
-
   const handleRefreshPrices = async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
-    const heldTickers = holdingsKeys.filter(t => activePortfolio.holdings[t].shares > 0);
+    const heldTickers = holdingsKeys.filter(t => (activePortfolio.holdings[t]?.shares || 0) > 0);
     const allPortfolioTickers = [...new Set(activePortfolio.transactions.map(t => t.ticker))];
     const tickersToRefresh = heldTickers.length > 0 ? heldTickers : allPortfolioTickers;
 
@@ -462,12 +343,8 @@ export default function PerformanceHoldings({
     }
 
     await Promise.all(tickersToRefresh.map(async (t) => {
-      if (onFetchPortfolioHistory) {
-        await onFetchPortfolioHistory(t);
-      }
-      if (onRefreshPrices) {
-        await onRefreshPrices(t);
-      }
+      if (onFetchPortfolioHistory) await onFetchPortfolioHistory(t);
+      if (onRefreshPrices) await onRefreshPrices(t);
     }));
     setIsRefreshing(false);
     showNotification('Chart history & live prices refreshed', 'success');
@@ -487,209 +364,112 @@ export default function PerformanceHoldings({
 
   const handleReset = () => {
     const confirmReset = confirm(`Are you absolutely sure you want to reset "${activePortfolio.name}"?\nThis will liquidate all holdings and delete all transaction audit history for this portfolio.`);
-    if (confirmReset) {
-      onResetPortfolio(activePortfolio.id);
-    }
+    if (confirmReset) onResetPortfolio(activePortfolio.id);
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      onImportCSV(evt.target.result);
-    };
+    reader.onload = (evt) => onImportCSV(evt.target.result);
     reader.readAsText(file);
     e.target.value = '';
   };
 
   const formattedDate = (timestamp) => {
     const txDate = new Date(timestamp);
-    const isMidnight = txDate.getHours() === 0 && txDate.getMinutes() === 0 && txDate.getSeconds() === 0 && txDate.getMilliseconds() === 0;
-    return isMidnight
-      ? txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
-      : txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <section className="panel panel-portfolio-right" aria-label="Portfolio Performance" style={{ height: '100%', overflowY: 'auto' }}>
-      <div className="panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-        <h2 className="panel-title" style={{ margin: 0 }}>
+    <section className="panel panel-portfolio-right" aria-label="Portfolio Performance">
+      <div className="panel-header portfolio-right-header">
+        <h2 className="panel-title">
           <i className="fa-solid fa-wallet"></i> Performance & Holdings
         </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button onClick={() => fileInputRef.current.click()} className="btn" title="Import transactions from CSV" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0, 240, 255, 0.3)', color: 'var(--cyan)', boxShadow: '0 0 8px rgba(0, 240, 255, 0.05)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            <i className="fa-solid fa-file-import"></i> Import CSV
+        <div className="portfolio-header-tools">
+          <button type="button" onClick={() => fileInputRef.current.click()} className="btn-tool btn-csv-import" title="Import transactions from CSV">
+            <i className="fa-solid fa-file-import"></i> <span>Import CSV</span>
           </button>
-          <button onClick={() => onExportCSV(activePortfolio.id)} className="btn" title="Export transactions as CSV" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--bullish)', boxShadow: '0 0 8px rgba(16, 185, 129, 0.05)', transition: 'all var(--transition-fast) ease', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            <i className="fa-solid fa-file-export"></i> Export CSV
+          <button type="button" onClick={() => onExportCSV(activePortfolio.id)} className="btn-tool btn-csv-export" title="Export transactions as CSV">
+            <i className="fa-solid fa-file-export"></i> <span>Export CSV</span>
           </button>
-          <button onClick={handleReset} className="btn btn-clear-lines" id="btnResetPortfolio" style={{ padding: '4px 10px', fontSize: '11px', margin: 0, display: 'inline-flex', height: 'auto', gap: '6px' }}>
-            <i className="fa-solid fa-rotate-left"></i> Reset Portfolio
+          <button type="button" onClick={handleReset} className="btn-tool btn-portfolio-reset" id="btnResetPortfolio" title="Reset Portfolio">
+            <i className="fa-solid fa-rotate-left"></i> <span>Reset</span>
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            id="csvFileInput"
-            accept=".csv"
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-          />
+          <input ref={fileInputRef} type="file" id="csvFileInput" accept=".csv" onChange={handleFileChange} style={{ display: 'none' }} />
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="analysis-cards-grid" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-color)', gap: '16px' }}>
+      <div className="analysis-cards-grid portfolio-kpi-grid">
         <div className="metric-card card-cyan">
-          <div className="metric-card-header">
-            <span className="title">Portfolio Market Value</span>
-            <i className="fa-solid fa-briefcase text-cyan"></i>
-          </div>
-          <div className="metric-val">{formatCurrency(totalAssetValue)}</div>
-          <div className="metric-subtext">Current market value of active assets</div>
+          <div className="metric-card-header"><span className="title">Portfolio Net Worth</span><i className="fa-solid fa-vault text-cyan"></i></div>
+          <div className="metric-val tabular-nums">{formatCurrency(totalAssetValue)}</div>
+          <div className="metric-subtext tabular-nums">Invested Capital: {formatCurrency(totalCostBasis)}</div>
         </div>
-
-        <div className="metric-card card-green" style={{ borderColor: 'rgba(255, 255, 255, 0.05)', background: 'rgba(255, 255, 255, 0.01)' }}>
-          <div className="metric-card-header">
-            <span className="title">Invested Capital</span>
-            <i className="fa-solid fa-vault text-cyan"></i>
-          </div>
-          <div className="metric-val" style={{ color: '#fff' }}>{formatCurrency(totalCostBasis)}</div>
-          <div className="metric-subtext">Total cost basis of active assets</div>
+        <div className={`metric-card ${netProfit >= 0 ? 'card-green' : 'card-red'}`}>
+          <div className="metric-card-header"><span className="title">Unrealized P&L</span><i className={`fa-solid ${netProfit >= 0 ? 'fa-arrow-trend-up text-green' : 'fa-arrow-trend-down text-red'}`}></i></div>
+          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>{netProfit >= 0 ? '+' : ''}{formatCurrency(netProfit)}</div>
+          <div className="metric-subtext tabular-nums">Open Returns: {netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%</div>
         </div>
-
-        <div
-          className="metric-card card-cyan"
-          style={{
-            borderColor: netProfit > 0 ? 'rgba(16, 185, 129, 0.3)' : netProfit < 0 ? 'rgba(244, 63, 94, 0.3)' : 'var(--border-color)',
-            background: netProfit > 0 ? 'rgba(16, 185, 129, 0.01)' : netProfit < 0 ? 'rgba(244, 63, 94, 0.01)' : 'rgba(255, 255, 255, 0.02)'
-          }}
-        >
-          <div className="metric-card-header">
-            <span className="title">Unrealized Profit / Loss</span>
-            <i className="fa-solid fa-money-bill-trend-up text-cyan"></i>
-          </div>
-          <div className={`metric-val ${netProfit > 0 ? 'text-green' : netProfit < 0 ? 'text-red' : ''}`}>
-            {netProfit >= 0 ? '+' : ''}{formatCurrency(netProfit)}
-          </div>
-          <div className="metric-subtext">Unrealized returns on active holdings</div>
+        <div className={`metric-card ${activePortfolio.realizedPL >= 0 ? 'card-green' : 'card-red'}`}>
+          <div className="metric-card-header"><span className="title">Realized P&L</span><i className="fa-solid fa-sack-dollar text-cyan"></i></div>
+          <div className={`metric-val tabular-nums ${activePortfolio.realizedPL >= 0 ? 'text-green' : 'text-red'}`}>{activePortfolio.realizedPL >= 0 ? '+' : ''}{formatCurrency(activePortfolio.realizedPL)}</div>
+          <div className="metric-subtext">Profit/loss closed from asset sales</div>
         </div>
-
-        <div
-          className="metric-card card-cyan"
-          style={{
-            borderColor: activePortfolio.realizedPL > 0 ? 'rgba(16, 185, 129, 0.3)' : activePortfolio.realizedPL < 0 ? 'rgba(244, 63, 94, 0.3)' : 'var(--border-color)',
-            background: activePortfolio.realizedPL > 0 ? 'rgba(16, 185, 129, 0.01)' : activePortfolio.realizedPL < 0 ? 'rgba(244, 63, 94, 0.01)' : 'rgba(255, 255, 255, 0.02)'
-          }}
-        >
-          <div className="metric-card-header">
-            <span className="title">Realized Profit / Loss</span>
-            <i className="fa-solid fa-wallet text-cyan"></i>
-          </div>
-          <div className={`metric-val ${activePortfolio.realizedPL > 0 ? 'text-green' : activePortfolio.realizedPL < 0 ? 'text-red' : ''}`}>
-            {activePortfolio.realizedPL >= 0 ? '+' : ''}{formatCurrency(activePortfolio.realizedPL)}
-          </div>
-          <div className="metric-subtext">Profit/loss realized from asset sales</div>
-        </div>
-
-        <div
-          className="metric-card card-cyan"
-          style={{
-            borderColor: netProfit > 0 ? 'rgba(16, 185, 129, 0.3)' : netProfit < 0 ? 'rgba(244, 63, 94, 0.3)' : 'var(--border-color)',
-            background: netProfit > 0 ? 'rgba(16, 185, 129, 0.01)' : netProfit < 0 ? 'rgba(244, 63, 94, 0.01)' : 'rgba(255, 255, 255, 0.02)'
-          }}
-        >
-          <div className="metric-card-header">
-            <span className="title">Unrealized Return Rate</span>
-            <i className="fa-solid fa-percent text-cyan"></i>
-          </div>
-          <div className={`metric-val ${netProfit > 0 ? 'text-green' : netProfit < 0 ? 'text-red' : ''}`}>
-            {netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%
-          </div>
-          <div className="metric-subtext">Percentage return on active holdings</div>
+        <div className="metric-card card-cyan">
+          <div className="metric-card-header"><span className="title">Total Return (ROI)</span><i className="fa-solid fa-percent text-cyan"></i></div>
+          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>{netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%</div>
+          <div className="metric-subtext">{rawHoldings.length} Active Positions Held</div>
         </div>
       </div>
 
-      {/* Performance Plot Chart */}
-      <div className="analysis-section" style={{ flex: 1.5, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '320px', padding: '12px 24px', borderBottom: '1px solid var(--border-color)' }}>
-        <div className="section-subtitle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span>{chartMode === 'total' ? 'Total Performance Over Time' : 'Unrealized Performance Over Time'}</span>
-            <div style={{ display: 'inline-flex', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '6px', padding: '2px', border: '1px solid var(--border-color)' }}>
-              <button
-                type="button"
-                onClick={() => setChartMode('total')}
-                style={{
-                  padding: '2px 8px',
-                  fontSize: '10px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  background: chartMode === 'total' ? 'var(--cyan)' : 'transparent',
-                  color: chartMode === 'total' ? '#000' : 'var(--text-muted)',
-                  fontWeight: chartMode === 'total' ? '700' : '500',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)'
-                }}
-              >
-                Total P&L
-              </button>
-              <button
-                type="button"
-                onClick={() => setChartMode('unrealized')}
-                style={{
-                  padding: '2px 8px',
-                  fontSize: '10px',
-                  borderRadius: '4px',
-                  border: 'none',
-                  background: chartMode === 'unrealized' ? 'var(--cyan)' : 'transparent',
-                  color: chartMode === 'unrealized' ? '#000' : 'var(--text-muted)',
-                  fontWeight: chartMode === 'unrealized' ? '700' : '500',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)'
-                }}
-              >
-                Unrealized P&L
-              </button>
+      <div className="analysis-section portfolio-chart-section">
+        <div className="section-subtitle portfolio-chart-subtitle">
+          <div className="chart-mode-cluster">
+            <span>Portfolio Valuation Progression</span>
+            <div className="chart-mode-pill-group">
+              <button type="button" onClick={() => setChartMode('total')} className={`chart-mode-pill ${chartMode === 'total' ? 'active' : ''}`}>Total P&L</button>
+              <button type="button" onClick={() => setChartMode('unrealized')} className={`chart-mode-pill ${chartMode === 'unrealized' ? 'active' : ''}`}>Unrealized P&L</button>
             </div>
           </div>
           {activePortfolio.transactions.length > 0 && (
-            <button onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh chart data" aria-label="Refresh chart data" style={{ width: 'auto', padding: '0 10px', gap: '6px', fontSize: '11px' }}>
-              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
-              <span>{isRefreshing ? 'Refreshing...' : 'Refresh Chart'}</span>
+            <button type="button" onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh chart prices">
+              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i> <span>{isRefreshing ? 'Refreshing...' : 'Refresh History'}</span>
             </button>
           )}
         </div>
-        <div style={{ position: 'relative', height: '260px', width: '100%' }} id="performanceChartContainer">
-          <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart" style={{ width: '100%', height: '100%' }}></canvas>
+        <div className="performance-chart-wrapper" id="performanceChartContainer">
+          <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart"></canvas>
           {activePortfolio.transactions.length === 0 && (
-            <div id="performanceEmptyMsg" className="empty-pill-msg" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', width: '100%' }}>
-              No performance history available yet. Record transactions to plot history.
+            <div id="performanceEmptyMsg" className="empty-chart-overlay">
+              <i className="fa-solid fa-chart-line empty-chart-icon"></i> <span>No performance history available yet. Record transactions to plot growth.</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Holdings grid table */}
-      <div className="analysis-section" style={{ flex: 2, display: 'flex', flexDirection: 'column', overflow: 'hidden', paddingBottom: '10px', minHeight: '450px' }}>
-        <div className="section-subtitle" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span>Active Assets Portfolio</span>
-          {holdingsKeys.length > 0 && (
-            <button onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh stock prices" aria-label="Refresh stock prices" style={{ width: 'auto', padding: '0 10px', gap: '6px', fontSize: '11px' }}>
-              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
-              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+      <div className="analysis-section holdings-table-section">
+        <div className="section-subtitle holdings-header-subtitle">
+          <div className="holdings-title-left">
+            <span>Active Asset Holdings</span>
+            <span className="holdings-count-badge tabular-nums">{rawHoldings.length} {rawHoldings.length === 1 ? 'Holding' : 'Holdings'}</span>
+          </div>
+          {rawHoldings.length > 0 && (
+            <button type="button" onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh stock prices">
+              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i> <span>{isRefreshing ? 'Refreshing...' : 'Refresh Prices'}</span>
             </button>
           )}
         </div>
-        <div className="projection-table-wrapper" style={{ flex: 1, overflowY: 'auto', maxHeight: '550px' }}>
+        <div className="projection-table-wrapper holdings-table-scroller">
           {sortedHoldings.length === 0 ? (
-            <div className="empty-table-state" id="emptyPortfolioState" style={{ display: 'flex', padding: '40px 0', position: 'relative', background: 'transparent' }}>
+            <div className="empty-table-state" id="emptyPortfolioState">
               <div className="empty-icon"><i className="fa-solid fa-briefcase"></i></div>
               <p className="empty-title">Your Portfolio is Empty</p>
               <p className="empty-desc">Search for a ticker and record a BUY transaction in the left panel to build your portfolio holdings.</p>
             </div>
           ) : (
-            <table className="projection-table" id="portfolioTable" style={{ margin: 0, width: '100%', display: 'table' }}>
+            <table className="projection-table holdings-table" id="portfolioTable">
               <thead>
                 <tr>
                   <th onClick={() => handleSort('ticker')} className="sortable">Asset {renderSortIcon('ticker')}</th>
@@ -699,70 +479,75 @@ export default function PerformanceHoldings({
                   <th onClick={() => handleSort('totalCost')} className="sortable">Total Cost {renderSortIcon('totalCost')}</th>
                   <th onClick={() => handleSort('marketValue')} className="sortable">Market Value {renderSortIcon('marketValue')}</th>
                   <th onClick={() => handleSort('pnlVal')} className="sortable">Unrealized P&L {renderSortIcon('pnlVal')}</th>
-                  <th style={{ width: '70px', textAlign: 'center' }}>Action</th>
+                  <th style={{ textAlign: 'center', width: '90px' }}>Weight</th>
+                  <th style={{ width: '80px', textAlign: 'center' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedHoldings.map(h => (
-                  <tr key={h.ticker}>
-                    <td style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--cyan)' }}>
-                      {h.ticker}
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 400, display: 'block' }}>{h.name}</span>
-                    </td>
-                    <td style={{ fontWeight: 700 }}>{parseFloat(h.shares.toFixed(6))}</td>
-                    <td>{formatCurrency(h.avgCost)}</td>
-                    <td style={{ fontWeight: 700, color: '#fff' }}>{formatCurrency(h.currentPrice)}</td>
-                    <td>{formatCurrency(h.totalCost)}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--cyan)' }}>{formatCurrency(h.marketValue)}</td>
-                    <td style={{ fontWeight: 700, color: h.pnlVal >= 0 ? 'var(--bullish)' : 'var(--bearish)' }}>
-                      {h.pnlVal >= 0 ? '+' : ''}{formatCurrency(h.pnlVal)}
-                      <span style={{ fontSize: '10px', display: 'block', fontWeight: 500 }}>({h.pnlVal >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)</span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <button onClick={() => handleSellAll(h.ticker, h.shares, h.currentPrice)} className="btn btn-tx-sell-all" style={{ background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)', color: 'var(--bearish)', padding: '4px 8px', fontSize: '10px', borderRadius: '4px', cursor: 'pointer', transition: 'all var(--transition-fast)' }}>
-                        Sell All
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {sortedHoldings.map(h => {
+                  const weight = totalAssetValue > 0 ? (h.marketValue / totalAssetValue) * 100 : 0;
+                  return (
+                    <tr key={h.ticker}>
+                      <td className="cell-asset">
+                        <div className="asset-cell-flex"><span className="asset-ticker">{h.ticker}</span><span className="asset-name">{h.name}</span></div>
+                      </td>
+                      <td className="tabular-nums font-bold">{parseFloat(h.shares.toFixed(6))}</td>
+                      <td className="tabular-nums">{formatCurrency(h.avgCost)}</td>
+                      <td className="tabular-nums font-bold text-white">{formatCurrency(h.currentPrice)}</td>
+                      <td className="tabular-nums">{formatCurrency(h.totalCost)}</td>
+                      <td className="tabular-nums font-bold text-cyan">{formatCurrency(h.marketValue)}</td>
+                      <td className="tabular-nums font-bold">
+                        <span className={h.pnlVal >= 0 ? 'text-green' : 'text-red'}>{h.pnlVal >= 0 ? '+' : ''}{formatCurrency(h.pnlVal)}</span>
+                        <span className={`cell-pct-sub ${h.pnlVal >= 0 ? 'text-green' : 'text-red'}`}>({h.pnlVal >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)</span>
+                      </td>
+                      <td className="cell-weight">
+                        <div className="table-weight-wrapper">
+                          <span className="weight-num tabular-nums">{weight.toFixed(1)}%</span>
+                          <div className="weight-track"><div className="weight-fill" style={{ width: `${weight}%` }}></div></div>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button type="button" onClick={() => handleSellAll(h.ticker, h.shares, h.currentPrice)} className="btn-sell-all-row" title={`Liquidate all ${h.ticker} shares`}>Sell All</button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
       </div>
 
-      {/* Transaction Audit Log */}
-      <div className="analysis-section" style={{ flex: 1.2, display: 'flex', flexDirection: 'column', borderTop: '1px solid var(--border-color)', overflow: 'hidden', maxHeight: '500px', minHeight: '350px' }}>
-        <div className="section-subtitle">Transaction Audit Log</div>
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }} id="portfolioLogList">
+      <div className="analysis-section transaction-ledger-section">
+        <div className="section-subtitle">
+          <span>Transaction Audit History</span>
+          <span className="ledger-count-tag tabular-nums">{activePortfolio.transactions.length} Records</span>
+        </div>
+        <div className="ledger-scroll-viewport">
+          <ul className="ledger-list" id="portfolioLogList">
             {activePortfolio.transactions.length === 0 ? (
-              <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '15px' }}>No transactions recorded.</li>
+              <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '15px' }}>No transaction audit records found.</li>
             ) : (
               [...activePortfolio.transactions].reverse().map((tx, idx) => {
                 const actualIndex = activePortfolio.transactions.length - 1 - idx;
                 const gross = tx.shares * tx.price;
                 const txFees = parseFloat(tx.fees) || 0;
                 const net = tx.type === 'BUY' ? (gross + txFees) : Math.max(0, gross - txFees);
-                const accountStr = tx.account && tx.account !== 'Default' ? ` | Account: ${tx.account}` : '';
-
+                const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
                 return (
-                  <li key={`tx-log-${actualIndex}`} className="tx-log-item">
-                    <div>
-                      <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
-                      <strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatCurrency(tx.price)}
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
-                        Gross: {formatCurrency(gross)} | Fee: {formatCurrency(txFees)} | Net: {formatCurrency(net)}{accountStr}
-                      </span>
+                  <li key={`tx-log-${actualIndex}`} className="tx-ledger-item">
+                    <div className="ledger-left">
+                      <div className="ledger-top-row">
+                        <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
+                        <span className="ledger-shares-ticker tabular-nums"><strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatCurrency(tx.price)}</span>
+                      </div>
+                      <div className="ledger-meta-row tabular-nums">
+                        <span>Gross: {formatCurrency(gross)}</span><span>Fee: {formatCurrency(txFees)}</span><span>Net: <strong>{formatCurrency(net)}</strong></span>{accountStr && <span className="account-tag">{accountStr}</span>}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="tx-time">{formattedDate(tx.timestamp)}</span>
-                      <button onClick={() => {
-                        const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings.");
-                        if (confirmDelete) {
-                          onDeleteTransaction(activePortfolio.id, actualIndex);
-                        }
-                      }} className="btn-tx-delete" title="Delete transaction entry"><i className="fa-solid fa-xmark"></i></button>
+                    <div className="ledger-right">
+                      <span className="tx-time tabular-nums">{formattedDate(tx.timestamp)}</span>
+                      <button type="button" onClick={() => { const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings."); if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex); }} className="btn-tx-delete" title="Delete transaction entry" aria-label="Delete transaction entry"><i className="fa-solid fa-trash-can"></i></button>
                     </div>
                   </li>
                 );
