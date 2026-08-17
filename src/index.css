@@ -1108,7 +1108,9 @@ body {
   flex-direction: column;
   justify-content: center;
   gap: 6px;
-  min-width: 220px;
+  min-width: 200px;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 8px 14px;
   background: rgba(13, 19, 33, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -2377,7 +2379,23 @@ body {
   .chart-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+  }
+
+  .stock-info-block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
     gap: 10px;
+  }
+
+  .session-range-meter {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .chart-controls {
