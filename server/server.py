@@ -4,6 +4,7 @@ import urllib.parse
 import json
 import os
 import sys
+import time
 
 try:
     import yfinance as yf
@@ -42,6 +43,10 @@ def get_next_api_key():
     key_index = (key_index + 1) % len(API_KEYS)
     return key
 
+# In-memory TTL caches (TTL = 300 seconds)
+_FUNDAMENTALS_CACHE = {}
+_STOCK_CACHE = {}
+
 class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         # Suppress standard high frequency GET terminal printing
@@ -52,6 +57,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed_url = urllib.parse.urlparse(self.path)
+        now = time.time()
         
         # Intercept Proxy Stock Fundamentals request (Live & 100% Free)
         if parsed_url.path == '/api/stock/fundamentals':
@@ -62,6 +68,17 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 clean_ticker = 'BTC-USD'
             elif ticker == 'EUR/USD':
                 clean_ticker = 'EURUSD=X'
+
+            # Check server-side memory cache first (instant 0ms response)
+            if clean_ticker in _FUNDAMENTALS_CACHE:
+                cached_time, cached_payload = _FUNDAMENTALS_CACHE[clean_ticker]
+                if now - cached_time < 300: # 5 min TTL
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(cached_payload)
+                    return
 
             try:
                 if yf is not None:
@@ -125,7 +142,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     employees_val = info.get('fullTimeEmployees')
                     employees_fmt = f"{int(employees_val):,}" if employees_val else 'Corporate'
 
-                    payload = {
+                    payload_obj = {
                         "status": "ok",
                         "symbol": ticker,
                         "name": info.get('shortName') or info.get('longName') or f"{ticker} Stock",
@@ -150,11 +167,14 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                         "isLiveApi": True
                     }
 
+                    payload_bytes = json.dumps(payload_obj).encode('utf-8')
+                    _FUNDAMENTALS_CACHE[clean_ticker] = (now, payload_bytes)
+
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
                     self.send_header('Access-Control-Allow-Origin', '*')
                     self.end_headers()
-                    self.wfile.write(json.dumps(payload).encode('utf-8'))
+                    self.wfile.write(payload_bytes)
                     return
             except Exception as e:
                 print(f"yfinance error for {ticker}: {e}")
@@ -193,6 +213,19 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     interval_val = timeframe
             
             # Sanitize cryptocurrency and forex indicators for Twelve Data (e.g. BTC-USD to BTC/USD)
+            clean_cache_key = f"{ticker}_{range_val}_{interval_val}"
+            
+            # Fast memory cache check for stock prices (15s TTL)
+            if clean_cache_key in _STOCK_CACHE:
+                cached_time, cached_payload = _STOCK_CACHE[clean_cache_key]
+                if now - cached_time < 15:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(cached_payload)
+                    return
+
             if ticker == 'BTC-USD':
                 ticker = 'BTC/USD'
             elif ticker == 'EURUSD=X':
@@ -208,12 +241,12 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 ('1W', '5m'): ('5min', '390'),
                 ('1W', '15m'): ('15min', '130'),
                 ('1W', '1h'): ('1h', '35'),
-                ('1W', '1d'): ('1day', '5'),
+                ('1W', '1d'): ('1day', '7'),
                 
-                ('1M', '15m'): ('15min', '546'),
+                ('1M', '15m'): ('15min', '500'),
                 ('1M', '1h'): ('1h', '150'),
                 ('1M', '1d'): ('1day', '30'),
-                ('1M', '1w'): ('1week', '4'),
+                ('1M', '1w'): ('1week', '5'),
                 
                 ('1Y', '1d'): ('1day', '260'),
                 ('1Y', '1w'): ('1week', '52'),
@@ -222,19 +255,15 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 ('5Y', '1w'): ('1week', '260'),
             }
             
-            mapping_key = (range_val, interval_val)
-            if mapping_key in MAPPING:
-                interval, outputsize = MAPPING[mapping_key]
-            else:
-                interval, outputsize = '1day', '30'
-                
+            mapped_interval, mapped_outputsize = MAPPING.get((range_val, interval_val), ('1day', '30'))
+            
             data = None
             last_error = None
             
             # Rotate through all available API keys in case one is rate limited (8 req/min on free tier)
             for _ in range(len(API_KEYS)):
                 key = get_next_api_key()
-                url = f"https://api.twelvedata.com/time_series?symbol={ticker}&interval={interval}&outputsize={outputsize}&order=asc&apikey={key}"
+                url = f"https://api.twelvedata.com/time_series?symbol={ticker}&interval={mapped_interval}&outputsize={mapped_outputsize}&order=asc&apikey={key}"
                 
                 try:
                     req = urllib.request.Request(
@@ -256,6 +285,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     continue
             
             if data is not None:
+                _STOCK_CACHE[clean_cache_key] = (now, data)
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
@@ -280,8 +310,9 @@ if __name__ == '__main__':
     os.chdir(project_root)
     
     port = 8080
-    print(f"Starting AetherTrade on Twelve Data at http://localhost:{port}...")
-    server = http.server.HTTPServer(('0.0.0.0', port), StockProxyHandler)
+    print(f"Starting AetherTrade Multi-Threaded Server at http://localhost:{port}...")
+    # Use ThreadingHTTPServer for concurrent non-blocking requests
+    server = http.server.ThreadingHTTPServer(('0.0.0.0', port), StockProxyHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
