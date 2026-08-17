@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "python3 server/server.py",
+    "server": "if [ -d .venv ]; then .venv/bin/python server/server.py; else python3 server/server.py; fi",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
