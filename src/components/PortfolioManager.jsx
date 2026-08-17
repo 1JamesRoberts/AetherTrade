@@ -108,39 +108,119 @@ export default function PortfolioManager({
     }
   };
 
-  // Autocomplete filter search
-  const handleSearchChange = (e) => {
-    const val = e.target.value;
-    setSearchQuery(val);
+  const portfolioSearchRef = useRef(null);
+  const [isSearchingServer, setIsSearchingServer] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
 
-    if (val.trim() === '') {
+  // Dismiss dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (portfolioSearchRef.current && !portfolioSearchRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Debounced search with in-memory matching + server fallback
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed === '') {
       setSearchResults([]);
       setShowDropdown(false);
+      setIsSearchingServer(false);
       return;
     }
 
-    const matches = Object.values(stocks).filter(stock =>
-      (stock.ticker && stock.ticker.toLowerCase().includes(val.toLowerCase())) ||
-      (stock.name && stock.name.toLowerCase().includes(val.toLowerCase()))
-    );
+    // 1. In-memory local matches
+    const localMatches = Object.values(stocks).filter(stock =>
+      (stock.ticker && stock.ticker.toLowerCase().includes(trimmed.toLowerCase())) ||
+      (stock.name && stock.name.toLowerCase().includes(trimmed.toLowerCase()))
+    ).map(s => ({
+      ticker: s.ticker,
+      name: s.name || `${s.ticker} Stock`,
+      price: s.price || 0,
+      exchange: s.exchange || 'US',
+      type: s.type || 'Stock'
+    }));
 
-    setSearchResults(matches);
+    setSearchResults(localMatches);
+    setShowDropdown(true);
+    setActiveSuggestionIndex(0);
+
+    if (trimmed.length < 2) {
+      setIsSearchingServer(false);
+      return;
+    }
+
+    // 2. Fetch live server results if query is at least 2 chars
+    const controller = new AbortController();
+    setIsSearchingServer(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/stock/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json.status === 'ok' && json.data) {
+          const serverItems = json.data.map(d => ({
+            ticker: d.symbol,
+            name: d.name,
+            price: stocks[d.symbol]?.price || 0,
+            exchange: d.exchange,
+            type: d.type
+          }));
+
+          // Merge without duplicating symbols
+          const seen = new Set(localMatches.map(m => m.ticker));
+          const combined = [...localMatches];
+          for (const item of serverItems) {
+            if (!seen.has(item.ticker)) {
+              seen.add(item.ticker);
+              combined.push(item);
+            }
+          }
+          setSearchResults(combined);
+          setActiveSuggestionIndex(0);
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.warn('Portfolio server search error:', err);
+        }
+      } finally {
+        setIsSearchingServer(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery, stocks]);
+
+  // Autocomplete filter search input change
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
     setShowDropdown(true);
   };
 
   // Select stock from search dropdown autocomplete list
   const handleSelectStock = async (stock) => {
-    setSelectedTicker(stock.ticker);
-    setSearchQuery(stock.ticker);
+    const sym = stock.ticker || stock.symbol;
+    setSelectedTicker(sym);
+    setSearchQuery(sym);
     setShowDropdown(false);
-    const livePrice = stock.price || stocks[stock.ticker]?.price;
+    const livePrice = stock.price || stocks[sym]?.price;
     if (livePrice) {
       setPrice(livePrice);
     }
     if (onFetchPrice) {
-      const fetched = await onFetchPrice(stock.ticker);
-      if (!fetched) {
-        showNotification(`No price data found for "${stock.ticker}". Please check the symbol and try again.`, 'error');
+      const fetched = await onFetchPrice(sym);
+      if (!fetched && !livePrice) {
+        showNotification(`Fetching price data for "${sym}"...`, 'info');
       }
     }
   };
@@ -158,10 +238,32 @@ export default function PortfolioManager({
       }
       if (onFetchPrice) {
         const fetched = await onFetchPrice(customTicker);
-        if (!fetched) {
-          showNotification(`No price data found for "${customTicker}". Please check the symbol and try again.`, 'error');
+        if (!fetched && !livePrice) {
+          showNotification(`Fetching price data for "${customTicker}"...`, 'info');
         }
       }
+    }
+  };
+
+  const handleSearchKeyDown = (e) => {
+    const totalItems = searchResults.length + 1; // +1 for custom add
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveSuggestionIndex((prev) => (prev + 1) % totalItems);
+      setShowDropdown(true);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveSuggestionIndex((prev) => (prev - 1 + totalItems) % totalItems);
+      setShowDropdown(true);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeSuggestionIndex >= 0 && activeSuggestionIndex < searchResults.length) {
+        handleSelectStock(searchResults[activeSuggestionIndex]);
+      } else {
+        handleAddCustomSymbol();
+      }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
     }
   };
 
@@ -488,18 +590,23 @@ export default function PortfolioManager({
         </div>
 
         {/* Autocomplete Ticker Search */}
-        <div className="portfolio-search-box">
+        <div className="portfolio-search-box" ref={portfolioSearchRef}>
           <div className="search-input-container">
             <i className="fa-solid fa-magnifying-glass search-icon"></i>
             <input
               type="text"
-              placeholder="Search ticker (e.g. AAPL, NVDA, TSLA)..."
+              placeholder="Search ticker or company (e.g. AAPL, NVDA, TSLA)..."
               value={searchQuery}
               onChange={handleSearchChange}
+              onFocus={() => setShowDropdown(true)}
+              onKeyDown={handleSearchKeyDown}
               autoComplete="off"
               className="portfolio-search-input"
             />
-            {searchQuery.length > 0 && (
+            {isSearchingServer && (
+              <i className="fa-solid fa-spinner fa-spin text-cyan search-loading-spinner"></i>
+            )}
+            {searchQuery.length > 0 && !isSearchingServer && (
               <button
                 type="button"
                 onClick={() => {
@@ -519,21 +626,48 @@ export default function PortfolioManager({
           {/* Autocomplete Dropdown */}
           {showDropdown && searchQuery.trim().length > 0 && (
             <div id="portfolioSearchDropdown" className="portfolio-search-dropdown" style={{ display: 'block' }}>
-              {searchResults.slice(0, 5).map(stock => (
-                <div key={stock.ticker} onClick={() => handleSelectStock(stock)} className="portfolio-search-item">
-                  <div className="item-meta">
-                    <span className="ticker">{stock.ticker}</span>
-                    <span className="name">{stock.name || `${stock.ticker} Stock`}</span>
-                  </div>
-                  <span className="price tabular-nums">${(stock.price ?? 0).toFixed(2)}</span>
+              {isSearchingServer && searchResults.length === 0 && (
+                <div className="autocomplete-loading">
+                  <i className="fa-solid fa-spinner fa-spin text-cyan"></i>
+                  <span>Searching markets...</span>
                 </div>
-              ))}
-              <div onClick={handleAddCustomSymbol} className="portfolio-search-item custom-add">
+              )}
+
+              {searchResults.slice(0, 8).map((stock, idx) => {
+                const isSelected = idx === activeSuggestionIndex;
+                const sym = stock.ticker || stock.symbol;
+                return (
+                  <div
+                    key={`${sym}-${idx}`}
+                    onClick={() => handleSelectStock(stock)}
+                    onMouseEnter={() => setActiveSuggestionIndex(idx)}
+                    className={`portfolio-search-item ${isSelected ? 'active' : ''}`}
+                  >
+                    <div className="item-meta">
+                      <div className="ticker-row">
+                        <span className="ticker">{sym}</span>
+                        {stock.exchange && <span className="autocomplete-tag exchange">{stock.exchange}</span>}
+                        {stock.type && <span className={`autocomplete-tag type ${String(stock.type).toLowerCase()}`}>{stock.type}</span>}
+                      </div>
+                      <span className="name">{stock.name || `${sym} Stock`}</span>
+                    </div>
+                    {stock.price > 0 && (
+                      <span className="price tabular-nums">${stock.price.toFixed(2)}</span>
+                    )}
+                  </div>
+                );
+              })}
+
+              <div
+                onClick={handleAddCustomSymbol}
+                onMouseEnter={() => setActiveSuggestionIndex(searchResults.length)}
+                className={`portfolio-search-item custom-add ${activeSuggestionIndex === searchResults.length ? 'active' : ''}`}
+              >
                 <div className="item-meta">
                   <span className="ticker custom-text">
-                    <i className="fa-solid fa-circle-plus"></i> {searchResults.some(s => s.ticker === searchQuery.toUpperCase().trim()) ? 'Fetch Price' : `ADD '${searchQuery.toUpperCase().trim()}'`}
+                    <i className="fa-solid fa-circle-plus text-cyan"></i> {searchResults.some(s => (s.ticker || s.symbol) === searchQuery.toUpperCase().trim()) ? 'Select' : `ADD '${searchQuery.toUpperCase().trim()}'`}
                   </span>
-                  <span className="name">Fetch market data for this symbol</span>
+                  <span className="name">Fetch live quote and log trade</span>
                 </div>
               </div>
             </div>

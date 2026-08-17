@@ -87,12 +87,7 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
                                err.message.toLowerCase().includes("invalid symbol");
 
       if (isSymbolNotFound) {
-        addToast(`Ticker "${ticker}" does not exist!`, 'error');
-        if (watchlist && setWatchlist) {
-          const next = watchlist.filter(t => t !== ticker);
-          setWatchlist(next);
-          if (setActiveTicker) setActiveTicker(next.length > 0 ? next[0] : 'AAPL');
-        }
+        addToast(`Ticker "${ticker}" was not found — use the search box to pick the right symbol.`, 'warning');
       } else {
         addToast(`Failed to load data for ${ticker}.`, 'error');
       }

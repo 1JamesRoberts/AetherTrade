@@ -5,6 +5,10 @@
       "destination": "/api/fundamentals.py"
     },
     {
+      "source": "/api/stock/search",
+      "destination": "/api/stock-search.py"
+    },
+    {
       "source": "/api/stock",
       "destination": "/api/stock.js"
     },

@@ -46,6 +46,55 @@ def get_next_api_key():
 # In-memory TTL caches (TTL = 300 seconds)
 _FUNDAMENTALS_CACHE = {}
 _STOCK_CACHE = {}
+_SEARCH_CACHE = {}
+
+PRIMARY_EXCHANGES = {'NMS', 'NASDAQ', 'NYQ', 'NYSE', 'CME', 'BINANCE', 'CCC', 'BATS', 'ARCX'}
+
+def map_quote_type(qtype):
+    if not qtype:
+        return 'Stock'
+    q = str(qtype).upper()
+    if 'ETF' in q or 'MUTUALFUND' in q:
+        return 'ETF'
+    if 'CRYPTO' in q:
+        return 'Crypto'
+    if 'CURRENCY' in q or 'FOREX' in q:
+        return 'Forex'
+    if 'INDEX' in q:
+        return 'Index'
+    if 'EQUITY' in q or 'STOCK' in q:
+        return 'Stock'
+    return str(qtype).title()
+
+def search_twelve_data(query):
+    key = get_next_api_key()
+    if not key:
+        return []
+    try:
+        url = f"https://api.twelvedata.com/symbol_search?symbol={urllib.parse.quote(query)}&apikey={key}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'AetherTrade/1.0'})
+        with urllib.request.urlopen(req, timeout=4) as response:
+            res = json.loads(response.read().decode('utf-8'))
+            items = res.get('data', [])
+            results = []
+            seen_symbols = set()
+            for it in items:
+                sym = it.get('symbol', '').strip().upper()
+                if not sym or sym in seen_symbols:
+                    continue
+                seen_symbols.add(sym)
+                results.append({
+                    'symbol': sym,
+                    'name': it.get('instrument_name') or sym,
+                    'exchange': it.get('exchange') or 'US',
+                    'type': map_quote_type(it.get('instrument_type', 'Stock'))
+                })
+                if len(results) >= 10:
+                    break
+            return results
+    except Exception as e:
+        print("Twelve Data fallback search error:", e)
+        return []
 
 class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
@@ -59,6 +108,96 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
         parsed_url = urllib.parse.urlparse(self.path)
         now = time.time()
         
+        # Intercept Proxy Stock Search request
+        if parsed_url.path == '/api/stock/search':
+            query_params = urllib.parse.parse_qs(parsed_url.query)
+            q = query_params.get('q', [''])[0].strip()
+
+            if len(q) < 2:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'ok', 'data': []}).encode('utf-8'))
+                return
+
+            cache_key = q.lower()
+            if cache_key in _SEARCH_CACHE:
+                cached_time, cached_payload = _SEARCH_CACHE[cache_key]
+                if now - cached_time < 300: # 5 min TTL
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(cached_payload)
+                    return
+
+            results = []
+            if yf is not None:
+                try:
+                    search_res = yf.Search(q, max_results=15)
+                    raw_quotes = search_res.quotes if hasattr(search_res, 'quotes') else []
+                    
+                    scored_items = []
+                    for item in raw_quotes:
+                        sym = (item.get('symbol') or '').strip().upper()
+                        if not sym:
+                            continue
+                        name = item.get('longname') or item.get('shortname') or sym
+                        exchange = item.get('exchange') or item.get('exchDisp') or 'US'
+                        qtype = map_quote_type(item.get('quoteType') or item.get('typeDisp'))
+                        
+                        score = 0
+                        if sym == q.upper():
+                            score += 100
+                        elif sym.startswith(q.upper()):
+                            score += 40
+                        
+                        if qtype in ('Stock', 'ETF'):
+                            score += 30
+                        elif qtype == 'Crypto':
+                            score += 15
+
+                        if exchange.upper() in PRIMARY_EXCHANGES:
+                            score += 25
+
+                        if name.lower().startswith(q.lower()):
+                            score += 20
+                        elif q.lower() in name.lower():
+                            score += 10
+
+                        scored_items.append((score, {
+                            'symbol': sym,
+                            'name': name,
+                            'exchange': exchange,
+                            'type': qtype
+                        }))
+
+                    scored_items.sort(key=lambda x: x[0], reverse=True)
+
+                    seen_symbols = set()
+                    for score, it in scored_items:
+                        if it['symbol'] not in seen_symbols:
+                            seen_symbols.add(it['symbol'])
+                            results.append(it)
+                            if len(results) >= 10:
+                                break
+                except Exception as e:
+                    print("yfinance search error in server.py:", e)
+
+            if not results:
+                results = search_twelve_data(q)
+
+            payload = json.dumps({'status': 'ok', 'data': results}).encode('utf-8')
+            _SEARCH_CACHE[cache_key] = (now, payload)
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
         # Intercept Proxy Stock Fundamentals request (Live & 100% Free)
         if parsed_url.path == '/api/stock/fundamentals':
             query_params = urllib.parse.parse_qs(parsed_url.query)
