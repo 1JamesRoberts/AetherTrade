@@ -259,6 +259,7 @@ export default function PerformanceHoldings({
     if (timeRange === '1W') cutoffTime = now - 7 * 24 * 60 * 60 * 1000;
     else if (timeRange === '1M') cutoffTime = now - 30 * 24 * 60 * 60 * 1000;
     else if (timeRange === '1Y') cutoffTime = now - 365 * 24 * 60 * 60 * 1000;
+    else if (timeRange === '5Y') cutoffTime = now - 5 * 365 * 24 * 60 * 60 * 1000;
 
     let filteredPoints = points;
     if (cutoffTime > 0) {
@@ -454,7 +455,7 @@ export default function PerformanceHoldings({
 
           <div className="chart-right-controls">
             <div className="time-range-pill-group">
-              {['1W', '1M', '1Y', 'ALL'].map((r) => (
+              {['1W', '1M', '1Y', '5Y', 'ALL'].map((r) => (
                 <button
                   key={r}
                   type="button"

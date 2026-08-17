@@ -17,6 +17,10 @@ const RANGE_INTERVALS = {
   '1Y': {
     allowed: ['1d', '1w'],
     default: '1w'
+  },
+  '5Y': {
+    allowed: ['1d', '1w'],
+    default: '1w'
   }
 };
 
@@ -734,7 +738,7 @@ export default function ChartContainer({
           </div>
 
           <div className="range-selector">
-            {['1D', '1W', '1M', '1Y'].map((r) => (
+            {['1D', '1W', '1M', '1Y', '5Y'].map((r) => (
               <button
                 key={r}
                 onClick={() => handleRangeChange(r)}

@@ -63,8 +63,10 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     range_val, interval_val = '1W', '1h'
                 elif timeframe == 'M':
                     range_val, interval_val = '1M', '1d'
-                elif timeframe == 'Y':
+                elif timeframe == 'Y' or timeframe == '1Y':
                     range_val, interval_val = '1Y', '1w'
+                elif timeframe == '5Y':
+                    range_val, interval_val = '5Y', '1w'
                 else:
                     # e.g. timeframe = '1m', '5m', '15m', '1h'
                     range_val = '1D'
@@ -95,6 +97,9 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 
                 ('1Y', '1d'): ('1day', '260'),
                 ('1Y', '1w'): ('1week', '52'),
+
+                ('5Y', '1d'): ('1day', '1260'),
+                ('5Y', '1w'): ('1week', '260'),
             }
             
             mapping_key = (range_val, interval_val)
