@@ -299,10 +299,12 @@ export default function ChartContainer({
     if (!chartContainerRef.current || formattedData.length === 0) return;
 
     const container = chartContainerRef.current;
+    const initialWidth = container.clientWidth || 350;
+    const initialHeight = container.clientHeight || 360;
 
     const chart = createChart(container, {
-      width: container.clientWidth,
-      height: container.clientHeight,
+      width: initialWidth,
+      height: initialHeight,
       layout: {
         background: { type: 'solid', color: 'transparent' },
         textColor: '#94a3b8',
@@ -474,11 +476,24 @@ export default function ChartContainer({
     }
 
     const totalLength = formattedData.length;
-    const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
-    chart.timeScale().setVisibleLogicalRange({
-      from: totalLength - visibleCount,
-      to: totalLength - 1,
-    });
+    if (totalLength > 0) {
+      const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
+      chart.timeScale().setVisibleLogicalRange({
+        from: totalLength - visibleCount,
+        to: totalLength - 1,
+      });
+
+      // Quick layout sync so chart immediately centers and renders on mobile viewports
+      requestAnimationFrame(() => {
+        if (chartContainerRef.current && chartInstanceRef.current) {
+          const w = chartContainerRef.current.clientWidth;
+          const h = chartContainerRef.current.clientHeight;
+          if (w > 0 && h > 0) {
+            chartInstanceRef.current.applyOptions({ width: w, height: h });
+          }
+        }
+      });
+    }
 
     const lines = linesMap[activeTicker] || [];
     if (showLevels) {
@@ -559,7 +574,20 @@ export default function ChartContainer({
     };
     window.addEventListener('resize', handleResize);
 
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0 && chartInstanceRef.current) {
+        chartInstanceRef.current.applyOptions({
+          width: Math.floor(width),
+          height: Math.floor(height),
+        });
+      }
+    });
+    resizeObserver.observe(container);
+
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       chart.unsubscribeClick(handleChartClick);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
