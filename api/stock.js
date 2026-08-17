@@ -31,6 +31,8 @@ const MAPPING = {
   '1M,1w':  { interval: '1week', outputsize: '4' },
   '1Y,1d':  { interval: '1day',  outputsize: '260' },
   '1Y,1w':  { interval: '1week', outputsize: '52' },
+  '5Y,1d':  { interval: '1day',  outputsize: '1260' },
+  '5Y,1w':  { interval: '1week', outputsize: '260' },
 };
 
 export default async function handler(req, res) {

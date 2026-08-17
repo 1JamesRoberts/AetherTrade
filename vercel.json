@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/stock/fundamentals",
+      "destination": "/api/fundamentals.py"
+    },
+    {
+      "source": "/api/stock",
+      "destination": "/api/stock.js"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
