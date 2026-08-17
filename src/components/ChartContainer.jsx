@@ -339,6 +339,7 @@ export default function ChartContainer({
         horzLines: { color: 'rgba(255, 255, 255, 0.02)' },
       },
       rightPriceScale: {
+        visible: (container.clientWidth || window.innerWidth) >= 600,
         borderColor: 'rgba(255, 255, 255, 0.06)',
         textColor: '#94a3b8',
       },
@@ -493,7 +494,13 @@ export default function ChartContainer({
           const w = chartContainerRef.current.clientWidth;
           const h = chartContainerRef.current.clientHeight;
           if (w > 0 && h > 0) {
-            chartInstanceRef.current.applyOptions({ width: w, height: h });
+            chartInstanceRef.current.applyOptions({
+              width: w,
+              height: h,
+              rightPriceScale: {
+                visible: w >= 600,
+              },
+            });
           }
         }
       });
@@ -570,9 +577,14 @@ export default function ChartContainer({
 
     const handleResize = () => {
       if (chartContainerRef.current && chartInstanceRef.current) {
+        const w = chartContainerRef.current.clientWidth;
+        const h = chartContainerRef.current.clientHeight;
         chartInstanceRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
+          width: w,
+          height: h,
+          rightPriceScale: {
+            visible: w >= 600,
+          },
         });
       }
     };
@@ -585,6 +597,9 @@ export default function ChartContainer({
         chartInstanceRef.current.applyOptions({
           width: Math.floor(width),
           height: Math.floor(height),
+          rightPriceScale: {
+            visible: width >= 600,
+          },
         });
       }
     });
