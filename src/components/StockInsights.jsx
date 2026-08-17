@@ -261,6 +261,72 @@ export default function StockInsights({ activeTicker, currentPrice }) {
                   <div className="chip-subtext">Total Float Shares</div>
                 </div>
               </div>
+
+              {/* Company Profile & Executive Overview (Step 2) */}
+              <div className="company-profile-card">
+                <div className="profile-header">
+                  <div className="profile-title-area">
+                    <span className="profile-title">
+                      <i className="fa-solid fa-building text-cyan"></i> About {data.name || activeTicker}
+                    </span>
+                    <div className="profile-tags-row">
+                      {data.sector && <span className="profile-tag sector">{data.sector}</span>}
+                      {data.industry && <span className="profile-tag industry">{data.industry}</span>}
+                    </div>
+                  </div>
+
+                  {data.website && (
+                    <a
+                      href={data.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-company-website"
+                      title={`Visit ${data.name || activeTicker} Official Website`}
+                    >
+                      <span>Website</span>
+                      <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                    </a>
+                  )}
+                </div>
+
+                {data.description && (
+                  <p className="profile-description">
+                    {data.description}
+                  </p>
+                )}
+
+                <div className="profile-meta-grid">
+                  <div className="meta-item">
+                    <div className="meta-icon-wrapper">
+                      <i className="fa-solid fa-user-tie text-cyan"></i>
+                    </div>
+                    <div className="meta-text">
+                      <span className="meta-label">LEADERSHIP</span>
+                      <span className="meta-value">{data.ceo || 'Executive Management'}</span>
+                    </div>
+                  </div>
+
+                  <div className="meta-item">
+                    <div className="meta-icon-wrapper">
+                      <i className="fa-solid fa-location-dot text-primary"></i>
+                    </div>
+                    <div className="meta-text">
+                      <span className="meta-label">HEADQUARTERS</span>
+                      <span className="meta-value">{data.headquarters || 'United States'}</span>
+                    </div>
+                  </div>
+
+                  <div className="meta-item">
+                    <div className="meta-icon-wrapper">
+                      <i className="fa-solid fa-users text-bullish"></i>
+                    </div>
+                    <div className="meta-text">
+                      <span className="meta-label">EMPLOYEES</span>
+                      <span className="meta-value">{data.employees || 'Corporate'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </>
           ) : (
             <div className="insights-empty-state">
