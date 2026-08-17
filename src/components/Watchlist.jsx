@@ -321,7 +321,7 @@ export default function Watchlist({
 
                   {/* Rich Popover Hover Card */}
                   {hoveredRailTicker === ticker && (
-                    <div className="rail-card-hover" role="tooltip">
+                    <div className="rail-hover-card" role="tooltip">
                       <div className="rail-card-top">
                         <span className="rail-card-ticker">{stock.ticker}</span>
                         <span className={`rail-card-change ${isUp ? 'up' : 'down'}`}>
@@ -350,25 +350,26 @@ export default function Watchlist({
   return (
     <section className="panel panel-left" aria-label="Stock Selection">
       {/* Panel Header */}
-      <div className="watchlist-header">
-        <div className="header-title-group">
-          <h2>Markets & Watchlist</h2>
-          <span className="live-count-badge tabular-nums">
-            {watchlist.length} {watchlist.length === 1 ? 'Asset' : 'Assets'}
-          </span>
+      <div className="panel-header watchlist-header">
+        <div className="watchlist-title-group">
+          <div className="watchlist-icon-wrap">
+            <i className="fa-solid fa-star"></i>
+          </div>
+          <h2 className="panel-title">Watchlist</h2>
+          <span className="watchlist-count-badge">{watchlist.length} Assets</span>
         </div>
         <button
           onClick={onToggleCollapse}
-          className="btn-collapse-panel"
-          title="Collapse Watchlist to Mini-Rail"
-          aria-label="Collapse Watchlist to Mini-Rail"
+          className="btn-collapse-watchlist"
+          title="Collapse to Mini-Rail"
+          aria-label="Collapse Watchlist"
         >
           <i className="fa-solid fa-angles-left"></i>
         </button>
       </div>
 
-      {/* Filter Tabs (All / Gainers / Losers) */}
-      <div className="filter-tabs">
+      {/* Filter Tabs */}
+      <div className="watchlist-filter-tabs">
         <button
           onClick={() => setFilter('all')}
           className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
