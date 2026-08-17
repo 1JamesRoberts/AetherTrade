@@ -1,84 +1,101 @@
-# 🌌 AetherTrade - Interactive Stock Terminal
+# 🌌 AetherTrade - Interactive Stock Terminal & Portfolio Intelligence Suite
 
-AetherTrade is a premium interactive support & resistance stock terminal with real-time profit projection, custom indicators, database persistence, and transaction log management.
+AetherTrade is a state-of-the-art financial terminal featuring interactive TradingView-style candlestick charting, support & resistance crosshairs, fundamental stock intelligence, Wall Street analyst consensus targets, and real-time portfolio management.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-- **📊 Support & Resistance Terminal**: Chart stock series dynamically and draw support/resistance lines with customizable crosshair line opacity.
-- **🔐 Flexible Auth**: Sign up or log in using email/password, or OAuth (Google & GitHub) via Supabase.
-- **🔄 Smart Offline Fallback**: If Supabase credentials are not configured, the terminal automatically runs in a local-only/offline mode, storing session and transaction logs locally in your browser's `localStorage`.
-- **💼 Portfolio Manager**: Record transactions (Buy/Sell, price, shares, and transaction fees), calculate real-time average cost, and compute realized P&L dynamically.
-- **📥 CSV Integration**: Import transaction logs from a CSV file (append or replace options) and export portfolios as structured CSV files.
-- **🔑 API Key Rotation**: A Python backend proxy that rotates through multiple Twelve Data API keys to bypass request rate limits on free-tier plans.
-- **📱 Responsive Layout**: Glassmorphic dark theme optimized for both desktop and mobile screens, featuring an adaptive stock picker dropdown, collapsible sidebar, and responsive layout.
+### 📊 Advanced Candlestick Charting & Historical Analysis
+- **TradingView-Grade Interactive Charts**: High-performance multi-timeframe candlestick series (`1D`, `1W`, `1M`, `1Y`, `5Y`) powered by Lightweight Charts.
+- **Support & Resistance Overlays**: Dynamically plot key resistance and support boundaries with live price distance markers.
+- **Responsive Mobile Layout**: Right price axis scales dynamically collapse on mobile (`< 600px`) to maximize screen width.
+
+### 🧠 Stock Intelligence & Fundamentals Suite
+- **Interactive 52-Week Range Meter**: Live price position indicator with `Near 52W High`, `Near 52W Low`, or `Mid-Range` momentum status badges.
+- **8-Card Financial Fundamentals Grid**: Real-time Market Cap, Trailing P/E, Forward P/E, EPS, Dividend Yield, 30-Day Average Volume, 5Y Beta, and Shares Outstanding.
+- **Company Profile & Executive Overview**: Sector and industry categorization pills, verified corporate website link, executive business summary, CEO leadership, Headquarters, and Global Workforce count.
+- **Wall Street Analyst Targets & Consensus**: Consensus Rating badge (`Strong Buy`, `Buy`, `Hold`, `Sell`), 1Y Average Target Price with Implied Upside/Downside %, visual price target range track, and Buy/Hold/Sell analyst opinion breakdown bar.
+
+### 💼 Portfolio Management & Tracking
+- **Transaction Engine**: Record Buy/Sell transactions, execution prices, quantities, and broker fees with dynamic real-time average cost basis and realized/unrealized P&L calculations.
+- **CSV Import & Export**: Seamlessly import existing transaction ledgers (append or overwrite mode) and export portfolio holdings.
+- **Flexible Auth & Smart Offline Fallback**: Authenticate via Supabase (OAuth Google/GitHub or Email) or run completely offline with instant browser `localStorage` persistence.
 
 ---
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: React 19 (Vite), Chart.js
-- **Styling**: Vanilla CSS (Modern CSS variables, glassmorphism, dynamic gradients)
+- **Frontend**: React 19 (Vite), Lightweight Charts (`lightweight-charts`), Chart.js
+- **Styling**: Vanilla CSS (CSS variables, glassmorphism, responsive flex/grid)
 - **Database/Auth**: Supabase (PostgreSQL, GoTrue)
-- **Backend API Proxy**: Python 3 (`http.server`)
+- **Local Proxy Server**: Python 3 (`ThreadingHTTPServer` with `yfinance`)
+- **Serverless Production**: Vercel Serverless Functions (`api/stock.js` & `api/fundamentals.py`)
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quickstart & Local Setup
 
 ### 1. Prerequisites
 - [Node.js](https://nodejs.org/) (v18 or higher recommended)
-- [Python 3](https://www.python.org/)
+- [Python 3.10+](https://www.python.org/)
 
 ### 2. Installation
-Clone the repository and install the dependencies:
 ```bash
+# Clone the repository
+git clone https://github.com/1JamesRoberts/VibecodePortfolioTracker.git
+cd VibecodePortfolioTracker
+
+# Install Node dependencies
 npm install
+
+# Set up Python virtual environment
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
-### 3. Configuration (`.env`)
-Create a `.env` file in the root of your project using `.env.example` as a template:
+### 3. Environment Configuration (`.env`)
+Create a `.env` file in the project root:
 ```env
-# Optional: Supabase configuration (omit/leave default to run in local-only mode)
+# Optional: Supabase configuration (omit to run in local-only offline mode)
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-# Required: Twelve Data API key(s) for backend proxy rotation
-TWELVE_DATA_KEY_1=your_twelve_data_key_here
-TWELVE_DATA_KEY_2=
-...
+# Required: Twelve Data API key(s) for key rotation
+TWELVE_DATA_KEY_1=your_twelve_data_key_1
+TWELVE_DATA_KEY_2=your_twelve_data_key_2
 ```
 
----
+### 4. Running Locally
 
-## 💻 Running the Application
-
-To run the application, you need to start both the Python backend server (the stock data proxy) and the Vite frontend development server.
-
-### Start the Backend Proxy
+Start the backend proxy and Vite dev server:
 ```bash
-python server/server.py
-```
-This runs the proxy server at `http://127.0.0.1:8080` which fetches price series from Twelve Data API.
+# Terminal 1: Start Backend Proxy (runs on .venv at http://127.0.0.1:8080)
+npm run server
 
-### Start the Frontend Dev Server
-In a separate terminal window, run:
-```bash
+# Terminal 2: Start Frontend Dev Server (runs at http://localhost:5173)
 npm run dev
 ```
-This launches the React development server at `http://localhost:5173`. Open this URL in your browser to interact with the AetherTrade terminal.
 
 ---
 
-## 🧪 Testing the Backend Proxy
+## ☁️ Vercel Deployment
 
-The project includes an automated test script to verify that the backend proxy connects successfully and rotates keys correctly:
+AetherTrade is configured out of the box for **1-click Vercel Deployment**:
 
-Ensure the Python server is running on `127.0.0.1:8080`, then execute:
+1. **Deploy to Vercel**: Push to your GitHub repository or connect via the Vercel Dashboard.
+2. **Environment Variables**: Add your `TWELVE_DATA_KEY_1`...`7` in **Vercel Settings > Environment Variables**.
+3. **Serverless Architecture**:
+   - `/api/stock` is handled by `api/stock.js` (Node.js Twelve Data proxy).
+   - `/api/stock/fundamentals` is handled by `api/fundamentals.py` (Python `yfinance` function).
+   - `vercel.json` automatically manages routing and single-page application fallbacks.
+
+---
+
+## 🧪 Testing
+
+Run the automated backend testing suite to verify Twelve Data key rotation and yfinance endpoints:
 ```bash
 python .agents/skills/tester/scripts/test_backend.py
 ```
-This script validates:
-- Retrieving stock data for valid symbols (`AAPL`, `AMD`)
-- Correct `500` error propagation for non-existent/invalid tickers
+
