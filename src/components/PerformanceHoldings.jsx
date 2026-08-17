@@ -396,7 +396,7 @@ export default function PerformanceHoldings({
             <i className="fa-solid fa-file-export"></i> <span>Export CSV</span>
           </button>
           <button type="button" onClick={handleReset} className="btn-tool btn-portfolio-reset" id="btnResetPortfolio" title="Reset Portfolio">
-            <i className="fa-solid fa-rotate-left"></i> <span>Reset</span>
+            <i className="fa-solid fa-trash-can"></i> <span>Reset</span>
           </button>
           <input ref={fileInputRef} type="file" id="csvFileInput" accept=".csv" onChange={handleFileChange} style={{ display: 'none' }} />
         </div>

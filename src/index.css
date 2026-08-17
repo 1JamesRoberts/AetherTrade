@@ -3682,6 +3682,29 @@ input:checked+.slider.round:before {
   gap: 10px;
 }
 
+.btn-tx-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all var(--transition-fast) ease;
+  opacity: 0.7;
+}
+
+.btn-tx-delete:hover {
+  opacity: 1;
+  color: var(--bearish);
+  background: rgba(244, 63, 94, 0.15);
+  transform: scale(1.1);
+}
+
 .sort-icon-muted {
   opacity: 0.3;
   margin-left: 4px;
