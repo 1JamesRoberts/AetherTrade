@@ -79,18 +79,35 @@
   padding: 0;
 }
 
+html {
+  max-width: 100vw;
+  overflow-x: hidden;
+  width: 100%;
+}
+
 body {
   background-color: var(--bg-main);
   color: var(--text-primary);
   font-family: var(--font-body);
   min-height: 100vh;
+  max-width: 100vw;
   overflow-x: hidden;
+  width: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Ambient Lighting & Mesh Gradients */
@@ -129,11 +146,13 @@ body {
 }
 
 .glow-sphere {
-  position: absolute;
+  position: fixed;
   border-radius: 50%;
   filter: blur(140px);
   z-index: -1;
   pointer-events: none;
+  max-width: 80vw;
+  max-height: 80vh;
 }
 
 .glow-sphere-1 {
@@ -2299,16 +2318,21 @@ body {
 
   /* Portfolio Mobile Stack */
   #viewPortfolio.workspace-view.active {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 100% !important;
     gap: 16px;
+    max-width: 100%;
+    width: 100%;
   }
 
   .panel-portfolio-left,
   .panel-portfolio-right {
-    width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
     height: auto;
     max-height: none;
-    overflow: visible;
+    overflow-x: hidden !important;
+    overflow-y: visible;
+    box-sizing: border-box;
   }
 
   /* Responsive App Header */
@@ -3564,11 +3588,16 @@ input:checked+.slider.round:before {
 .holdings-table-scroller {
   max-height: 400px;
   overflow-y: auto;
+  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .holdings-table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 620px;
 }
 
 .cell-asset {
