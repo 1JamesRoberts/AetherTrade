@@ -434,8 +434,15 @@ export default function PerformanceHoldings({
             </div>
           </div>
           {activePortfolio.transactions.length > 0 && (
-            <button type="button" onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh chart prices">
-              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i> <span>{isRefreshing ? 'Refreshing...' : 'Refresh History'}</span>
+            <button
+              type="button"
+              onClick={handleRefreshPrices}
+              disabled={isRefreshing}
+              className="btn-refresh"
+              title="Refresh chart prices"
+              aria-label="Refresh chart prices"
+            >
+              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
             </button>
           )}
         </div>
@@ -456,8 +463,15 @@ export default function PerformanceHoldings({
             <span className="holdings-count-badge tabular-nums">{rawHoldings.length} {rawHoldings.length === 1 ? 'Holding' : 'Holdings'}</span>
           </div>
           {rawHoldings.length > 0 && (
-            <button type="button" onClick={handleRefreshPrices} disabled={isRefreshing} className="btn-refresh" title="Refresh stock prices">
-              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i> <span>{isRefreshing ? 'Refreshing...' : 'Refresh Prices'}</span>
+            <button
+              type="button"
+              onClick={handleRefreshPrices}
+              disabled={isRefreshing}
+              className="btn-refresh"
+              title="Refresh stock prices"
+              aria-label="Refresh stock prices"
+            >
+              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
             </button>
           )}
         </div>
