@@ -44,60 +44,116 @@ export default function AnalysisEngine({
 
   const handleAutoDetectLevels = () => {
     const price = currentPrice || 150;
-    const detected = new Set(linesMap[activeTicker] || []);
+    const rawSupports = [];
+    const rawResistances = [];
+
+    // Prioritize existing manual lines if any
+    const existing = linesMap[activeTicker] || [];
+    existing.forEach((p) => {
+      if (p < price * 0.99) rawSupports.push({ price: p, priority: 100 });
+      else if (p > price * 1.01) rawResistances.push({ price: p, priority: 100 });
+    });
 
     if (liveRawValues && liveRawValues.length > 5) {
-      const closes = liveRawValues.map(v => parseFloat(v.close || v.open)).filter(p => !isNaN(p) && p > 0);
-      const highs = liveRawValues.map(v => parseFloat(v.high || v.close)).filter(p => !isNaN(p) && p > 0);
-      const lows = liveRawValues.map(v => parseFloat(v.low || v.close)).filter(p => !isNaN(p) && p > 0);
+      const closes = liveRawValues.map((v) => parseFloat(v.close || v.open)).filter((p) => !isNaN(p) && p > 0);
+      const highs = liveRawValues.map((v) => parseFloat(v.high || v.close)).filter((p) => !isNaN(p) && p > 0);
+      const lows = liveRawValues.map((v) => parseFloat(v.low || v.close)).filter((p) => !isNaN(p) && p > 0);
 
       const maxHigh = Math.max(...highs);
       const minLow = Math.min(...lows);
 
-      if (maxHigh > price * 1.005) detected.add(parseFloat(maxHigh.toFixed(2)));
-      if (minLow < price * 0.995) detected.add(parseFloat(minLow.toFixed(2)));
+      // Add major period extremes as highest priority primary levels
+      if (maxHigh > price * 1.04) {
+        rawResistances.push({ price: parseFloat(maxHigh.toFixed(2)), priority: 90 });
+      }
+      if (minLow < price * 0.96) {
+        rawSupports.push({ price: parseFloat(minLow.toFixed(2)), priority: 90 });
+      }
 
-      // Scan local swing peaks & valleys
-      for (let i = 2; i < closes.length - 2; i++) {
-        const prev2 = closes[i - 2];
-        const prev1 = closes[i - 1];
-        const curr = closes[i];
-        const next1 = closes[i + 1];
-        const next2 = closes[i + 2];
+      // Scan multi-bar swing peaks & valleys with prominence
+      const window = Math.min(4, Math.max(2, Math.floor(closes.length / 10)));
+      for (let i = window; i < closes.length - window; i++) {
+        const currHigh = highs[i] || closes[i];
+        const currLow = lows[i] || closes[i];
 
-        // Resistance Peak
-        if (curr > prev1 && curr > prev2 && curr > next1 && curr > next2 && curr > price * 1.01) {
-          detected.add(parseFloat(curr.toFixed(2)));
+        let isPeak = true;
+        let isValley = true;
+        for (let j = 1; j <= window; j++) {
+          if ((highs[i - j] || closes[i - j]) >= currHigh || (highs[i + j] || closes[i + j]) >= currHigh) {
+            isPeak = false;
+          }
+          if ((lows[i - j] || closes[i - j]) <= currLow || (lows[i + j] || closes[i + j]) <= currLow) {
+            isValley = false;
+          }
         }
-        // Support Valley
-        if (curr < prev1 && curr < prev2 && curr < next1 && curr < next2 && curr < price * 0.99) {
-          detected.add(parseFloat(curr.toFixed(2)));
+
+        if (isPeak && currHigh > price * 1.03) {
+          rawResistances.push({ price: parseFloat(currHigh.toFixed(2)), priority: 50 });
+        }
+        if (isValley && currLow < price * 0.97) {
+          rawSupports.push({ price: parseFloat(currLow.toFixed(2)), priority: 50 });
         }
       }
     }
 
-    // Ensure at least 2 supports and 2 resistances
-    const currentSupCount = Array.from(detected).filter(p => p < price).length;
-    const currentResCount = Array.from(detected).filter(p => p > price).length;
+    // Filter levels so every selected level is at least 5% different, keeping primary levels
+    const filterBy5Percent = (candidates) => {
+      // Sort primarily by priority (descending), secondarily by distance from price
+      const sorted = [...candidates].sort((a, b) => {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        return Math.abs(a.price - price) - Math.abs(b.price - price);
+      });
 
-    if (currentSupCount === 0) {
-      detected.add(parseFloat((price * 0.96).toFixed(2)));
-      detected.add(parseFloat((price * 0.91).toFixed(2)));
-    } else if (currentSupCount === 1) {
-      detected.add(parseFloat((price * 0.88).toFixed(2)));
+      const selected = [];
+      for (const candidate of sorted) {
+        // Must be at least 3.5% away from current active price
+        const distFromPrice = Math.abs(candidate.price - price) / price;
+        if (distFromPrice < 0.035) continue;
+
+        // Check if candidate is at least 5% away from all already selected levels
+        const isTooClose = selected.some((existingPrice) => {
+          const diffPct = Math.abs(candidate.price - existingPrice) / Math.min(candidate.price, existingPrice);
+          return diffPct < 0.05; // 5% minimum separation threshold
+        });
+
+        if (!isTooClose) {
+          selected.push(candidate.price);
+        }
+
+        if (selected.length >= 3) break; // Keep top 3 clean primary levels per side
+      }
+      return selected;
+    };
+
+    let finalSupports = filterBy5Percent(rawSupports);
+    let finalResistances = filterBy5Percent(rawResistances);
+
+    // Ensure clean minimum 5% spaced fallback levels if data had few distinct swings
+    if (finalSupports.length === 0) {
+      finalSupports = [
+        parseFloat((price * 0.95).toFixed(2)),
+        parseFloat((price * 0.90).toFixed(2))
+      ];
+    } else if (finalSupports.length === 1) {
+      const sup1 = finalSupports[0];
+      finalSupports.push(parseFloat((sup1 * 0.94).toFixed(2)));
     }
 
-    if (currentResCount === 0) {
-      detected.add(parseFloat((price * 1.05).toFixed(2)));
-      detected.add(parseFloat((price * 1.12).toFixed(2)));
-    } else if (currentResCount === 1) {
-      detected.add(parseFloat((price * 1.18).toFixed(2)));
+    if (finalResistances.length === 0) {
+      finalResistances = [
+        parseFloat((price * 1.05).toFixed(2)),
+        parseFloat((price * 1.10).toFixed(2))
+      ];
+    } else if (finalResistances.length === 1) {
+      const res1 = finalResistances[0];
+      finalResistances.push(parseFloat((res1 * 1.06).toFixed(2)));
     }
 
-    const finalLevels = Array.from(detected).sort((a, b) => a - b);
+    const allFinal = [...finalSupports, ...finalResistances].sort((a, b) => a - b);
+
     setLinesMap({
       ...linesMap,
-      [activeTicker]: finalLevels
+      [activeTicker]: allFinal
     });
   };
 
