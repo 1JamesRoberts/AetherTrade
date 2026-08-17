@@ -379,7 +379,7 @@ export default function PerformanceHoldings({
 
   const formattedDate = (timestamp) => {
     const txDate = new Date(timestamp);
-    return txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + txDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   return (
