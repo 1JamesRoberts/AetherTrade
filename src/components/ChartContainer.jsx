@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { createChart, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
+import StockInsights from './StockInsights';
 
 const RANGE_INTERVALS = {
   '1D': {
@@ -865,6 +866,14 @@ export default function ChartContainer({
           </div>
         )}
       </div>
+
+      {!isFullscreen && (
+        <StockInsights
+          activeTicker={activeTicker}
+          currentPrice={activeStock.price}
+          historicalData={formattedData}
+        />
+      )}
     </section>
   );
 }
