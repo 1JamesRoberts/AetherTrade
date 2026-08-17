@@ -5169,3 +5169,230 @@ input:checked+.slider.round:before {
   background: var(--bearish);
   box-shadow: 0 0 6px rgba(244, 63, 94, 0.4);
 }
+
+/* ==========================================================================
+   TECHNICAL HEALTH & MOMENTUM SUMMARY GAUGE (STEP 4)
+   ========================================================================== */
+
+.technical-health-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: fadeIn 0.25s ease;
+}
+
+.tech-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tech-title-area {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tech-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tech-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.tech-summary-badge-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tech-indicators-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.tech-indicator-item {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all var(--transition-fast) ease;
+}
+
+.tech-indicator-item:hover {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--border-hover);
+}
+
+.tech-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.indicator-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.indicator-status-pill {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.indicator-status-pill.bullish,
+.indicator-status-pill.oversold {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--bullish);
+}
+
+.indicator-status-pill.bearish,
+.indicator-status-pill.overbought {
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  color: var(--bearish);
+}
+
+.indicator-status-pill.neutral {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+}
+
+.indicator-value-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.indicator-main-val {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.indicator-subtext {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+/* RSI Gauge Bar */
+.rsi-gauge-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.rsi-gauge-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-full);
+  overflow: visible;
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.rsi-zone.oversold {
+  width: 30%;
+  background: rgba(16, 185, 129, 0.4);
+  border-radius: var(--radius-full) 0 0 var(--radius-full);
+}
+
+.rsi-zone.neutral {
+  width: 40%;
+  background: rgba(245, 158, 11, 0.3);
+}
+
+.rsi-zone.overbought {
+  width: 30%;
+  background: rgba(244, 63, 94, 0.4);
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+}
+
+.rsi-pointer {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #060912;
+  box-shadow: 0 0 8px #06B6D4;
+  z-index: 2;
+  transition: left 0.3s ease;
+}
+
+.rsi-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+.macd-details-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+}
+
+.detail-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.detail-stat .lbl {
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 9px;
+}
+
+.detail-stat .val {
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 900px) {
+  .tech-indicators-grid {
+    grid-template-columns: 1fr;
+  }
+}
