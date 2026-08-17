@@ -45,6 +45,144 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed_url = urllib.parse.urlparse(self.path)
         
+        # Intercept Proxy Stock Fundamentals request
+        if parsed_url.path == '/api/stock/fundamentals':
+            query_params = urllib.parse.parse_qs(parsed_url.query)
+            ticker = query_params.get('ticker', ['AAPL'])[0].upper()
+            if ticker == 'BTC-USD':
+                ticker = 'BTC/USD'
+            elif ticker == 'EURUSD=X':
+                ticker = 'EUR/USD'
+
+            endpoints = [
+                ('profile', f"https://api.twelvedata.com/profile?symbol={ticker}"),
+                ('quote', f"https://api.twelvedata.com/quote?symbol={ticker}"),
+                ('statistics', f"https://api.twelvedata.com/statistics?symbol={ticker}")
+            ]
+            
+            results = {}
+            last_error = None
+            for ep_name, ep_base in endpoints:
+                for _ in range(len(API_KEYS)):
+                    key = get_next_api_key()
+                    url = f"{ep_base}&apikey={key}"
+                    try:
+                        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(req) as response:
+                            res_json = json.loads(response.read().decode('utf-8'))
+                            if res_json.get('code') != 400 and res_json.get('status') != 'error':
+                                results[ep_name] = res_json
+                                break
+                            else:
+                                last_error = res_json.get('message', 'API Error')
+                    except Exception as e:
+                        last_error = str(e)
+                        continue
+
+            if 'profile' in results or 'quote' in results or 'statistics' in results:
+                prof = results.get('profile', {})
+                quo = results.get('quote', {})
+                st = results.get('statistics', {}).get('statistics', {})
+                val = st.get('valuations_metrics', {}) if isinstance(st, dict) else {}
+                fin = st.get('financials', {}) if isinstance(st, dict) else {}
+                stock_stats = st.get('stock_statistics', {}) if isinstance(st, dict) else {}
+                price_sum = st.get('stock_price_summary', {}) if isinstance(st, dict) else {}
+                divs = st.get('dividends_and_splits', {}) if isinstance(st, dict) else {}
+
+                # Format market cap
+                market_cap_raw = val.get('market_capitalization')
+                if market_cap_raw:
+                    if market_cap_raw >= 1e12:
+                        market_cap_fmt = f"${market_cap_raw / 1e12:.2f}T"
+                    elif market_cap_raw >= 1e9:
+                        market_cap_fmt = f"${market_cap_raw / 1e9:.2f}B"
+                    elif market_cap_raw >= 1e6:
+                        market_cap_fmt = f"${market_cap_raw / 1e6:.2f}M"
+                    else:
+                        market_cap_fmt = f"${market_cap_raw:,.0f}"
+                else:
+                    market_cap_fmt = 'N/A'
+
+                # Format PE
+                pe_val = val.get('trailing_pe')
+                pe_fmt = f"{pe_val:.1f}x" if pe_val else 'N/A'
+                fpe_val = val.get('forward_pe')
+                fpe_fmt = f"{fpe_val:.1f}x" if fpe_val else 'N/A'
+
+                # Format EPS
+                eps_val = fin.get('income_statement', {}).get('diluted_eps_ttm') if isinstance(fin, dict) else None
+                eps_fmt = f"${eps_val:.2f}" if eps_val is not None else 'N/A'
+
+                # Format Dividend Yield
+                div_yield = divs.get('trailing_annual_dividend_yield') or divs.get('forward_annual_dividend_yield')
+                div_fmt = f"{div_yield * 100:.2f}%" if div_yield else '0.00%'
+
+                # Format Avg Volume
+                avg_vol = quo.get('average_volume') or (stock_stats.get('avg_30_volume') if isinstance(stock_stats, dict) else None)
+                if avg_vol:
+                    avg_vol_num = float(avg_vol)
+                    avg_vol_fmt = f"{avg_vol_num / 1e6:.1f}M" if avg_vol_num >= 1e6 else f"{avg_vol_num / 1e3:.0f}K"
+                else:
+                    avg_vol_fmt = 'N/A'
+
+                # Format Beta
+                beta_val = price_sum.get('beta') if isinstance(price_sum, dict) else None
+                beta_fmt = f"{beta_val:.2f}" if beta_val is not None else '1.00'
+
+                # Format Shares Out
+                shares_out = stock_stats.get('shares_outstanding') if isinstance(stock_stats, dict) else None
+                if shares_out:
+                    shares_out_num = float(shares_out)
+                    shares_out_fmt = f"{shares_out_num / 1e9:.2f}B" if shares_out_num >= 1e9 else f"{shares_out_num / 1e6:.1f}M"
+                else:
+                    shares_out_fmt = 'N/A'
+
+                # 52W range
+                fifty_two = quo.get('fifty_two_week', {}) if isinstance(quo, dict) else {}
+                low52 = float(fifty_two.get('low', 0)) if fifty_two.get('low') else ((price_sum.get('fifty_two_week_low', 0) if isinstance(price_sum, dict) else 0))
+                high52 = float(fifty_two.get('high', 0)) if fifty_two.get('high') else ((price_sum.get('fifty_two_week_high', 0) if isinstance(price_sum, dict) else 0))
+
+                hq_parts = [prof.get('city'), prof.get('state'), prof.get('country')]
+                hq_str = ", ".join([p for p in hq_parts if p]) or 'United States'
+
+                payload = {
+                    "status": "ok",
+                    "symbol": ticker,
+                    "name": prof.get('name') or quo.get('name') or f"{ticker} Stock",
+                    "sector": prof.get('sector') or 'Equity Market',
+                    "industry": prof.get('industry') or 'Public Company',
+                    "ceo": prof.get('CEO') or 'Executive Management',
+                    "headquarters": hq_str,
+                    "employees": f"{int(prof.get('employees', 0)):,}" if prof.get('employees') else 'Corporate',
+                    "website": prof.get('website', ''),
+                    "description": prof.get('description', ''),
+                    "marketCap": market_cap_fmt,
+                    "marketCapRaw": market_cap_raw,
+                    "peRatio": pe_fmt,
+                    "forwardPE": fpe_fmt,
+                    "eps": eps_fmt,
+                    "dividendYield": div_fmt,
+                    "avgVolume30D": avg_vol_fmt,
+                    "beta": beta_fmt,
+                    "sharesOutstanding": shares_out_fmt,
+                    "fiftyTwoWeekLow": low52,
+                    "fiftyTwoWeekHigh": high52,
+                    "isLiveApi": True
+                }
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(payload).encode('utf-8'))
+                return
+            else:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"Twelve Data fundamentals failed: {last_error}"}).encode('utf-8'))
+                return
+
         # Intercept Proxy Stock request
         if parsed_url.path == '/api/stock':
             query_params = urllib.parse.parse_qs(parsed_url.query)

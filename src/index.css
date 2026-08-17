@@ -4499,6 +4499,24 @@ input:checked+.slider.round:before {
   border-radius: var(--radius-full);
 }
 
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--bullish);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+}
+
+.live-badge i {
+  font-size: 9px;
+}
+
 .insights-subtitle {
   font-size: 11px;
   color: var(--text-muted);
