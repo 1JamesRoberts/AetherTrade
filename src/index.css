@@ -3815,6 +3815,14 @@ input:checked+.slider.round:before {
   gap: 10px;
 }
 
+.tx-time {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
 .btn-tx-delete {
   background: transparent;
   border: none;
