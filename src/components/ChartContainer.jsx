@@ -833,16 +833,18 @@ export default function ChartContainer({
             </div>
           )}
         </div>
-        <div className="chart-instructions">
-          <i className="fa-solid fa-circle-info"></i>{' '}
-          {hoverPrice !== null && showLevels ? (
-            <span style={{ color: hoverPrice > activeStock.price ? 'var(--bearish)' : 'var(--bullish)', fontWeight: 700 }}>
-              Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at ${hoverPrice.toFixed(2)}
-            </span>
-          ) : (
-            "Click anywhere on the chart canvas to add a Support or Resistance level"
-          )}
-        </div>
+        {showLevels && (
+          <div className="chart-instructions">
+            <i className="fa-solid fa-circle-info"></i>{' '}
+            {hoverPrice !== null ? (
+              <span style={{ color: hoverPrice > activeStock.price ? 'var(--bearish)' : 'var(--bullish)', fontWeight: 700 }}>
+                Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at ${hoverPrice.toFixed(2)}
+              </span>
+            ) : (
+              "Click anywhere on the chart canvas to add a Support or Resistance level"
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
