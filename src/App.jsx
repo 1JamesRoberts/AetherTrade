@@ -269,22 +269,113 @@ export default function App() {
 
       <main className="app-workspace">
         {view === 'terminal' ? (
-          <div id="viewTerminal" className={`workspace-view active ${isWatchlistCollapsed ? 'watchlist-collapsed' : ''}`}>
-            <div className="mobile-stock-picker">
-              <select value={activeTicker} onChange={(e) => setActiveTicker(e.target.value)}>
-                {watchlist.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+          <div
+            id="viewTerminal"
+            className={`workspace-view active mobile-tab-${terminalMobileTab} ${isWatchlistCollapsed ? 'watchlist-collapsed' : ''}`}
+          >
+            {/* Mobile Workspace Segmented Control (Visible on screens < 900px) */}
+            <div className="terminal-mobile-nav">
+              <button
+                type="button"
+                className={`mobile-tab-btn ${terminalMobileTab === 'chart' ? 'active' : ''}`}
+                onClick={() => setTerminalMobileTab('chart')}
+              >
+                <i className="fa-solid fa-chart-line"></i>
+                <span>Chart ({activeTicker})</span>
+              </button>
+              <button
+                type="button"
+                className={`mobile-tab-btn ${terminalMobileTab === 'watchlist' ? 'active' : ''}`}
+                onClick={() => setTerminalMobileTab('watchlist')}
+              >
+                <i className="fa-solid fa-star"></i>
+                <span>Watchlist ({watchlist.length})</span>
+              </button>
+              <button
+                type="button"
+                className={`mobile-tab-btn ${terminalMobileTab === 'analysis' ? 'active' : ''}`}
+                onClick={() => setTerminalMobileTab('analysis')}
+              >
+                <i className="fa-solid fa-layer-group"></i>
+                <span>Analysis</span>
+              </button>
             </div>
-            <Watchlist watchlist={watchlist} activeTicker={activeTicker} setActiveTicker={setActiveTicker} stocks={stocks} onRemoveTicker={handleRemoveTicker} onAddTicker={handleAddTicker} isCollapsed={isWatchlistCollapsed} onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)} />
-            <ChartContainer activeTicker={activeTicker} stocks={stocks} range={selectedRange} setRange={setSelectedRange} interval={selectedInterval} setInterval={setSelectedInterval} chartType={chartType} setChartType={setChartType} showLevels={showLevels} setShowLevels={setShowLevels} zoomLevel={zoomLevel} setZoomLevel={setZoomLevel} linesMap={linesMap} setLinesMap={setLinesMap} onRefresh={handleRefresh} isLoading={isLoading} />
-            <AnalysisEngine activeTicker={activeTicker} currentPrice={stocks[activeTicker]?.price || 150.00} lines={linesMap[activeTicker] || []} setLinesMap={setLinesMap} linesMap={linesMap} currentCapital={currentCapital} setCurrentCapital={setCurrentCapital} activeTickerHoldings={activeTickerHoldings} activeStockPrice={activeStockPrice} liveRawValues={stocks[activeTicker]?.liveRawValues || []} />
+
+            <Watchlist
+              watchlist={watchlist}
+              activeTicker={activeTicker}
+              setActiveTicker={(ticker) => {
+                setActiveTicker(ticker);
+                // On mobile, auto-switch to chart when selecting a stock from watchlist
+                if (window.innerWidth < 900) {
+                  setTerminalMobileTab('chart');
+                }
+              }}
+              stocks={stocks}
+              onRemoveTicker={handleRemoveTicker}
+              onAddTicker={handleAddTicker}
+              isCollapsed={isWatchlistCollapsed}
+              onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)}
+            />
+            <ChartContainer
+              activeTicker={activeTicker}
+              stocks={stocks}
+              range={selectedRange}
+              setRange={setSelectedRange}
+              interval={selectedInterval}
+              setInterval={setSelectedInterval}
+              chartType={chartType}
+              setChartType={setChartType}
+              showLevels={showLevels}
+              setShowLevels={setShowLevels}
+              zoomLevel={zoomLevel}
+              setZoomLevel={setZoomLevel}
+              linesMap={linesMap}
+              setLinesMap={setLinesMap}
+              onRefresh={handleRefresh}
+              isLoading={isLoading}
+            />
+            <AnalysisEngine
+              activeTicker={activeTicker}
+              currentPrice={stocks[activeTicker]?.price || 150.00}
+              lines={linesMap[activeTicker] || []}
+              setLinesMap={setLinesMap}
+              linesMap={linesMap}
+              currentCapital={currentCapital}
+              setCurrentCapital={setCurrentCapital}
+              activeTickerHoldings={activeTickerHoldings}
+              activeStockPrice={activeStockPrice}
+              liveRawValues={stocks[activeTicker]?.liveRawValues || []}
+            />
           </div>
         ) : (
           <div id="viewPortfolio" className="workspace-view active">
-            <PortfolioManager portfolios={portfolios} setPortfolios={setPortfolios} activePortfolioId={activePortfolioId} setActivePortfolioId={setActivePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onCreatePortfolio={createPortfolio} onRenamePortfolio={renamePortfolio} onDeletePortfolio={deletePortfolio} showNotification={addToast} onFetchPrice={fetchBackgroundPrice} />
-            <PerformanceHoldings portfolios={portfolios} activePortfolioId={activePortfolioId} stocks={stocks} onAddTransaction={addTransaction} onDeleteTransaction={deleteTransaction} onResetPortfolio={resetPortfolio} onImportCSV={handleImportCSV} onExportCSV={handleExportCSV} onRefreshPrices={fetchBackgroundPrice} onFetchPortfolioHistory={fetchPortfolioHistory} showNotification={addToast} />
+            <PortfolioManager
+              portfolios={portfolios}
+              setPortfolios={setPortfolios}
+              activePortfolioId={activePortfolioId}
+              setActivePortfolioId={setActivePortfolioId}
+              stocks={stocks}
+              onAddTransaction={addTransaction}
+              onCreatePortfolio={createPortfolio}
+              onRenamePortfolio={renamePortfolio}
+              onDeletePortfolio={deletePortfolio}
+              showNotification={addToast}
+              onFetchPrice={fetchBackgroundPrice}
+            />
+            <PerformanceHoldings
+              portfolios={portfolios}
+              activePortfolioId={activePortfolioId}
+              stocks={stocks}
+              onAddTransaction={addTransaction}
+              onDeleteTransaction={deleteTransaction}
+              onResetPortfolio={resetPortfolio}
+              onImportCSV={handleImportCSV}
+              onExportCSV={handleExportCSV}
+              onRefreshPrices={fetchBackgroundPrice}
+              onFetchPortfolioHistory={fetchPortfolioHistory}
+              showNotification={addToast}
+            />
           </div>
         )}
       </main>

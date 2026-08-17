@@ -2172,87 +2172,146 @@ body {
   }
 }
 
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .app-workspace {
-    height: auto;
-    overflow-y: auto;
-  }
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE SYSTEM (PHASE 5)
+   ========================================================================== */
 
-  #viewTerminal.workspace-view.active {
-    grid-template-columns: 280px 1fr;
-  }
-
-  #viewPortfolio.workspace-view.active {
-    grid-template-columns: 1fr;
-  }
-
-  .panel-right {
-    grid-column: 1 / -1;
-  }
-}
-
-/* Mobile Stock Picker — hidden on desktop */
-.mobile-stock-picker {
+/* Mobile Terminal Segmented Workspace Navigation (Hidden on Desktop) */
+.terminal-mobile-nav {
   display: none;
 }
 
-/* Tablet */
-@media (max-width: 850px) {
+/* Tablet & Large Mobile (max-width: 1200px) */
+@media (max-width: 1200px) {
+  #viewTerminal.workspace-view.active {
+    grid-template-columns: 260px 1fr 320px;
+    gap: 14px;
+  }
+
+  #viewPortfolio.workspace-view.active {
+    grid-template-columns: 340px 1fr;
+    gap: 14px;
+  }
+}
+
+/* Mobile & Tablet Mode (max-width: 900px) */
+@media (max-width: 900px) {
   .app-workspace {
     height: auto;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px;
   }
 
   .workspace-view {
     overflow: visible;
+    height: auto;
   }
 
-  #viewTerminal.workspace-view.active {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
-  }
-
-  .mobile-stock-picker {
-    display: block;
-  }
-
-  .mobile-stock-picker select {
-    width: 100%;
-    padding: 10px 14px;
-    background: rgba(255, 255, 255, 0.04);
+  /* Segmented Mobile Workspace Navigation Bar */
+  .terminal-mobile-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    background: rgba(13, 19, 33, 0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 14px;
+    margin-bottom: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+
+  .mobile-tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 12px;
+    min-height: 40px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
     font-weight: 700;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
     cursor: pointer;
+    transition: all var(--transition-fast) ease;
   }
 
-  .mobile-stock-picker select:focus {
-    outline: none;
-    border-color: var(--cyan);
+  .mobile-tab-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.03);
   }
 
-  .panel-left {
-    display: none;
+  .mobile-tab-btn.active {
+    background: rgba(6, 182, 212, 0.15);
+    border-color: rgba(6, 182, 212, 0.4);
+    color: var(--cyan);
+    box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
   }
 
-  .panel-right {
-    grid-column: 1;
+  /* Switch active panels according to mobile tab */
+  #viewTerminal.workspace-view.active {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #viewTerminal.mobile-tab-chart .panel-left,
+  #viewTerminal.mobile-tab-chart .panel-right {
+    display: none !important;
+  }
+
+  #viewTerminal.mobile-tab-chart .panel-center {
+    display: flex !important;
+    width: 100%;
+    min-height: 520px;
+  }
+
+  #viewTerminal.mobile-tab-watchlist .panel-center,
+  #viewTerminal.mobile-tab-watchlist .panel-right {
+    display: none !important;
+  }
+
+  #viewTerminal.mobile-tab-watchlist .panel-left {
+    display: flex !important;
+    width: 100%;
+    max-width: 100%;
+    min-height: 450px;
+  }
+
+  #viewTerminal.mobile-tab-analysis .panel-left,
+  #viewTerminal.mobile-tab-analysis .panel-center {
+    display: none !important;
+  }
+
+  #viewTerminal.mobile-tab-analysis .panel-right {
+    display: flex !important;
+    width: 100%;
+    min-height: 500px;
+  }
+
+  /* Portfolio Mobile Stack */
+  #viewPortfolio.workspace-view.active {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+
+  .panel-portfolio-left,
+  .panel-portfolio-right {
+    width: 100%;
+    height: auto;
+    max-height: none;
     overflow: visible;
   }
 
-  .panel-center {
-    overflow: visible;
-  }
-
+  /* Responsive App Header */
   .app-header {
     flex-wrap: wrap;
     height: auto;
@@ -2260,178 +2319,119 @@ body {
     gap: 10px;
   }
 
-  .header-logo {
-    gap: 8px;
-  }
-
-  .header-logo .logo-icon {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
-  }
-
-  .header-logo .logo-brand {
-    font-size: 16px;
-  }
-
-  .header-logo .logo-sub {
-    font-size: 10px;
+  .header-left {
+    gap: 10px;
   }
 
   .app-nav {
     order: 3;
     width: 100%;
     justify-content: center;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 3px;
+    border-radius: var(--radius-sm);
   }
 
-  .user-email {
+  .app-nav .nav-btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 38px;
+  }
+
+  .nav-shortcut {
     display: none;
   }
 
-  .ticker-tape {
+  .user-email-text {
     display: none;
   }
 
   .panel-center {
-    padding: 16px;
-    gap: 14px;
+    padding: 14px;
   }
 
   .chart-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 10px;
   }
 
   .chart-controls {
     width: 100%;
-    gap: 8px;
-  }
-
-  .stock-name {
-    font-size: 18px;
-  }
-
-  .stock-price {
-    font-size: 16px;
-  }
-
-  .stock-badge {
-    padding: 6px 12px;
-    font-size: 15px;
-  }
-
-  .analysis-section {
-    padding: 16px;
-  }
-
-  .holding-panel {
-    padding: 14px 16px;
-  }
-
-  .holding-row {
-    padding: 8px 10px;
-  }
-
-  .holding-row-details {
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .analysis-cards-grid {
-    grid-template-columns: 1fr 1fr !important;
-  }
-
-  .auth-card {
-    padding: 28px 20px;
-    margin: 10px;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 
-/* Mobile */
+/* Small Mobile (max-width: 480px) */
 @media (max-width: 480px) {
+  .app-workspace {
+    padding: 8px;
+  }
+
   .app-header {
-    padding: 8px 12px;
-    gap: 8px;
+    padding: 8px 10px;
   }
 
-  .nav-btn {
-    padding: 6px 12px;
-    font-size: 12px;
+  .header-logo .logo-brand {
+    font-size: 15px;
   }
 
-  .nav-btn i {
-    font-size: 12px;
+  .header-logo .logo-sub {
+    font-size: 9px;
   }
 
-  .panel-center {
-    padding: 12px;
-    gap: 10px;
+  .market-status-pill {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+
+  .market-time-sep,
+  .market-time {
+    display: none;
   }
 
   .chart-container {
-    min-height: 220px;
+    min-height: 280px;
   }
 
-  .chart-controls {
-    gap: 6px;
+  .price-range-meter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
   }
 
-  .range-selector,
-  .interval-selector,
-  .chart-style-selector {
-    padding: 3px;
+  .range-track-container {
+    width: 100%;
   }
 
-  .range-btn,
-  .interval-btn,
-  .style-btn {
-    padding: 5px 8px;
+  .portfolio-kpi-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .portfolio-header-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .btn-tool span {
+    display: none;
+  }
+
+  .btn-tool {
+    padding: 6px 10px;
+  }
+
+  .tx-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .holdings-table th,
+  .holdings-table td {
+    padding: 8px 6px;
     font-size: 11px;
-  }
-
-  .toggle-container span {
-    font-size: 10px !important;
-  }
-
-  .zoom-container {
-    display: none !important;
-  }
-
-  .stock-name {
-    font-size: 16px;
-  }
-
-  .stock-price {
-    font-size: 14px;
-  }
-
-  .stock-trend {
-    font-size: 12px;
-  }
-
-  .stock-badge {
-    padding: 5px 10px;
-    font-size: 13px;
-  }
-
-  .chart-instructions {
-    font-size: 10px;
-  }
-
-  .holding-panel-header {
-    font-size: 11px;
-  }
-
-  .holding-row-name {
-    font-size: 11px;
-  }
-
-  .holding-row-pnl {
-    font-size: 11px;
-  }
-
-  .holding-row-details span {
-    font-size: 10px;
   }
 
   .analysis-section {
