@@ -62,7 +62,13 @@ function calculateMACD(closes) {
   const latestMacd = macdLine[macdLine.length - 1];
   const latestSignal = signalLine[signalLine.length - 1];
   const histogram = latestMacd - latestSignal;
-  return { macd: latestMacd, signal: latestSignal, histogram };
+
+  const prevMacd = macdLine.length > 1 ? macdLine[macdLine.length - 2] : latestMacd;
+  const prevSignal = signalLine.length > 1 ? signalLine[signalLine.length - 2] : latestSignal;
+  const prevHistogram = prevMacd - prevSignal;
+  const isGrowing = histogram >= prevHistogram;
+
+  return { macd: latestMacd, signal: latestSignal, histogram, prevHistogram, isGrowing };
 }
 
 function calculateSMAValue(closes, period) {
@@ -76,7 +82,7 @@ function formatPercentValue(val) {
   if (val === null || val === undefined || val === 'N/A' || val === '') return '0.00%';
   const str = String(val).trim();
   if (str.endsWith('%')) return str;
-  const num = parseFloat(str);
+  const num = parseFloat(str.replace(/,/g, ''));
   return isNaN(num) ? '0.00%' : `${num.toFixed(2)}%`;
 }
 
@@ -84,7 +90,8 @@ function formatLargeNumber(val, isCurrency = false) {
   if (val === null || val === undefined || val === 'N/A' || val === '') return '--';
   const str = String(val).trim();
   if (/[KMBT]$/i.test(str) || str.startsWith('$')) return str;
-  const num = parseFloat(str);
+  const cleanStr = str.replace(/,/g, '');
+  const num = parseFloat(cleanStr);
   if (isNaN(num)) return str;
   const prefix = isCurrency ? '$' : '';
   if (num >= 1e12) return `${prefix}${(num / 1e12).toFixed(2)}T`;
@@ -579,17 +586,17 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                   }
                 }
 
-                // Factor 2: MACD Histogram & Momentum Direction (Weight: 3 pts)
+                // Factor 2: MACD Histogram & Momentum Delta (Weight: 3 pts)
                 if (macd !== null) {
                   maxPoints += 3;
-                  if (macd.histogram > 0 && macd.macd > macd.signal) {
-                    bullishPoints += 3; // Strong bullish expansion
+                  if (macd.histogram > 0 && macd.isGrowing) {
+                    bullishPoints += 3; // Bullish Expansion (+3 pts)
                   } else if (macd.histogram > 0) {
-                    bullishPoints += 2; // Mild bullish crossover
-                  } else if (macd.histogram < 0 && macd.macd > macd.signal) {
-                    bullishPoints += 1; // Weakening bearish momentum
+                    bullishPoints += 2; // Bullish Weakening (+2 pts)
+                  } else if (macd.histogram < 0 && macd.isGrowing) {
+                    bullishPoints += 1; // Bearish Weakening / Bottoming (+1 pt)
                   } else {
-                    bullishPoints += 0; // Solid bearish phase
+                    bullishPoints += 0; // Bearish Expansion (0 pts)
                   }
                 }
 
@@ -712,8 +719,14 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                         <div className="tech-item-header">
                           <span className="indicator-name">MACD (12, 26, 9)</span>
                           {macd ? (
-                            <span className={`indicator-status-pill ${macd.histogram >= 0 ? 'bullish' : 'bearish'}`}>
-                              {macd.histogram >= 0 ? 'Bullish Crossover' : 'Bearish Momentum'}
+                            <span className={`indicator-status-pill ${
+                              macd.histogram >= 0
+                                ? (macd.isGrowing ? 'bullish' : 'neutral')
+                                : (macd.isGrowing ? 'neutral' : 'bearish')
+                            }`}>
+                              {macd.histogram >= 0
+                                ? (macd.isGrowing ? 'Bullish Expansion' : 'Bullish Weakening')
+                                : (macd.isGrowing ? 'Bearish Weakening' : 'Bearish Expansion')}
                             </span>
                           ) : (
                             <span className="indicator-status-pill neutral">
@@ -732,7 +745,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                               --
                             </span>
                           )}
-                          <span className="indicator-subtext">{macd ? 'Histogram Delta' : 'Requires 26+ data points'}</span>
+                          <span className="indicator-subtext">{macd ? (macd.isGrowing ? 'Expanding Delta' : 'Weakening Delta') : 'Requires 26+ data points'}</span>
                         </div>
 
                         <div className="macd-details-row tabular-nums">
