@@ -42,6 +42,7 @@ function calculateRSI(closes, period = 14) {
 }
 
 function calculateEMA(prices, period) {
+  if (!prices || prices.length === 0) return [];
   const k = 2 / (period + 1);
   let ema = prices[0];
   const emaValues = [ema];
@@ -57,7 +58,7 @@ function calculateMACD(closes) {
   const ema12 = calculateEMA(closes, 12);
   const ema26 = calculateEMA(closes, 26);
   const macdLine = ema12.map((v, i) => v - ema26[i]);
-  const signalLine = calculateEMA(macdLine.slice(25), 9);
+  const signalLine = calculateEMA(macdLine, 9);
   const latestMacd = macdLine[macdLine.length - 1];
   const latestSignal = signalLine[signalLine.length - 1];
   const histogram = latestMacd - latestSignal;
@@ -69,6 +70,28 @@ function calculateSMAValue(closes, period) {
   const slice = closes.slice(closes.length - period);
   const sum = slice.reduce((a, b) => a + b, 0);
   return sum / period;
+}
+
+function formatPercentValue(val) {
+  if (val === null || val === undefined || val === 'N/A' || val === '') return '0.00%';
+  const str = String(val).trim();
+  if (str.endsWith('%')) return str;
+  const num = parseFloat(str);
+  return isNaN(num) ? '0.00%' : `${num.toFixed(2)}%`;
+}
+
+function formatLargeNumber(val, isCurrency = false) {
+  if (val === null || val === undefined || val === 'N/A' || val === '') return '--';
+  const str = String(val).trim();
+  if (/[KMBT]$/i.test(str) || str.startsWith('$')) return str;
+  const num = parseFloat(str);
+  if (isNaN(num)) return str;
+  const prefix = isCurrency ? '$' : '';
+  if (num >= 1e12) return `${prefix}${(num / 1e12).toFixed(2)}T`;
+  if (num >= 1e9) return `${prefix}${(num / 1e9).toFixed(2)}B`;
+  if (num >= 1e6) return `${prefix}${(num / 1e6).toFixed(2)}M`;
+  if (num >= 1e3) return `${prefix}${(num / 1e3).toFixed(0)}K`;
+  return `${prefix}${num.toLocaleString()}`;
 }
 
 export default function StockInsights({ activeTicker, currentPrice, historicalData = [] }) {
@@ -247,7 +270,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                     <span className="chip-label">Market Cap</span>
                     <i className="fa-solid fa-building-columns chip-icon text-cyan"></i>
                   </div>
-                  <div className="chip-value tabular-nums">{data.marketCap || '--'}</div>
+                  <div className="chip-value tabular-nums">{formatLargeNumber(data.marketCap, true)}</div>
                   <div className="chip-subtext">Enterprise Valuation</div>
                 </div>
 
@@ -283,7 +306,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                     <span className="chip-label">Dividend Yield</span>
                     <i className="fa-solid fa-hand-holding-dollar chip-icon text-warning"></i>
                   </div>
-                  <div className="chip-value tabular-nums">{data.dividendYield || '0.00%'}</div>
+                  <div className="chip-value tabular-nums">{formatPercentValue(data.dividendYield)}</div>
                   <div className="chip-subtext">Annual Payout Rate</div>
                 </div>
 
@@ -292,7 +315,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                     <span className="chip-label">Avg Volume (30D)</span>
                     <i className="fa-solid fa-chart-simple chip-icon text-cyan"></i>
                   </div>
-                  <div className="chip-value tabular-nums">{data.avgVolume30D || '--'}</div>
+                  <div className="chip-value tabular-nums">{formatLargeNumber(data.avgVolume30D)}</div>
                   <div className="chip-subtext">Daily Liquidity</div>
                 </div>
 
@@ -310,7 +333,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                     <span className="chip-label">Shares Out</span>
                     <i className="fa-solid fa-layer-group chip-icon text-muted"></i>
                   </div>
-                  <div className="chip-value tabular-nums">{data.sharesOutstanding || '--'}</div>
+                  <div className="chip-value tabular-nums">{formatLargeNumber(data.sharesOutstanding)}</div>
                   <div className="chip-subtext">Total Float Shares</div>
                 </div>
               </div>
@@ -433,7 +456,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                     )}
                   </div>
 
-                  {/* Price Target Range Bar */}
+                  {/* Price Target Range Bar with strict [0, 100] proportional clamping */}
                   {data.targetLow && data.targetHigh && data.targetHigh > data.targetLow && (
                     <div className="target-range-container">
                       <div className="target-range-labels">
@@ -455,7 +478,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                         <div className="target-track">
                           {(() => {
                             const range = data.targetHigh - data.targetLow;
-                            const meanPos = Math.max(5, Math.min(95, ((data.targetMean - data.targetLow) / range) * 100));
+                            const meanPos = Math.max(0, Math.min(100, ((data.targetMean - data.targetLow) / range) * 100));
                             const currentPos = price > 0 ? Math.max(0, Math.min(100, ((price - data.targetLow) / range) * 100)) : null;
 
                             return (
@@ -520,186 +543,267 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                       })()}
                     </div>
                   )}
-                  {/* Technical Health & Momentum Summary Gauge (Step 4) */}
-                  {(() => {
-                    const closes = (historicalData || [])
-                      .map(d => (typeof d.close === 'number' ? d.close : (typeof d.value === 'number' ? d.value : null)))
-                      .filter(v => v !== null);
+                </div>
+              )}
 
-                    if (closes.length < 15) return null;
+              {/* Technical Health & Momentum Summary Gauge (Step 4) */}
+              {(() => {
+                const closes = (historicalData || [])
+                  .map(d => (typeof d.close === 'number' ? d.close : (typeof d.value === 'number' ? d.value : null)))
+                  .filter(v => v !== null);
 
-                    const rsi = calculateRSI(closes, 14);
-                    const macd = calculateMACD(closes);
-                    const sma20 = calculateSMAValue(closes, 20);
-                    const sma50 = calculateSMAValue(closes, 50);
+                if (closes.length < 15) return null;
 
-                    // Compute overall composite momentum score
-                    let bullishPoints = 0;
-                    let totalPoints = 0;
+                const rsi = calculateRSI(closes, 14);
+                const macd = calculateMACD(closes);
+                const sma20 = calculateSMAValue(closes, 20);
+                const sma50 = calculateSMAValue(closes, 50);
 
-                    if (rsi !== null) {
-                      totalPoints += 2;
-                      if (rsi >= 50 && rsi <= 70) bullishPoints += 2;
-                      else if (rsi > 70) bullishPoints += 1; // overbought
-                      else if (rsi >= 45) bullishPoints += 1;
-                    }
+                // Institutional Multi-Factor Momentum Evaluation
+                let bullishPoints = 0;
+                let maxPoints = 0;
 
-                    if (macd !== null) {
-                      totalPoints += 2;
-                      if (macd.histogram > 0) bullishPoints += 2;
-                    }
+                // Factor 1: RSI (14) Momentum & Overbought Nuance (Weight: 3 pts)
+                if (rsi !== null) {
+                  maxPoints += 3;
+                  if (rsi >= 55 && rsi <= 70) {
+                    bullishPoints += 3; // Healthy bullish trend zone
+                  } else if (rsi > 70) {
+                    bullishPoints += 1.5; // Overbought: positive trend but elevated pullback risk
+                  } else if (rsi >= 45 && rsi < 55) {
+                    bullishPoints += 1.5; // Neutral balance
+                  } else if (rsi >= 30 && rsi < 45) {
+                    bullishPoints += 0.5; // Bearish weakness
+                  } else {
+                    bullishPoints += 1.0; // Oversold (<30): potential mean-reversion watch
+                  }
+                }
 
-                    if (sma20 !== null && price > 0) {
-                      totalPoints += 1;
-                      if (price > sma20) bullishPoints += 1;
-                    }
+                // Factor 2: MACD Histogram & Momentum Direction (Weight: 3 pts)
+                if (macd !== null) {
+                  maxPoints += 3;
+                  if (macd.histogram > 0 && macd.macd > macd.signal) {
+                    bullishPoints += 3; // Strong bullish expansion
+                  } else if (macd.histogram > 0) {
+                    bullishPoints += 2; // Mild bullish crossover
+                  } else if (macd.histogram < 0 && macd.macd > macd.signal) {
+                    bullishPoints += 1; // Weakening bearish momentum
+                  } else {
+                    bullishPoints += 0; // Solid bearish phase
+                  }
+                }
 
-                    if (sma50 !== null && price > 0) {
-                      totalPoints += 1;
-                      if (price > sma50) bullishPoints += 1;
-                    }
+                // Factor 3: Price vs. Short-Term SMA 20 (Weight: 2 pts)
+                if (sma20 !== null && price > 0) {
+                  maxPoints += 2;
+                  if (price > sma20) {
+                    bullishPoints += 2;
+                  }
+                }
 
-                    const signalScore = totalPoints > 0 ? (bullishPoints / totalPoints) : 0.5;
-                    let overallSignal = 'Neutral';
-                    let signalClass = 'neutral';
+                // Factor 4: SMA 20 vs. SMA 50 Alignment (Weight: 2 pts)
+                if (sma20 !== null && sma50 !== null && price > 0) {
+                  maxPoints += 2;
+                  if (price > sma20 && sma20 > sma50) {
+                    bullishPoints += 2; // Golden alignment
+                  } else if (price > sma50) {
+                    bullishPoints += 1;
+                  }
+                }
 
-                    if (signalScore >= 0.8) {
-                      overallSignal = 'Strong Buy';
-                      signalClass = 'bullish';
-                    } else if (signalScore >= 0.6) {
-                      overallSignal = 'Bullish';
-                      signalClass = 'bullish';
-                    } else if (signalScore <= 0.25) {
-                      overallSignal = 'Strong Sell';
-                      signalClass = 'bearish';
-                    } else if (signalScore <= 0.45) {
-                      overallSignal = 'Bearish';
-                      signalClass = 'bearish';
-                    }
+                const signalScore = maxPoints > 0 ? (bullishPoints / maxPoints) : 0.5;
+                let overallSignal = 'Neutral';
+                let signalClass = 'neutral';
 
-                    const rsiPct = rsi !== null ? Math.max(0, Math.min(100, rsi)) : 50;
+                if (signalScore >= 0.75) {
+                  overallSignal = 'Strong Buy';
+                  signalClass = 'bullish';
+                } else if (signalScore >= 0.55) {
+                  overallSignal = 'Bullish';
+                  signalClass = 'bullish';
+                } else if (signalScore <= 0.25) {
+                  overallSignal = 'Strong Sell';
+                  signalClass = 'bearish';
+                } else if (signalScore < 0.40) {
+                  overallSignal = 'Bearish';
+                  signalClass = 'bearish';
+                }
 
-                    return (
-                      <div className="technical-health-card">
-                        <div className="tech-header">
-                          <div className="tech-title-area">
-                            <span className="tech-title">
-                              <i className="fa-solid fa-gauge-high text-cyan"></i> Technical Health & Momentum
-                            </span>
-                            <span className="tech-subtitle">Live Indicator Analysis</span>
-                          </div>
+                const rsiPct = rsi !== null ? Math.max(0, Math.min(100, rsi)) : 50;
 
-                          <div className="tech-summary-badge-wrapper">
-                            <span className="consensus-label">SUMMARY SIGNAL</span>
-                            <span className={`status-badge ${signalClass}`}>
-                              {overallSignal}
-                            </span>
-                          </div>
+                return (
+                  <div className="technical-health-card">
+                    <div className="tech-header">
+                      <div className="tech-title-area">
+                        <span className="tech-title">
+                          <i className="fa-solid fa-gauge-high text-cyan"></i> Technical Health & Momentum
+                        </span>
+                        <span className="tech-subtitle">Live Indicator Analysis</span>
+                      </div>
+
+                      <div className="tech-summary-badge-wrapper">
+                        <span className="consensus-label">SUMMARY SIGNAL</span>
+                        <span className={`status-badge ${signalClass}`}>
+                          {overallSignal}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Technical Indicator Tri-Grid */}
+                    <div className="tech-indicators-grid">
+                      {/* RSI (14) Card */}
+                      <div className="tech-indicator-item">
+                        <div className="tech-item-header">
+                          <span className="indicator-name">RSI (14)</span>
+                          <span className={`indicator-status-pill ${
+                            rsi === null
+                              ? 'neutral'
+                              : rsi > 70
+                                ? 'overbought'
+                                : rsi > 55
+                                  ? 'bullish'
+                                  : rsi >= 45
+                                    ? 'neutral'
+                                    : rsi >= 30
+                                      ? 'bearish'
+                                      : 'oversold'
+                          }`}>
+                            {rsi === null
+                              ? 'No Data'
+                              : rsi > 70
+                                ? 'Overbought'
+                                : rsi > 55
+                                  ? 'Bullish'
+                                  : rsi >= 45
+                                    ? 'Neutral'
+                                    : rsi >= 30
+                                      ? 'Bearish'
+                                      : 'Oversold'}
+                          </span>
                         </div>
 
-                        {/* Technical Indicator Tri-Grid */}
-                        <div className="tech-indicators-grid">
-                          {/* RSI (14) Card */}
-                          <div className="tech-indicator-item">
-                            <div className="tech-item-header">
-                              <span className="indicator-name">RSI (14)</span>
-                              <span className={`indicator-status-pill ${
-                                rsi > 70 ? 'overbought' : rsi > 55 ? 'bullish' : rsi > 45 ? 'neutral' : rsi > 30 ? 'bearish' : 'oversold'
-                              }`}>
-                                {rsi > 70 ? 'Overbought' : rsi > 55 ? 'Bullish' : rsi > 45 ? 'Neutral' : rsi > 30 ? 'Bearish' : 'Oversold'}
-                              </span>
-                            </div>
+                        <div className="indicator-value-row">
+                          <span className="indicator-main-val tabular-nums">
+                            {rsi !== null ? rsi.toFixed(1) : '--'}
+                          </span>
+                          <span className="indicator-subtext">Oscillator (0–100)</span>
+                        </div>
 
-                            <div className="indicator-value-row">
-                              <span className="indicator-main-val tabular-nums">
-                                {rsi !== null ? rsi.toFixed(1) : '--'}
-                              </span>
-                              <span className="indicator-subtext">Oscillator (0–100)</span>
-                            </div>
-
-                            {/* RSI 0-100 Gauge Track */}
-                            <div className="rsi-gauge-wrapper">
-                              <div className="rsi-gauge-track">
-                                <div className="rsi-zone oversold" title="Oversold Zone (<30)"></div>
-                                <div className="rsi-zone neutral" title="Neutral Zone (30–70)"></div>
-                                <div className="rsi-zone overbought" title="Overbought Zone (>70)"></div>
-                                <div className="rsi-pointer" style={{ left: `${rsiPct}%` }} title={`RSI: ${rsi !== null ? rsi.toFixed(1) : '--'}`}>
-                                  <div className="pointer-dot"></div>
-                                </div>
-                              </div>
-                              <div className="rsi-labels">
-                                <span>30</span>
-                                <span>50</span>
-                                <span>70</span>
-                              </div>
+                        {/* RSI 0-100 Gauge Track */}
+                        <div className="rsi-gauge-wrapper">
+                          <div className="rsi-gauge-track">
+                            <div className="rsi-zone oversold" title="Oversold Zone (<30)"></div>
+                            <div className="rsi-zone neutral" title="Neutral Zone (30–70)"></div>
+                            <div className="rsi-zone overbought" title="Overbought Zone (>70)"></div>
+                            <div className="rsi-pointer" style={{ left: `${rsiPct}%` }} title={`RSI: ${rsi !== null ? rsi.toFixed(1) : '--'}`}>
+                              <div className="pointer-dot"></div>
                             </div>
                           </div>
-
-                          {/* MACD (12, 26, 9) Card */}
-                          <div className="tech-indicator-item">
-                            <div className="tech-item-header">
-                              <span className="indicator-name">MACD (12, 26, 9)</span>
-                              <span className={`indicator-status-pill ${macd && macd.histogram >= 0 ? 'bullish' : 'bearish'}`}>
-                                {macd && macd.histogram >= 0 ? 'Bullish Crossover' : 'Bearish Momentum'}
-                              </span>
-                            </div>
-
-                            <div className="indicator-value-row">
-                              <span className={`indicator-main-val tabular-nums ${macd && macd.histogram >= 0 ? 'text-bullish' : 'text-bearish'}`}>
-                                {macd ? (macd.histogram >= 0 ? `+${macd.histogram.toFixed(2)}` : macd.histogram.toFixed(2)) : '--'}
-                              </span>
-                              <span className="indicator-subtext">Histogram Delta</span>
-                            </div>
-
-                            <div className="macd-details-row tabular-nums">
-                              <div className="detail-stat">
-                                <span className="lbl">MACD</span>
-                                <span className="val text-cyan">{macd ? macd.macd.toFixed(2) : '--'}</span>
-                              </div>
-                              <div className="detail-stat">
-                                <span className="lbl">SIGNAL</span>
-                                <span className="val text-muted">{macd ? macd.signal.toFixed(2) : '--'}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Moving Averages Alignment Card */}
-                          <div className="tech-indicator-item">
-                            <div className="tech-item-header">
-                              <span className="indicator-name">Trend Alignment</span>
-                              <span className={`indicator-status-pill ${
-                                sma20 && price > sma20 ? 'bullish' : 'bearish'
-                              }`}>
-                                {sma20 && price > sma20 ? 'Price > SMA 20' : 'Price < SMA 20'}
-                              </span>
-                            </div>
-
-                            <div className="indicator-value-row">
-                              <span className="indicator-main-val tabular-nums text-cyan">
-                                {sma20 ? `$${sma20.toFixed(2)}` : '--'}
-                              </span>
-                              <span className="indicator-subtext">20-Day Simple Moving Avg</span>
-                            </div>
-
-                            <div className="macd-details-row tabular-nums">
-                              <div className="detail-stat">
-                                <span className="lbl">SMA 50</span>
-                                <span className="val">{sma50 ? `$${sma50.toFixed(2)}` : '--'}</span>
-                              </div>
-                              <div className="detail-stat">
-                                <span className="lbl">SPREAD</span>
-                                <span className={`val ${sma20 && sma50 && sma20 > sma50 ? 'text-bullish' : 'text-bearish'}`}>
-                                  {sma20 && sma50 ? `${(((sma20 - sma50) / sma50) * 100).toFixed(1)}%` : '--'}
-                                </span>
-                              </div>
-                            </div>
+                          <div className="rsi-labels">
+                            <span>30</span>
+                            <span>50</span>
+                            <span>70</span>
                           </div>
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
-              )}
+
+                      {/* MACD (12, 26, 9) Card */}
+                      <div className="tech-indicator-item">
+                        <div className="tech-item-header">
+                          <span className="indicator-name">MACD (12, 26, 9)</span>
+                          {macd ? (
+                            <span className={`indicator-status-pill ${macd.histogram >= 0 ? 'bullish' : 'bearish'}`}>
+                              {macd.histogram >= 0 ? 'Bullish Crossover' : 'Bearish Momentum'}
+                            </span>
+                          ) : (
+                            <span className="indicator-status-pill neutral">
+                              No Data (&lt; 26 Bars)
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="indicator-value-row">
+                          {macd ? (
+                            <span className={`indicator-main-val tabular-nums ${macd.histogram >= 0 ? 'text-bullish' : 'text-bearish'}`}>
+                              {macd.histogram >= 0 ? `+${macd.histogram.toFixed(2)}` : macd.histogram.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="indicator-main-val tabular-nums text-muted">
+                              --
+                            </span>
+                          )}
+                          <span className="indicator-subtext">{macd ? 'Histogram Delta' : 'Requires 26+ data points'}</span>
+                        </div>
+
+                        <div className="macd-details-row tabular-nums">
+                          <div className="detail-stat">
+                            <span className="lbl">MACD</span>
+                            <span className="val text-cyan">{macd ? macd.macd.toFixed(2) : '--'}</span>
+                          </div>
+                          <div className="detail-stat">
+                            <span className="lbl">SIGNAL</span>
+                            <span className="val text-muted">{macd ? macd.signal.toFixed(2) : '--'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Moving Averages Alignment Card */}
+                      <div className="tech-indicator-item">
+                        <div className="tech-item-header">
+                          <span className="indicator-name">Trend Alignment</span>
+                          {sma20 && price > 0 ? (
+                            <span className={`indicator-status-pill ${
+                              sma50 && price > sma20 && sma20 > sma50
+                                ? 'bullish'
+                                : price > sma20
+                                  ? 'bullish'
+                                  : 'bearish'
+                            }`}>
+                              {sma50 && price > sma20 && sma20 > sma50
+                                ? 'Golden Alignment'
+                                : price > sma20
+                                  ? 'Price > SMA 20'
+                                  : sma50 && price < sma20 && sma20 < sma50
+                                    ? 'Death Alignment'
+                                    : 'Price < SMA 20'}
+                            </span>
+                          ) : (
+                            <span className="indicator-status-pill neutral">
+                              No Data (&lt; 20 Bars)
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="indicator-value-row">
+                          {sma20 ? (
+                            <span className="indicator-main-val tabular-nums text-cyan">
+                              ${sma20.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="indicator-main-val tabular-nums text-muted">
+                              --
+                            </span>
+                          )}
+                          <span className="indicator-subtext">{sma20 ? '20-Day Simple Moving Avg' : 'Requires 20+ data points'}</span>
+                        </div>
+
+                        <div className="macd-details-row tabular-nums">
+                          <div className="detail-stat">
+                            <span className="lbl">SMA 50</span>
+                            <span className="val">{sma50 ? `$${sma50.toFixed(2)}` : '--'}</span>
+                          </div>
+                          <div className="detail-stat">
+                            <span className="lbl">SPREAD</span>
+                            <span className={`val ${sma20 && sma50 ? (sma20 > sma50 ? 'text-bullish' : 'text-bearish') : 'text-muted'}`}>
+                              {sma20 && sma50 ? `${(((sma20 - sma50) / sma50) * 100).toFixed(1)}%` : '--'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           ) : (
             <div className="insights-empty-state">
