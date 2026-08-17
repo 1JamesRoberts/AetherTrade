@@ -281,12 +281,12 @@ export default function PerformanceHoldings({
           borderWidth: 2.5,
           backgroundColor: gradient,
           fill: true,
-          tension: 0.35,
-          pointRadius: data.length > 30 ? 0 : 3,
+          pointRadius: 0,
           pointHoverRadius: 6,
+          pointHitRadius: 12,
           pointBackgroundColor: accentColor,
           pointBorderColor: '#ffffff',
-          pointBorderWidth: 1.5,
+          pointBorderWidth: 2,
         }]
       },
       options: {
