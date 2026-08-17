@@ -1583,10 +1583,10 @@ body {
 
 /* Interactive Chart Area */
 .chart-container {
-  flex: 1;
+  flex-shrink: 0;
+  height: 520px;
+  min-height: 520px;
   position: relative;
-  min-height: 300px;
-  max-height: 700px;
   background: rgba(10, 15, 25, 0.7);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -2436,7 +2436,9 @@ body {
   }
 
   .chart-container {
-    min-height: 280px;
+    height: 420px;
+    min-height: 420px;
+    flex-shrink: 0;
   }
 
   .price-range-meter {
@@ -4934,4 +4936,228 @@ input:checked+.slider.round:before {
   .profile-meta-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ==========================================================================
+   WALL STREET ANALYST PRICE TARGETS (STEP 3)
+   ========================================================================== */
+
+.analyst-targets-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: fadeIn 0.25s ease;
+}
+
+.analyst-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.analyst-title-area {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analyst-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.analyst-coverage-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+}
+
+.analyst-consensus-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.consensus-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.analyst-stats-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(6, 182, 212, 0.04);
+  border: 1px solid rgba(6, 182, 212, 0.15);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.callout-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.callout-block.right {
+  align-items: flex-end;
+}
+
+.callout-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.callout-val {
+  font-size: 16px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+
+/* Price Target Range Bar */
+.target-range-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.target-range-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.target-track-wrapper {
+  width: 100%;
+}
+
+.target-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+  overflow: visible;
+}
+
+.target-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #F59E0B 0%, #10B981 100%);
+  border-radius: var(--radius-full);
+}
+
+.target-mean-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 2px solid #060912;
+  box-shadow: 0 0 8px #06B6D4;
+  z-index: 3;
+}
+
+.target-current-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #060912;
+  box-shadow: 0 0 6px #ffffff;
+  z-index: 4;
+}
+
+/* Analyst Breakdown Multi-Segment Bar */
+.analyst-breakdown-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.breakdown-bar {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bar-segment.buy {
+  background: var(--bullish);
+  transition: width 0.3s ease;
+}
+
+.bar-segment.hold {
+  background: #F59E0B;
+  transition: width 0.3s ease;
+}
+
+.bar-segment.sell {
+  background: var(--bearish);
+  transition: width 0.3s ease;
+}
+
+.breakdown-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.legend-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend-chip .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-chip.buy .dot {
+  background: var(--bullish);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.legend-chip.hold .dot {
+  background: #F59E0B;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.legend-chip.sell .dot {
+  background: var(--bearish);
+  box-shadow: 0 0 6px rgba(244, 63, 94, 0.4);
 }

@@ -327,6 +327,148 @@ export default function StockInsights({ activeTicker, currentPrice }) {
                   </div>
                 </div>
               </div>
+
+              {/* Wall Street Analyst Price Targets & Consensus (Step 3) */}
+              {data.targetMean && data.targetMean > 0 && (
+                <div className="analyst-targets-card">
+                  <div className="analyst-header">
+                    <div className="analyst-title-area">
+                      <span className="analyst-title">
+                        <i className="fa-solid fa-bullseye text-cyan"></i> Wall Street Analyst Targets
+                      </span>
+                      {data.numberOfAnalysts > 0 && (
+                        <span className="analyst-coverage-badge">
+                          {data.numberOfAnalysts} Analysts Covering
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="analyst-consensus-wrapper">
+                      <span className="consensus-label">CONSENSUS</span>
+                      <span className={`status-badge ${
+                        data.recommendationKey?.toLowerCase().includes('buy')
+                          ? 'bullish'
+                          : data.recommendationKey?.toLowerCase().includes('sell')
+                            ? 'bearish'
+                            : 'neutral'
+                      }`}>
+                        {data.recommendationKey || 'Hold'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Upside / Downside Callout Row */}
+                  <div className="analyst-stats-callout">
+                    <div className="callout-block">
+                      <span className="callout-label">CONSENSUS 1Y TARGET</span>
+                      <span className="callout-val tabular-nums text-cyan">${Number(data.targetMean).toFixed(2)}</span>
+                    </div>
+
+                    {price > 0 && (
+                      <div className="callout-block right">
+                        <span className="callout-label">IMPLIED RETURN</span>
+                        {(() => {
+                          const upside = ((data.targetMean - price) / price) * 100;
+                          const isUp = upside >= 0;
+                          return (
+                            <span className={`callout-val tabular-nums ${isUp ? 'text-bullish' : 'text-bearish'}`}>
+                              {isUp ? `+${upside.toFixed(1)}% Upside` : `${upside.toFixed(1)}% Downside`}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Price Target Range Bar */}
+                  {data.targetLow && data.targetHigh && data.targetHigh > data.targetLow && (
+                    <div className="target-range-container">
+                      <div className="target-range-labels">
+                        <div className="range-point low">
+                          <span className="label">LOW TARGET</span>
+                          <span className="val tabular-nums">${Number(data.targetLow).toFixed(2)}</span>
+                        </div>
+                        <div className="range-point current">
+                          <span className="label">AVG TARGET</span>
+                          <span className="val tabular-nums text-cyan">${Number(data.targetMean).toFixed(2)}</span>
+                        </div>
+                        <div className="range-point high">
+                          <span className="label">HIGH TARGET</span>
+                          <span className="val tabular-nums">${Number(data.targetHigh).toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <div className="target-track-wrapper">
+                        <div className="target-track">
+                          {(() => {
+                            const range = data.targetHigh - data.targetLow;
+                            const meanPos = Math.max(5, Math.min(95, ((data.targetMean - data.targetLow) / range) * 100));
+                            const currentPos = price > 0 ? Math.max(0, Math.min(100, ((price - data.targetLow) / range) * 100)) : null;
+
+                            return (
+                              <>
+                                <div className="target-fill" style={{ width: `${meanPos}%` }}></div>
+                                <div className="target-mean-marker" style={{ left: `${meanPos}%` }} title={`Avg Target: $${Number(data.targetMean).toFixed(2)}`}>
+                                  <div className="mean-line"></div>
+                                </div>
+                                {currentPos !== null && (
+                                  <div className="target-current-marker" style={{ left: `${currentPos}%` }} title={`Current Price: $${price.toFixed(2)}`}>
+                                    <div className="current-pin"></div>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Analyst Ratings Breakdown Bar */}
+                  {data.analystBreakdown && (
+                    <div className="analyst-breakdown-section">
+                      {(() => {
+                        const bd = data.analystBreakdown;
+                        const buys = (bd.strongBuy || 0) + (bd.buy || 0);
+                        const holds = bd.hold || 0;
+                        const sells = (bd.sell || 0) + (bd.strongSell || 0);
+                        const total = buys + holds + sells;
+
+                        if (total === 0) return null;
+
+                        const buyPct = (buys / total) * 100;
+                        const holdPct = (holds / total) * 100;
+                        const sellPct = (sells / total) * 100;
+
+                        return (
+                          <>
+                            <div className="breakdown-bar">
+                              {buys > 0 && <div className="bar-segment buy" style={{ width: `${buyPct}%` }} title={`Buy / Strong Buy: ${buys}`}></div>}
+                              {holds > 0 && <div className="bar-segment hold" style={{ width: `${holdPct}%` }} title={`Hold: ${holds}`}></div>}
+                              {sells > 0 && <div className="bar-segment sell" style={{ width: `${sellPct}%` }} title={`Sell / Strong Sell: ${sells}`}></div>}
+                            </div>
+
+                            <div className="breakdown-legend">
+                              <div className="legend-chip buy">
+                                <span className="dot"></span>
+                                <span>Buy: <strong>{buys}</strong> ({buyPct.toFixed(0)}%)</span>
+                              </div>
+                              <div className="legend-chip hold">
+                                <span className="dot"></span>
+                                <span>Hold: <strong>{holds}</strong> ({holdPct.toFixed(0)}%)</span>
+                              </div>
+                              <div className="legend-chip sell">
+                                <span className="dot"></span>
+                                <span>Sell: <strong>{sells}</strong> ({sellPct.toFixed(0)}%)</span>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <div className="insights-empty-state">

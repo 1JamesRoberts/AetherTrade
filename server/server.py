@@ -142,6 +142,29 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     employees_val = info.get('fullTimeEmployees')
                     employees_fmt = f"{int(employees_val):,}" if employees_val else 'Corporate'
 
+                    rec_key = info.get('recommendationKey', '')
+                    rec_key_fmt = rec_key.replace('_', ' ').title() if rec_key else 'Hold'
+
+                    target_low = info.get('targetLowPrice')
+                    target_mean = info.get('targetMeanPrice')
+                    target_high = info.get('targetHighPrice')
+                    num_analysts = info.get('numberOfAnalystOpinions') or 0
+
+                    analyst_breakdown = {"strongBuy": 0, "buy": 0, "hold": 0, "sell": 0, "strongSell": 0}
+                    try:
+                        recs = t.recommendations
+                        if recs is not None and not recs.empty:
+                            row = recs.iloc[0]
+                            analyst_breakdown = {
+                                "strongBuy": int(row.get('strongBuy', 0)),
+                                "buy": int(row.get('buy', 0)),
+                                "hold": int(row.get('hold', 0)),
+                                "sell": int(row.get('sell', 0)),
+                                "strongSell": int(row.get('strongSell', 0))
+                            }
+                    except Exception:
+                        pass
+
                     payload_obj = {
                         "status": "ok",
                         "symbol": ticker,
@@ -164,6 +187,12 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                         "sharesOutstanding": shares_out_fmt,
                         "fiftyTwoWeekLow": low52,
                         "fiftyTwoWeekHigh": high52,
+                        "recommendationKey": rec_key_fmt,
+                        "numberOfAnalysts": num_analysts,
+                        "targetLow": target_low,
+                        "targetMean": target_mean,
+                        "targetHigh": target_high,
+                        "analystBreakdown": analyst_breakdown,
                         "isLiveApi": True
                     }
 
