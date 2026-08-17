@@ -25,6 +25,8 @@ export default function PerformanceHoldings({
   const [sortDirection, setSortDirection] = useState('desc');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [chartMode, setChartMode] = useState('total'); // 'total' | 'unrealized'
+  const [timeRange, setTimeRange] = useState('ALL'); // '1W' | '1M' | '1Y' | 'ALL'
+  const [isLedgerCollapsed, setIsLedgerCollapsed] = useState(false);
 
   const activePortfolio = portfolios.find(p => p.id === activePortfolioId) || {
     id: 'default',
@@ -251,14 +253,29 @@ export default function PerformanceHoldings({
       });
     });
 
-    if (points.length === 1) {
-      const prevDate = new Date(points[0].x.getTime() - 24 * 60 * 60 * 1000);
-      points.unshift({ x: prevDate, y: 0 });
+    // Apply Time Range Cutoff Filter
+    let cutoffTime = 0;
+    const now = Date.now();
+    if (timeRange === '1W') cutoffTime = now - 7 * 24 * 60 * 60 * 1000;
+    else if (timeRange === '1M') cutoffTime = now - 30 * 24 * 60 * 60 * 1000;
+    else if (timeRange === '1Y') cutoffTime = now - 365 * 24 * 60 * 60 * 1000;
+
+    let filteredPoints = points;
+    if (cutoffTime > 0) {
+      filteredPoints = points.filter(p => p.x.getTime() >= cutoffTime);
+      if (filteredPoints.length === 0 && points.length > 0) {
+        filteredPoints = [points[points.length - 1]];
+      }
     }
 
-    points.sort((a, b) => a.x.getTime() - b.x.getTime());
-    const labels = points.map(p => p.x.toLocaleDateString([], { month: 'short', day: 'numeric' }));
-    const data = points.map(p => parseFloat(p.y.toFixed(2)) || 0);
+    if (filteredPoints.length === 1) {
+      const prevDate = new Date(filteredPoints[0].x.getTime() - 24 * 60 * 60 * 1000);
+      filteredPoints.unshift({ x: prevDate, y: filteredPoints[0].y });
+    }
+
+    filteredPoints.sort((a, b) => a.x.getTime() - b.x.getTime());
+    const labels = filteredPoints.map(p => p.x.toLocaleDateString([], { month: 'short', day: 'numeric' }));
+    const data = filteredPoints.map(p => parseFloat(p.y.toFixed(2)) || 0);
 
     const ctx = performanceCanvasRef.current.getContext('2d');
     const isOverallGain = data.length > 0 && data[data.length - 1] >= 0;
@@ -328,7 +345,7 @@ export default function PerformanceHoldings({
         performanceChartRef.current = null;
       }
     };
-  }, [activePortfolio, stocks, chartMode]);
+  }, [activePortfolio, stocks, chartMode, timeRange]);
 
   const handleRefreshPrices = async () => {
     if (isRefreshing) return;
@@ -434,19 +451,35 @@ export default function PerformanceHoldings({
               <button type="button" onClick={() => setChartMode('unrealized')} className={`chart-mode-pill ${chartMode === 'unrealized' ? 'active' : ''}`}>Unrealized P&L</button>
             </div>
           </div>
-          {activePortfolio.transactions.length > 0 && (
-            <button
-              type="button"
-              onClick={handleRefreshPrices}
-              disabled={isRefreshing}
-              className="btn-refresh"
-              title="Refresh chart prices"
-              aria-label="Refresh chart prices"
-            >
-              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
-            </button>
-          )}
+
+          <div className="chart-right-controls">
+            <div className="time-range-pill-group">
+              {['1W', '1M', '1Y', 'ALL'].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setTimeRange(r)}
+                  className={`time-range-pill ${timeRange === r ? 'active' : ''}`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            {activePortfolio.transactions.length > 0 && (
+              <button
+                type="button"
+                onClick={handleRefreshPrices}
+                disabled={isRefreshing}
+                className="btn-refresh"
+                title="Refresh chart prices"
+                aria-label="Refresh chart prices"
+              >
+                <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
+              </button>
+            )}
+          </div>
         </div>
+
         <div className="performance-chart-wrapper" id="performanceChartContainer">
           <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart"></canvas>
           {activePortfolio.transactions.length === 0 && (
@@ -533,43 +566,62 @@ export default function PerformanceHoldings({
         </div>
       </div>
 
-      <div className="analysis-section transaction-ledger-section">
-        <div className="section-subtitle">
-          <span>Transaction Audit History</span>
-          <span className="ledger-count-tag tabular-nums">{activePortfolio.transactions.length} Records</span>
+      <div className={`analysis-section transaction-ledger-section ${isLedgerCollapsed ? 'collapsed' : ''}`}>
+        <div
+          className="section-subtitle ledger-header-subtitle"
+          onClick={() => setIsLedgerCollapsed(!isLedgerCollapsed)}
+          title="Click to toggle Transaction Ledger"
+        >
+          <div className="ledger-header-left">
+            <i className={`fa-solid ${isLedgerCollapsed ? 'fa-chevron-right' : 'fa-chevron-down'} ledger-toggle-icon`}></i>
+            <span>Transaction Audit History</span>
+            <span className="ledger-count-tag tabular-nums">{activePortfolio.transactions.length} Records</span>
+          </div>
+          <button
+            type="button"
+            className="btn-ledger-collapse"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsLedgerCollapsed(!isLedgerCollapsed);
+            }}
+          >
+            {isLedgerCollapsed ? 'Expand' : 'Collapse'}
+          </button>
         </div>
-        <div className="ledger-scroll-viewport">
-          <ul className="ledger-list" id="portfolioLogList">
-            {activePortfolio.transactions.length === 0 ? (
-              <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '15px' }}>No transaction audit records found.</li>
-            ) : (
-              [...activePortfolio.transactions].reverse().map((tx, idx) => {
-                const actualIndex = activePortfolio.transactions.length - 1 - idx;
-                const gross = tx.shares * tx.price;
-                const txFees = parseFloat(tx.fees) || 0;
-                const net = tx.type === 'BUY' ? (gross + txFees) : Math.max(0, gross - txFees);
-                const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
-                return (
-                  <li key={`tx-log-${actualIndex}`} className="tx-ledger-item">
-                    <div className="ledger-left">
-                      <div className="ledger-top-row">
-                        <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
-                        <span className="ledger-shares-ticker tabular-nums"><strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatCurrency(tx.price)}</span>
+        {!isLedgerCollapsed && (
+          <div className="ledger-scroll-viewport">
+            <ul className="ledger-list" id="portfolioLogList">
+              {activePortfolio.transactions.length === 0 ? (
+                <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '15px' }}>No transaction audit records found.</li>
+              ) : (
+                [...activePortfolio.transactions].reverse().map((tx, idx) => {
+                  const actualIndex = activePortfolio.transactions.length - 1 - idx;
+                  const gross = tx.shares * tx.price;
+                  const txFees = parseFloat(tx.fees) || 0;
+                  const net = tx.type === 'BUY' ? (gross + txFees) : Math.max(0, gross - txFees);
+                  const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
+                  return (
+                    <li key={`tx-log-${actualIndex}`} className="tx-ledger-item">
+                      <div className="ledger-left">
+                        <div className="ledger-top-row">
+                          <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
+                          <span className="ledger-shares-ticker tabular-nums"><strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatCurrency(tx.price)}</span>
+                        </div>
+                        <div className="ledger-meta-row tabular-nums">
+                          <span>Gross: {formatCurrency(gross)}</span><span>Fee: {formatCurrency(txFees)}</span><span>Net: <strong>{formatCurrency(net)}</strong></span>{accountStr && <span className="account-tag">{accountStr}</span>}
+                        </div>
                       </div>
-                      <div className="ledger-meta-row tabular-nums">
-                        <span>Gross: {formatCurrency(gross)}</span><span>Fee: {formatCurrency(txFees)}</span><span>Net: <strong>{formatCurrency(net)}</strong></span>{accountStr && <span className="account-tag">{accountStr}</span>}
+                      <div className="ledger-right">
+                        <span className="tx-time tabular-nums">{formattedDate(tx.timestamp)}</span>
+                        <button type="button" onClick={() => { const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings."); if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex); }} className="btn-tx-delete" title="Delete transaction entry" aria-label="Delete transaction entry"><i className="fa-solid fa-trash-can"></i></button>
                       </div>
-                    </div>
-                    <div className="ledger-right">
-                      <span className="tx-time tabular-nums">{formattedDate(tx.timestamp)}</span>
-                      <button type="button" onClick={() => { const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings."); if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex); }} className="btn-tx-delete" title="Delete transaction entry" aria-label="Delete transaction entry"><i className="fa-solid fa-trash-can"></i></button>
-                    </div>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </div>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        )}
       </div>
     </section>
   );
