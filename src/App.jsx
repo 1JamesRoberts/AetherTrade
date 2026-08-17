@@ -68,6 +68,7 @@ export default function App() {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [linesMap, setLinesMap] = useState(loadLinesMap);
   const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
+  const [terminalMobileTab, setTerminalMobileTab] = useState('chart'); // 'chart' | 'watchlist' | 'analysis'
   const [marketStatus, setMarketStatus] = useState(getMarketStatus);
 
   // Live Market Status Clock
