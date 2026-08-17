@@ -179,11 +179,6 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
               {data && data.sector && (
                 <span className="insights-sector-tag">{data.sector}</span>
               )}
-              {data && data.isLiveApi && (
-                <span className="live-badge" title="Live data synced from Twelve Data API">
-                  <i className="fa-solid fa-bolt"></i> Live API
-                </span>
-              )}
             </div>
             <p className="insights-subtitle">
               {data && data.industry ? `${data.industry} • ` : ''}Valuation multiples, earnings metrics & 52-week liquidity
