@@ -1083,67 +1083,108 @@ body {
   transform: translateY(-1px);
 }
 
-/* Session Low/High Range Bar in Header */
+/* Enhanced Session Price Range Meter in Header */
 .session-range-meter {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 140px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  margin-left: 8px;
+  justify-content: center;
+  gap: 6px;
+  min-width: 220px;
+  padding: 8px 14px;
+  background: rgba(13, 19, 33, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  margin-left: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: all var(--transition-fast) ease;
+}
+
+.session-range-meter:hover {
+  border-color: rgba(6, 182, 212, 0.35);
+  background: rgba(13, 19, 33, 0.95);
 }
 
 .session-range-labels {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
+  font-size: 11px;
   font-family: var(--font-mono);
   font-weight: 700;
+  color: #E2E8F0;
 }
 
 .range-low {
-  color: var(--text-muted);
-}
-
-.range-title {
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  font-size: 9px;
-  letter-spacing: 0.5px;
+  color: #CBD5E1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .range-high {
-  color: var(--text-muted);
+  color: #CBD5E1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.range-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.range-low .range-tag {
+  background: rgba(244, 63, 94, 0.18);
+  color: var(--bearish);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.range-high .range-tag {
+  background: rgba(16, 185, 129, 0.18);
+  color: var(--bullish);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.range-mid-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
 }
 
 .session-range-track {
   position: relative;
   width: 100%;
-  height: 4px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: visible;
 }
 
 .session-range-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--bullish), var(--cyan));
-  border-radius: 2px;
+  background: linear-gradient(90deg, #F43F5E 0%, #F59E0B 50%, #10B981 100%);
+  border-radius: 3px;
 }
 
 .session-range-pointer {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 6px var(--cyan);
+  background: #ffffff;
+  border: 2px solid #060912;
+  box-shadow: 0 0 8px #06B6D4, 0 0 2px #fff;
+  z-index: 2;
+  transition: left 0.3s ease;
 }
 
 /* Technical Indicator Toggles */

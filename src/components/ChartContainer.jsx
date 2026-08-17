@@ -645,11 +645,15 @@ export default function ChartContainer({
           </div>
 
           {sessionStats.high > 0 && sessionStats.low > 0 && (
-            <div className="session-range-meter" title={`Range Low: $${sessionStats.low.toFixed(2)} | High: $${sessionStats.high.toFixed(2)}`}>
+            <div className="session-range-meter" title={`Session Range: Low $${sessionStats.low.toFixed(2)} — High $${sessionStats.high.toFixed(2)} (Current position: ${rangePercent.toFixed(0)}%)`}>
               <div className="session-range-labels">
-                <span className="range-low">L ${sessionStats.low.toFixed(2)}</span>
-                <span className="range-title">Range</span>
-                <span className="range-high">H ${sessionStats.high.toFixed(2)}</span>
+                <span className="range-low tabular-nums">
+                  <span className="range-tag">LOW</span> ${sessionStats.low.toFixed(2)}
+                </span>
+                <span className="range-mid-badge tabular-nums">{rangePercent.toFixed(0)}%</span>
+                <span className="range-high tabular-nums">
+                  <span className="range-tag">HIGH</span> ${sessionStats.high.toFixed(2)}
+                </span>
               </div>
               <div className="session-range-track">
                 <div className="session-range-fill" style={{ width: `${rangePercent}%` }}></div>

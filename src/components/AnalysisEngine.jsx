@@ -120,7 +120,7 @@ export default function AnalysisEngine({
           selected.push(candidate.price);
         }
 
-        if (selected.length >= 3) break; // Keep top 3 clean primary levels per side
+        if (selected.length >= 4) break; // Keep top 3 clean primary levels per side
       }
       return selected;
     };
