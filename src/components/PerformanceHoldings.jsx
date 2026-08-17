@@ -296,6 +296,7 @@ export default function PerformanceHoldings({
         plugins: {
           legend: { display: false },
           tooltip: {
+            displayColors: false,
             backgroundColor: '#060912',
             titleColor: '#06B6D4',
             bodyColor: '#ffffff',
@@ -309,7 +310,7 @@ export default function PerformanceHoldings({
               label: function (context) {
                 const val = context.parsed.y;
                 const sign = val >= 0 ? '+' : '';
-                return ` ${context.dataset.label}: ${sign}$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                return `${context.dataset.label}: ${sign}$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
               }
             }
           }
