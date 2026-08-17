@@ -152,7 +152,7 @@ export default function Watchlist({
   );
 
   const handleAddCustom = (tickerToAdd) => {
-    const cleanQuery = (tickerToAdd || query).toUpperCase().trim();
+    const cleanQuery = (tickerToAdd || '').toUpperCase().trim();
     if (cleanQuery) {
       onAddTicker(cleanQuery);
       setQuery('');
@@ -163,31 +163,28 @@ export default function Watchlist({
   };
 
   const handleKeyDown = (e) => {
-    const showCustomRow = query.trim().length > 0 && !exactMatchInWatchlist;
-    const totalItems = suggestions.length + (showCustomRow ? 1 : 0);
+    if (suggestions.length === 0) {
+      if (e.key === 'Escape') {
+        setShowDropdown(false);
+        setQuery('');
+      }
+      return;
+    }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (totalItems > 0) {
-        setActiveSuggestionIndex((prev) => (prev + 1) % totalItems);
-        setShowDropdown(true);
-      }
+      setActiveSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+      setShowDropdown(true);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (totalItems > 0) {
-        setActiveSuggestionIndex((prev) => (prev - 1 + totalItems) % totalItems);
-        setShowDropdown(true);
-      }
+      setActiveSuggestionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+      setShowDropdown(true);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (showDropdown && activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.length) {
+      if (activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.length) {
         handleAddCustom(suggestions[activeSuggestionIndex].symbol);
-      } else if (showDropdown && activeSuggestionIndex === suggestions.length && showCustomRow) {
-        handleAddCustom(query);
       } else if (suggestions.length > 0) {
         handleAddCustom(suggestions[0].symbol);
-      } else {
-        handleAddCustom(query);
       }
     } else if (e.key === 'Escape') {
       setShowDropdown(false);
@@ -259,6 +256,20 @@ export default function Watchlist({
               {/* Autocomplete Dropdown in Rail Popover */}
               {showDropdown && query.trim().length >= 2 && (
                 <div className="search-autocomplete-dropdown rail-dropdown">
+                  {isLoadingSuggestions && suggestions.length === 0 && (
+                    <div className="autocomplete-loading">
+                      <i className="fa-solid fa-spinner fa-spin text-cyan"></i>
+                      <span>Searching...</span>
+                    </div>
+                  )}
+
+                  {!isLoadingSuggestions && suggestions.length === 0 && (
+                    <div className="autocomplete-empty-state">
+                      <i className="fa-solid fa-circle-exclamation text-warning"></i>
+                      <span>No verified stock found for "{query.trim().toUpperCase()}"</span>
+                    </div>
+                  )}
+
                   {suggestions.map((item, idx) => {
                     const isSelected = idx === activeSuggestionIndex;
                     const isAlreadyInWatchlist = watchlist.includes(item.symbol);
@@ -280,25 +291,6 @@ export default function Watchlist({
                       </div>
                     );
                   })}
-                  {query.trim().length > 0 && !exactMatchInWatchlist && (
-                    <div
-                      className={`autocomplete-item custom-add ${activeSuggestionIndex === suggestions.length ? 'active' : ''}`}
-                      onClick={() => handleAddCustom(query)}
-                      onMouseEnter={() => setActiveSuggestionIndex(suggestions.length)}
-                    >
-                      <div className="autocomplete-left">
-                        <span className="autocomplete-symbol custom-symbol">
-                          <i className="fa-solid fa-circle-plus text-cyan"></i>
-                        </span>
-                        <span className="autocomplete-name">
-                          Add <strong>"{query.toUpperCase().trim()}"</strong>
-                        </span>
-                      </div>
-                      <div className="autocomplete-right">
-                        <span className="autocomplete-tag custom">Custom</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -329,7 +321,7 @@ export default function Watchlist({
 
                   {/* Rich Popover Hover Card */}
                   {hoveredRailTicker === ticker && (
-                    <div className="rail-hover-card" role="tooltip">
+                    <div className="rail-card-hover" role="tooltip">
                       <div className="rail-card-top">
                         <span className="rail-card-ticker">{stock.ticker}</span>
                         <span className={`rail-card-change ${isUp ? 'up' : 'down'}`}>
@@ -358,26 +350,25 @@ export default function Watchlist({
   return (
     <section className="panel panel-left" aria-label="Stock Selection">
       {/* Panel Header */}
-      <div className="panel-header watchlist-header">
-        <div className="watchlist-title-group">
-          <div className="watchlist-icon-wrap">
-            <i className="fa-solid fa-star"></i>
-          </div>
-          <h2 className="panel-title">Watchlist</h2>
-          <span className="watchlist-count-badge">{watchlist.length} Assets</span>
+      <div className="watchlist-header">
+        <div className="header-title-group">
+          <h2>Markets & Watchlist</h2>
+          <span className="live-count-badge tabular-nums">
+            {watchlist.length} {watchlist.length === 1 ? 'Asset' : 'Assets'}
+          </span>
         </div>
         <button
           onClick={onToggleCollapse}
-          className="btn-collapse-watchlist"
-          title="Collapse to Mini-Rail"
-          aria-label="Collapse Watchlist"
+          className="btn-collapse-panel"
+          title="Collapse Watchlist to Mini-Rail"
+          aria-label="Collapse Watchlist to Mini-Rail"
         >
           <i className="fa-solid fa-angles-left"></i>
         </button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="watchlist-filter-tabs">
+      {/* Filter Tabs (All / Gainers / Losers) */}
+      <div className="filter-tabs">
         <button
           onClick={() => setFilter('all')}
           className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
@@ -442,6 +433,13 @@ export default function Watchlist({
               </div>
             )}
 
+            {!isLoadingSuggestions && suggestions.length === 0 && (
+              <div className="autocomplete-empty-state">
+                <i className="fa-solid fa-circle-exclamation text-warning"></i>
+                <span>No verified stock found for "{query.trim().toUpperCase()}"</span>
+              </div>
+            )}
+
             {suggestions.map((item, idx) => {
               const isSelected = idx === activeSuggestionIndex;
               const isAlreadyInWatchlist = watchlist.includes(item.symbol);
@@ -475,30 +473,6 @@ export default function Watchlist({
                 </div>
               );
             })}
-
-            {/* Custom Fallback Row */}
-            {query.trim().length > 0 && !exactMatchInWatchlist && (
-              <div
-                className={`autocomplete-item custom-add ${activeSuggestionIndex === suggestions.length ? 'active' : ''}`}
-                onClick={() => {
-                  handleAddCustom(query);
-                  setShowDropdown(false);
-                }}
-                onMouseEnter={() => setActiveSuggestionIndex(suggestions.length)}
-              >
-                <div className="autocomplete-left">
-                  <span className="autocomplete-symbol custom-symbol">
-                    <i className="fa-solid fa-circle-plus text-cyan"></i>
-                  </span>
-                  <span className="autocomplete-name">
-                    Add custom ticker <strong>"{query.toUpperCase().trim()}"</strong>
-                  </span>
-                </div>
-                <div className="autocomplete-right">
-                  <span className="autocomplete-tag custom">Custom</span>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -572,31 +546,6 @@ export default function Watchlist({
               <i className="fa-solid fa-filter-circle-xmark"></i>
               <span>No {filter} found in your watchlist</span>
             </div>
-          )}
-
-          {/* Quick Add Custom Symbol Item */}
-          {query.trim().length > 0 && !exactMatchInWatchlist && (
-            <li
-              onClick={() => handleAddCustom()}
-              className="stock-item add-custom-item"
-            >
-              <div className="stock-item-left">
-                <div className="stock-symbol-badge add-badge">
-                  <i className="fa-solid fa-plus"></i>
-                </div>
-                <div className="stock-item-info">
-                  <span className="stock-item-ticker" style={{ color: 'var(--cyan)' }}>
-                    Add '{query.toUpperCase().trim()}'
-                  </span>
-                  <span className="stock-item-name">Fetch quote & add to watchlist</span>
-                </div>
-              </div>
-              <div className="stock-item-stats">
-                <span className="stock-item-price" style={{ fontSize: '11px', color: 'var(--cyan)' }}>
-                  Fetch Live <i className="fa-solid fa-bolt" style={{ marginLeft: '4px' }}></i>
-                </span>
-              </div>
-            </li>
           )}
         </ul>
       </div>
