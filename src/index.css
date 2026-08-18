@@ -3410,9 +3410,14 @@ input:checked+.slider.round:before {
 }
 
 .btn-record-tx.sell {
-  background: linear-gradient(135deg, var(--bullish), #059669);
+  background: linear-gradient(135deg, var(--bearish), #E11D48);
   color: #ffffff;
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 16px rgba(244, 63, 94, 0.3);
+}
+
+.btn-record-tx.sell:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(244, 63, 94, 0.45);
 }
 
 .btn-record-tx.editing {
