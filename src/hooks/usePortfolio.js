@@ -1,12 +1,33 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
+function loadLocalTargetAllocations() {
+  try {
+    const saved = localStorage.getItem('aethertrade_target_allocations');
+    if (saved) return JSON.parse(saved);
+  } catch (e) { console.error('Error loading target allocations:', e); }
+  return {};
+}
+
+function saveLocalTargetAllocations(targetMap) {
+  try {
+    localStorage.setItem('aethertrade_target_allocations', JSON.stringify(targetMap));
+  } catch (e) { console.error('Error saving target allocations:', e); }
+}
+
 function loadLocalPortfolios() {
+  const targetMap = loadLocalTargetAllocations();
   try {
     const saved = localStorage.getItem('aethertrade_portfolios_list');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return parsed.map(p => ({
+        ...p,
+        targetAllocations: p.targetAllocations || targetMap[p.id] || {}
+      }));
+    }
   } catch (e) { console.error(e); }
-  return [{ id: 'default', name: 'Primary Portfolio', holdings: {}, transactions: [], realizedPL: 0 }];
+  return [{ id: 'default', name: 'Primary Portfolio', holdings: {}, transactions: [], realizedPL: 0, targetAllocations: targetMap['default'] || {} }];
 }
 
 function loadLocalActiveId() {
@@ -90,10 +111,18 @@ export function usePortfolio(addToast, user) {
         txMap[tx.portfolio_id].push(tx);
       });
 
+      const targetMap = loadLocalTargetAllocations();
       const merged = dbPortfolios.map(dbPort => {
         const dbTxs = txMap[dbPort.id] || [];
         const { holdings, realizedPL } = rebuildPortfolioHoldings(dbTxs);
-        return { id: dbPort.id, name: dbPort.name, transactions: dbTxs, holdings, realizedPL };
+        return {
+          id: dbPort.id,
+          name: dbPort.name,
+          transactions: dbTxs,
+          holdings,
+          realizedPL,
+          targetAllocations: targetMap[dbPort.id] || {}
+        };
       });
 
       setPortfolios(merged);
@@ -189,6 +218,17 @@ export function usePortfolio(addToast, user) {
           setPortfolios(parsed);
         } catch (err) {
           console.error('Cross-tab storage sync error:', err);
+        }
+      }
+      if (e.key === 'aethertrade_target_allocations' && e.newValue) {
+        try {
+          const targetMap = JSON.parse(e.newValue);
+          setPortfolios(prev => prev.map(p => ({
+            ...p,
+            targetAllocations: targetMap[p.id] || p.targetAllocations || {}
+          })));
+        } catch (err) {
+          console.error('Cross-tab target allocations sync error:', err);
         }
       }
       if (e.key === 'aethertrade_active_portfolio_id' && e.newValue) {
@@ -433,6 +473,14 @@ export function usePortfolio(addToast, user) {
     if (activePortfolioId === portfolioId) {
       setActivePortfolioId(remaining[0].id);
     }
+
+    // Prune target allocations for deleted portfolio
+    const targetMap = loadLocalTargetAllocations();
+    if (targetMap[portfolioId]) {
+      delete targetMap[portfolioId];
+      saveLocalTargetAllocations(targetMap);
+    }
+
     addToast(`Deleted portfolio "${deletedPort?.name || ''}" successfully.`, "success");
 
     if (user) {
@@ -443,6 +491,77 @@ export function usePortfolio(addToast, user) {
       if (portErr) console.error('Supabase delete portfolio error:', portErr);
     }
     return true;
+  }, [portfolios, activePortfolioId, user, addToast]);
+
+  const updateTargetAllocations = useCallback((portfolioId, newTargets) => {
+    let targetPortId = portfolioId;
+    if (!portfolios.some(p => p.id === targetPortId)) {
+      targetPortId = activePortfolioId;
+    }
+
+    // 1. Update state
+    setPortfolios(prev => prev.map(p => {
+      if (p.id === targetPortId) {
+        return { ...p, targetAllocations: newTargets };
+      }
+      return p;
+    }));
+
+    // 2. Persist to dedicated localStorage key
+    const targetMap = loadLocalTargetAllocations();
+    targetMap[targetPortId] = newTargets;
+    saveLocalTargetAllocations(targetMap);
+  }, [portfolios, activePortfolioId]);
+
+  const executeRebalance = useCallback(async (portfolioId, trades) => {
+    if (!trades || trades.length === 0) return;
+
+    let targetPortId = portfolioId;
+    const targetPort = portfolios.find(p => p.id === targetPortId) || portfolios.find(p => p.id === activePortfolioId) || portfolios[0];
+    if (targetPort) targetPortId = targetPort.id;
+    const accountName = targetPort?.name || 'Default';
+
+    const now = Date.now();
+    const newTxs = trades.map((t, idx) => ({
+      id: `tx_reb_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+      portfolio_id: targetPortId,
+      ticker: t.ticker,
+      type: t.type,
+      shares: t.shares,
+      price: t.price,
+      fees: 0,
+      timestamp: now + idx * 10,
+      account: accountName
+    }));
+
+    // 1. Atomic functional state update
+    setPortfolios(prev => prev.map(p => {
+      if (p.id === targetPortId) {
+        const combined = [...p.transactions, ...newTxs];
+        const { holdings, realizedPL } = rebuildPortfolioHoldings(combined);
+        return { ...p, transactions: combined, holdings, realizedPL };
+      }
+      return p;
+    }));
+
+    addToast(`Executed ${trades.length} rebalance order${trades.length === 1 ? '' : 's'} successfully!`, 'success');
+
+    // 2. Batch insert to Supabase if logged in
+    if (user) {
+      const dbRows = newTxs.map(tx => ({
+        id: tx.id,
+        portfolio_id: targetPortId,
+        ticker: tx.ticker,
+        type: tx.type,
+        shares: tx.shares,
+        price: tx.price,
+        fees: 0,
+        date: new Date(tx.timestamp).toISOString()
+      }));
+
+      const { error } = await supabase.from('transactions').insert(dbRows);
+      if (error) console.error('Supabase batch rebalance insert error:', error);
+    }
   }, [portfolios, activePortfolioId, user, addToast]);
 
   return {
@@ -457,6 +576,8 @@ export function usePortfolio(addToast, user) {
     createPortfolio,
     renamePortfolio,
     deletePortfolio,
+    updateTargetAllocations,
+    executeRebalance,
     dbLoaded
   };
 }

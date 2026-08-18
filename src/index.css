@@ -5637,3 +5637,644 @@ input:checked+.slider.round:before {
   align-items: center;
   gap: 6px;
 }
+
+/* ==========================================================================
+   Target Strategy & Portfolio Rebalance Studio Styling
+   ========================================================================== */
+
+/* Sub-Tab Navigation Bar in Portfolio Manager */
+.portfolio-subtab-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  margin: 12px 0 16px;
+  background: rgba(13, 19, 33, 0.65);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.portfolio-subtab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+}
+
+.portfolio-subtab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.portfolio-subtab-btn.active {
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 2px 10px rgba(6, 182, 212, 0.12);
+}
+
+/* Rebalance Studio Container */
+.rebalance-studio-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.rebalance-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rebalance-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.target-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.target-status-pill.balanced {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--bullish);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.target-status-pill.under {
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.target-status-pill.over {
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--bearish);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.target-tools-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-target-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+}
+
+.btn-target-tool:hover {
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.08);
+  border-color: rgba(6, 182, 212, 0.25);
+}
+
+.btn-target-clear:hover {
+  color: var(--bearish);
+  background: rgba(244, 63, 94, 0.08);
+  border-color: rgba(244, 63, 94, 0.25);
+}
+
+/* Studio Warning Alert */
+.studio-warning-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-sm);
+  color: #FBBF24;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.studio-warning-alert i {
+  margin-top: 2px;
+}
+
+/* Target Matrix List */
+.target-matrix-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.target-matrix-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 85px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(13, 19, 33, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast) ease;
+}
+
+.target-matrix-row:hover {
+  background: rgba(13, 19, 33, 0.75);
+  border-color: var(--border-hover);
+}
+
+.matrix-col-asset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.matrix-ticker-group {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.matrix-ticker {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.matrix-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matrix-val-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.matrix-col-drift {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.matrix-weight-compare {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.actual-weight-tag {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.drift-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.drift-badge.overweight {
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.drift-badge.underweight {
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.1);
+}
+
+.drift-badge.balanced {
+  color: var(--bullish);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.matrix-progress-track {
+  position: relative;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+.matrix-actual-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #06B6D4, #3B82F6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.matrix-target-marker {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 12px;
+  background: #ffffff;
+  border-radius: 1.5px;
+  transform: translateX(-50%);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+  z-index: 2;
+}
+
+.matrix-col-input {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.target-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.target-pct-input {
+  width: 100%;
+  padding: 5px 20px 5px 8px;
+  background: rgba(6, 9, 18, 0.8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  transition: all var(--transition-fast) ease;
+}
+
+.target-pct-input:focus {
+  border-color: var(--cyan);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+}
+
+.target-suffix {
+  position: absolute;
+  right: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+/* Rebalance Mode Selector */
+.rebalance-mode-pill-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(13, 19, 33, 0.6);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.rebalance-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+}
+
+.rebalance-mode-pill:hover {
+  color: var(--text-primary);
+}
+
+.rebalance-mode-pill.active {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+/* Deposit Config Card */
+.deposit-config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  background: rgba(13, 19, 33, 0.5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.deposit-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.deposit-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.deposit-field-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 140px;
+}
+
+.deposit-cash-input {
+  width: 100%;
+  padding: 6px 8px 6px 20px;
+  background: rgba(6, 9, 18, 0.85);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.deposit-cash-input:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.deposit-chips-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.deposit-chips-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.deposit-preset-chip {
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+}
+
+.deposit-preset-chip:hover,
+.deposit-preset-chip.active {
+  background: rgba(6, 182, 212, 0.12);
+  color: var(--cyan);
+  border-color: rgba(6, 182, 212, 0.3);
+}
+
+/* Proposed Rebalance Orders Card */
+.rebalance-orders-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.orders-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgba(13, 19, 33, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.orders-summary-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.orders-count-badge {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.orders-stat-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.btn-execute-rebalance {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #06B6D4, #2563EB);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast) ease;
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.25);
+}
+
+.btn-execute-rebalance:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22D3EE, #3B82F6);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(6, 182, 212, 0.35);
+}
+
+.btn-execute-rebalance:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.empty-orders-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--bullish);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rebalance-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.rebalance-order-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  background: rgba(13, 19, 33, 0.4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.order-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.order-type-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.order-type-badge.buy {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--bullish);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.order-type-badge.sell {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--bearish);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.order-ticker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.order-ticker {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12.5px;
+  color: #ffffff;
+}
+
+.order-shares-desc {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.order-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.order-total {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.order-weight-transition {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Enhanced Holdings Table Weight Cell */
+.weight-val-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 3px;
+}
+
+.table-target-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.table-target-tag.balanced {
+  color: var(--bullish);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.table-target-tag.overweight {
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.table-target-tag.underweight {
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.12);
+}
+
+.target-marker-line {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 8px;
+  background: #ffffff;
+  border-radius: 1px;
+  transform: translateX(-50%);
+  z-index: 2;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+}

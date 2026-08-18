@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
+import RebalanceStudio from './RebalanceStudio';
 
 Chart.register(...registerables);
 
@@ -23,11 +24,16 @@ export default function PortfolioManager({
   onCreatePortfolio,
   onRenamePortfolio,
   onDeletePortfolio,
+  onUpdateTargetAllocations,
+  onExecuteRebalance,
   showNotification,
   onFetchPrice
 }) {
   const allocationCanvasRef = useRef(null);
   const allocationChartRef = useRef(null);
+
+  // Sub-tab selection ('trade' | 'rebalance')
+  const [activeSubTab, setActiveSubTab] = useState('trade');
 
   // Form states
   const [searchQuery, setSearchQuery] = useState('');
@@ -583,238 +589,268 @@ export default function PortfolioManager({
         )}
       </div>
 
-      {/* Section 2: Record Transaction Form */}
-      <div className="analysis-section transaction-section">
-        <div className="section-subtitle">
-          <span>Record Transaction</span>
-          <span className="tx-target-account">{activePortfolio.name}</span>
-        </div>
+      {/* Sub-Tab Navigation Bar: Record Trade vs Target Strategy & Rebalance */}
+      <div className="portfolio-subtab-bar">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('trade')}
+          className={`portfolio-subtab-btn ${activeSubTab === 'trade' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-pen-to-square"></i>
+          <span>Record Trade</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('rebalance')}
+          className={`portfolio-subtab-btn ${activeSubTab === 'rebalance' ? 'active' : ''}`}
+        >
+          <i className="fa-solid fa-bullseye"></i>
+          <span>Strategy & Rebalance</span>
+        </button>
+      </div>
 
-        {/* Order Type Toggle (BUY / SELL) */}
-        <div className="tx-type-toggle-group">
-          <button
-            type="button"
-            onClick={() => setTxType('BUY')}
-            className={`tx-type-btn buy ${txType === 'BUY' ? 'active' : ''}`}
-          >
-            <i className="fa-solid fa-arrow-trend-up"></i> BUY
-          </button>
-          <button
-            type="button"
-            onClick={() => setTxType('SELL')}
-            className={`tx-type-btn sell ${txType === 'SELL' ? 'active' : ''}`}
-          >
-            <i className="fa-solid fa-arrow-trend-down"></i> SELL
-          </button>
-        </div>
+      {activeSubTab === 'trade' ? (
+        /* Section 2: Record Transaction Form */
+        <div className="analysis-section transaction-section">
+          <div className="section-subtitle">
+            <span>Record Transaction</span>
+            <span className="tx-target-account">{activePortfolio.name}</span>
+          </div>
 
-        {/* Autocomplete Ticker Search */}
-        <div className="portfolio-search-box" ref={portfolioSearchRef}>
-          <div className="search-input-container">
-            <i className="fa-solid fa-magnifying-glass search-icon"></i>
-            <input
-              type="text"
-              placeholder="Search ticker or company (e.g. AAPL, NVDA, TSLA)..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onFocus={() => setShowDropdown(true)}
-              onKeyDown={handleSearchKeyDown}
-              autoComplete="off"
-              className="portfolio-search-input"
-            />
-            {isSearchingServer && (
-              <i className="fa-solid fa-spinner fa-spin text-cyan search-loading-spinner"></i>
-            )}
-            {searchQuery.length > 0 && !isSearchingServer && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSelectedTicker(null);
-                  setShowDropdown(false);
-                }}
-                className="clear-btn"
-                style={{ display: 'block' }}
-                aria-label="Clear search"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
+          {/* Order Type Toggle (BUY / SELL) */}
+          <div className="tx-type-toggle-group">
+            <button
+              type="button"
+              onClick={() => setTxType('BUY')}
+              className={`tx-type-btn buy ${txType === 'BUY' ? 'active' : ''}`}
+            >
+              <i className="fa-solid fa-arrow-trend-up"></i> BUY
+            </button>
+            <button
+              type="button"
+              onClick={() => setTxType('SELL')}
+              className={`tx-type-btn sell ${txType === 'SELL' ? 'active' : ''}`}
+            >
+              <i className="fa-solid fa-arrow-trend-down"></i> SELL
+            </button>
+          </div>
+
+          {/* Autocomplete Ticker Search */}
+          <div className="portfolio-search-box" ref={portfolioSearchRef}>
+            <div className="search-input-container">
+              <i className="fa-solid fa-magnifying-glass search-icon"></i>
+              <input
+                type="text"
+                placeholder="Search ticker or company (e.g. AAPL, NVDA, TSLA)..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onFocus={() => setShowDropdown(true)}
+                onKeyDown={handleSearchKeyDown}
+                autoComplete="off"
+                className="portfolio-search-input"
+              />
+              {isSearchingServer && (
+                <i className="fa-solid fa-spinner fa-spin text-cyan search-loading-spinner"></i>
+              )}
+              {searchQuery.length > 0 && !isSearchingServer && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedTicker(null);
+                    setShowDropdown(false);
+                  }}
+                  className="clear-btn"
+                  style={{ display: 'block' }}
+                  aria-label="Clear search"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              )}
+            </div>
+
+            {/* Autocomplete Dropdown */}
+            {showDropdown && searchQuery.trim().length > 0 && (
+              <div id="portfolioSearchDropdown" className="portfolio-search-dropdown" style={{ display: 'block' }}>
+                {isSearchingServer && searchResults.length === 0 && (
+                  <div className="autocomplete-loading">
+                    <i className="fa-solid fa-spinner fa-spin text-cyan"></i>
+                    <span>Searching markets...</span>
+                  </div>
+                )}
+
+                {searchResults.slice(0, 8).map((stock, idx) => {
+                  const isSelected = idx === activeSuggestionIndex;
+                  const sym = stock.ticker || stock.symbol;
+                  return (
+                    <div
+                      key={`${sym}-${idx}`}
+                      onClick={() => handleSelectStock(stock)}
+                      onMouseEnter={() => setActiveSuggestionIndex(idx)}
+                      className={`portfolio-search-item ${isSelected ? 'active' : ''}`}
+                    >
+                      <div className="item-meta">
+                        <div className="ticker-row">
+                          <span className="ticker">{sym}</span>
+                          {stock.exchange && <span className="autocomplete-tag exchange">{stock.exchange}</span>}
+                          {stock.type && <span className={`autocomplete-tag type ${String(stock.type).toLowerCase()}`}>{stock.type}</span>}
+                        </div>
+                        <span className="name">{stock.name || `${sym} Stock`}</span>
+                      </div>
+                      {stock.price > 0 && (
+                        <span className="price tabular-nums">${stock.price.toFixed(2)}</span>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div
+                  onClick={handleAddCustomSymbol}
+                  onMouseEnter={() => setActiveSuggestionIndex(searchResults.length)}
+                  className={`portfolio-search-item custom-add ${activeSuggestionIndex === searchResults.length ? 'active' : ''}`}
+                >
+                  <div className="item-meta">
+                    <span className="ticker custom-text">
+                      <i className="fa-solid fa-circle-plus text-cyan"></i> {searchResults.some(s => (s.ticker || s.symbol) === searchQuery.toUpperCase().trim()) ? 'Select' : `ADD '${searchQuery.toUpperCase().trim()}'`}
+                    </span>
+                    <span className="name">Fetch live quote and log trade</span>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Autocomplete Dropdown */}
-          {showDropdown && searchQuery.trim().length > 0 && (
-            <div id="portfolioSearchDropdown" className="portfolio-search-dropdown" style={{ display: 'block' }}>
-              {isSearchingServer && searchResults.length === 0 && (
-                <div className="autocomplete-loading">
-                  <i className="fa-solid fa-spinner fa-spin text-cyan"></i>
-                  <span>Searching markets...</span>
-                </div>
-              )}
-
-              {searchResults.slice(0, 8).map((stock, idx) => {
-                const isSelected = idx === activeSuggestionIndex;
-                const sym = stock.ticker || stock.symbol;
-                return (
-                  <div
-                    key={`${sym}-${idx}`}
-                    onClick={() => handleSelectStock(stock)}
-                    onMouseEnter={() => setActiveSuggestionIndex(idx)}
-                    className={`portfolio-search-item ${isSelected ? 'active' : ''}`}
-                  >
-                    <div className="item-meta">
-                      <div className="ticker-row">
-                        <span className="ticker">{sym}</span>
-                        {stock.exchange && <span className="autocomplete-tag exchange">{stock.exchange}</span>}
-                        {stock.type && <span className={`autocomplete-tag type ${String(stock.type).toLowerCase()}`}>{stock.type}</span>}
-                      </div>
-                      <span className="name">{stock.name || `${sym} Stock`}</span>
-                    </div>
-                    {stock.price > 0 && (
-                      <span className="price tabular-nums">${stock.price.toFixed(2)}</span>
-                    )}
-                  </div>
-                );
-              })}
-
-              <div
-                onClick={handleAddCustomSymbol}
-                onMouseEnter={() => setActiveSuggestionIndex(searchResults.length)}
-                className={`portfolio-search-item custom-add ${activeSuggestionIndex === searchResults.length ? 'active' : ''}`}
-              >
-                <div className="item-meta">
-                  <span className="ticker custom-text">
-                    <i className="fa-solid fa-circle-plus text-cyan"></i> {searchResults.some(s => (s.ticker || s.symbol) === searchQuery.toUpperCase().trim()) ? 'Select' : `ADD '${searchQuery.toUpperCase().trim()}'`}
+          {/* Selected Stock Preview Info Card */}
+          {selectedTicker && (
+            <div id="portfolioStockPreview" className="portfolio-stock-preview">
+              <div className="preview-left">
+                <span className="preview-ticker-badge">{selectedTicker}</span>
+                <span className="preview-name">{stocks[selectedTicker]?.name || `${selectedTicker} Stock`}</span>
+              </div>
+              <div className="preview-right">
+                <span className="preview-price tabular-nums">
+                  ${(stocks[selectedTicker]?.price || price || 0).toFixed(2)}
+                </span>
+                {activePortfolio.holdings[selectedTicker]?.shares > 0 && (
+                  <span className="preview-owned tabular-nums">
+                    Owned: {parseFloat(activePortfolio.holdings[selectedTicker].shares.toFixed(4))} sh
                   </span>
-                  <span className="name">Fetch live quote and log trade</span>
-                </div>
+                )}
               </div>
             </div>
           )}
-        </div>
 
-        {/* Selected Stock Preview Info Card */}
-        {selectedTicker && (
-          <div id="portfolioStockPreview" className="portfolio-stock-preview">
-            <div className="preview-left">
-              <span className="preview-ticker-badge">{selectedTicker}</span>
-              <span className="preview-name">{stocks[selectedTicker]?.name || `${selectedTicker} Stock`}</span>
+          {/* Transaction Inputs Grid */}
+          <div className="tx-fields-grid">
+            <div className="tx-field">
+              <label htmlFor="txShares">Shares Quantity</label>
+              <div className="field-input-wrapper">
+                <input
+                  id="txShares"
+                  type="number"
+                  value={shares}
+                  onChange={(e) => setShares(e.target.value)}
+                  min="0.0001"
+                  step="any"
+                  placeholder="10"
+                  className="tabular-nums"
+                />
+                <span className="field-suffix">SH</span>
+              </div>
             </div>
-            <div className="preview-right">
-              <span className="preview-price tabular-nums">
-                ${(stocks[selectedTicker]?.price || price || 0).toFixed(2)}
-              </span>
-              {activePortfolio.holdings[selectedTicker]?.shares > 0 && (
-                <span className="preview-owned tabular-nums">
-                  Owned: {parseFloat(activePortfolio.holdings[selectedTicker].shares.toFixed(4))} sh
-                </span>
-              )}
-            </div>
-          </div>
-        )}
 
-        {/* Transaction Inputs Grid */}
-        <div className="tx-fields-grid">
-          <div className="tx-field">
-            <label htmlFor="txShares">Shares Quantity</label>
-            <div className="field-input-wrapper">
+            <div className="tx-field">
+              <label htmlFor="txPrice">Execution Price</label>
+              <div className="field-input-wrapper">
+                <span className="field-prefix">$</span>
+                <input
+                  id="txPrice"
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  min="0.01"
+                  step="0.01"
+                  placeholder="150.00"
+                  className="tabular-nums"
+                />
+              </div>
+            </div>
+
+            <div className="tx-field">
+              <label htmlFor="txDate">Transaction Date</label>
               <input
-                id="txShares"
-                type="number"
-                value={shares}
-                onChange={(e) => setShares(e.target.value)}
-                min="0.0001"
-                step="any"
-                placeholder="10"
-                className="tabular-nums"
-              />
-              <span className="field-suffix">SH</span>
-            </div>
-          </div>
-
-          <div className="tx-field">
-            <label htmlFor="txPrice">Execution Price</label>
-            <div className="field-input-wrapper">
-              <span className="field-prefix">$</span>
-              <input
-                id="txPrice"
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                min="0.01"
-                step="0.01"
-                placeholder="150.00"
+                id="txDate"
+                type="date"
+                value={txDate}
+                onChange={(e) => setTxDate(e.target.value)}
                 className="tabular-nums"
               />
             </div>
+
+            <div className="tx-field">
+              <label htmlFor="txFees">Brokerage Fees</label>
+              <div className="field-input-wrapper">
+                <span className="field-prefix">$</span>
+                <input
+                  id="txFees"
+                  type="number"
+                  value={fees}
+                  onChange={(e) => setFees(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  className="tabular-nums"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="tx-field">
-            <label htmlFor="txDate">Transaction Date</label>
+          {/* Investment Account Label */}
+          <div className="tx-field account-field">
+            <label htmlFor="txAccount">Investment Account</label>
             <input
-              id="txDate"
-              type="date"
-              value={txDate}
-              onChange={(e) => setTxDate(e.target.value)}
-              className="tabular-nums"
+              id="txAccount"
+              type="text"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              placeholder="e.g. Primary Taxable, Roth IRA"
             />
           </div>
 
-          <div className="tx-field">
-            <label htmlFor="txFees">Brokerage Fees</label>
-            <div className="field-input-wrapper">
-              <span className="field-prefix">$</span>
-              <input
-                id="txFees"
-                type="number"
-                value={fees}
-                onChange={(e) => setFees(e.target.value)}
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                className="tabular-nums"
-              />
+          {/* Live Calculation Estimation Banner */}
+          <div className="tx-estimate-banner">
+            <div className="estimate-row">
+              <span className="estimate-label">Gross Value:</span>
+              <span className="estimate-val tabular-nums">${gross.toFixed(2)}</span>
+            </div>
+            <div className="estimate-row total-row">
+              <span className="estimate-label">Net Settlement Total:</span>
+              <span className={`estimate-val total-val tabular-nums ${txType === 'BUY' ? 'buy' : 'sell'}`}>
+                ${net.toFixed(2)}
+              </span>
             </div>
           </div>
-        </div>
 
-        {/* Investment Account Label */}
-        <div className="tx-field account-field">
-          <label htmlFor="txAccount">Investment Account</label>
-          <input
-            id="txAccount"
-            type="text"
-            value={accountName}
-            onChange={(e) => setAccountName(e.target.value)}
-            placeholder="e.g. Primary Taxable, Roth IRA"
-          />
+          {/* Submit Button */}
+          <button
+            type="button"
+            onClick={handleRecordTransaction}
+            id="btnRecordTx"
+            className={`btn-record-tx ${txType === 'BUY' ? 'buy' : 'sell'}`}
+          >
+            <i className={`fa-solid ${txType === 'BUY' ? 'fa-circle-plus' : 'fa-circle-minus'}`}></i>
+            <span>Record {txType === 'BUY' ? 'Buy Order' : 'Sell Order'}</span>
+          </button>
         </div>
-
-        {/* Live Calculation Estimation Banner */}
-        <div className="tx-estimate-banner">
-          <div className="estimate-row">
-            <span className="estimate-label">Gross Value:</span>
-            <span className="estimate-val tabular-nums">${gross.toFixed(2)}</span>
-          </div>
-          <div className="estimate-row total-row">
-            <span className="estimate-label">Net Settlement Total:</span>
-            <span className={`estimate-val total-val tabular-nums ${txType === 'BUY' ? 'buy' : 'sell'}`}>
-              ${net.toFixed(2)}
-            </span>
-          </div>
-        </div>
-
-        {/* Submit Button */}
-        <button
-          type="button"
-          onClick={handleRecordTransaction}
-          id="btnRecordTx"
-          className={`btn-record-tx ${txType === 'BUY' ? 'buy' : 'sell'}`}
-        >
-          <i className={`fa-solid ${txType === 'BUY' ? 'fa-circle-plus' : 'fa-circle-minus'}`}></i>
-          <span>Record {txType === 'BUY' ? 'Buy Order' : 'Sell Order'}</span>
-        </button>
-      </div>
+      ) : (
+        <RebalanceStudio
+          activePortfolio={activePortfolio}
+          stocks={stocks}
+          onUpdateTargetAllocations={onUpdateTargetAllocations}
+          onExecuteRebalance={onExecuteRebalance}
+          showNotification={showNotification}
+        />
+      )}
     </section>
   );
 }

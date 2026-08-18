@@ -116,7 +116,21 @@ export default function App() {
 
   const { watchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist();
   const { stocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory } = useStockData(activeTicker, selectedRange, selectedInterval, addToast);
-  const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio, importCSVTransactions, createPortfolio, renamePortfolio, deletePortfolio } = usePortfolio(addToast, user);
+  const {
+    portfolios,
+    setPortfolios,
+    activePortfolioId,
+    setActivePortfolioId,
+    addTransaction,
+    deleteTransaction,
+    resetPortfolio,
+    importCSVTransactions,
+    createPortfolio,
+    renamePortfolio,
+    deletePortfolio,
+    updateTargetAllocations,
+    executeRebalance
+  } = usePortfolio(addToast, user);
 
   const loadStockDataRef = useRef(loadStockData);
   const fetchBackgroundPriceRef = useRef(fetchBackgroundPrice);
@@ -369,6 +383,8 @@ export default function App() {
               onCreatePortfolio={createPortfolio}
               onRenamePortfolio={renamePortfolio}
               onDeletePortfolio={deletePortfolio}
+              onUpdateTargetAllocations={updateTargetAllocations}
+              onExecuteRebalance={executeRebalance}
               showNotification={addToast}
               onFetchPrice={fetchBackgroundPrice}
             />

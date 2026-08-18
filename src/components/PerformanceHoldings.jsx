@@ -562,10 +562,37 @@ export default function PerformanceHoldings({
                         <span className={`cell-pct-sub ${h.pnlVal >= 0 ? 'text-green' : 'text-red'}`}>({h.pnlVal >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)</span>
                       </td>
                       <td className="cell-weight">
-                        <div className="table-weight-wrapper">
-                          <span className="weight-num tabular-nums">{weight.toFixed(1)}%</span>
-                          <div className="weight-track"><div className="weight-fill" style={{ width: `${weight}%` }}></div></div>
-                        </div>
+                        {(() => {
+                          const targetPct = parseFloat(activePortfolio.targetAllocations?.[h.ticker]) || 0;
+                          const drift = weight - targetPct;
+                          return (
+                            <div className="table-weight-wrapper">
+                              <div className="weight-val-row">
+                                <span className="weight-num tabular-nums">{weight.toFixed(1)}%</span>
+                                {targetPct > 0 && (
+                                  <span
+                                    className={`table-target-tag tabular-nums ${
+                                      Math.abs(drift) <= 0.5 ? 'balanced' : drift > 0 ? 'overweight' : 'underweight'
+                                    }`}
+                                    title={`Target: ${targetPct.toFixed(1)}% (Drift: ${drift > 0 ? '+' : ''}${drift.toFixed(1)}%)`}
+                                  >
+                                    Tgt {targetPct.toFixed(1)}% ({drift > 0 ? '+' : ''}${drift.toFixed(1)}%)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="weight-track">
+                                <div className="weight-fill" style={{ width: `${Math.min(100, weight)}%` }}></div>
+                                {targetPct > 0 && (
+                                  <div
+                                    className="target-marker-line"
+                                    style={{ left: `${Math.min(100, targetPct)}%` }}
+                                    title={`Target: ${targetPct.toFixed(1)}%`}
+                                  ></div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <button type="button" onClick={() => handleSellAll(h.ticker, h.shares, h.currentPrice)} className="btn-sell-all-row" title={`Liquidate all ${h.ticker} shares`}>Sell All</button>

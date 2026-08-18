@@ -8,6 +8,7 @@
     "server": "if [ -d .venv ]; then .venv/bin/python server/server.py; else python3 server/server.py; fi",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "node --test",
     "preview": "vite preview"
   },
   "dependencies": {
