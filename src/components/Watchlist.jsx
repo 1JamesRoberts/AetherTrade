@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 // Mini SVG Sparkline — renders real 1D intraday close prices when available,
 // falling back to a generated bezier shape while data is loading.
@@ -95,21 +95,31 @@ export default function Watchlist({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleQueryChange = (val) => {
+    setQuery(val);
+    if (val.trim().length < 2) {
+      setSuggestions([]);
+      setIsLoadingSuggestions(false);
+      setActiveSuggestionIndex(0);
+      setShowDropdown(val.trim().length > 0);
+    } else {
+      setIsLoadingSuggestions(true);
+      setShowDropdown(true);
+    }
+  };
+
   // Debounced live symbol/company search via proxy with AbortController
   useEffect(() => {
     const trimmed = query.trim();
     if (trimmed.length < 2) {
-      setSuggestions([]);
-      setIsLoadingSuggestions(false);
-      setActiveSuggestionIndex(0);
       return;
     }
 
     const controller = new AbortController();
-    setIsLoadingSuggestions(true);
 
     const timeoutId = setTimeout(async () => {
       try {
+        setIsLoadingSuggestions(true);
         const res = await fetch(`/api/stock/search?q=${encodeURIComponent(trimmed)}`, {
           signal: controller.signal
         });
@@ -147,12 +157,8 @@ export default function Watchlist({
     return true;
   });
 
-  const exactMatchInWatchlist = watchlist.some(
-    (ticker) => ticker.toLowerCase() === query.trim().toLowerCase()
-  );
-
   const handleAddCustom = (tickerToAdd) => {
-    const cleanQuery = (tickerToAdd || '').toUpperCase().trim();
+    const cleanQuery = (tickerToAdd || query || '').toUpperCase().trim();
     if (cleanQuery) {
       onAddTicker(cleanQuery);
       setQuery('');
@@ -163,7 +169,10 @@ export default function Watchlist({
   };
 
   const handleKeyDown = (e) => {
-    if (suggestions.length === 0) {
+    const hasCustomOption = query.trim().length > 0;
+    const totalItems = suggestions.length + (hasCustomOption ? 1 : 0);
+
+    if (totalItems === 0) {
       if (e.key === 'Escape') {
         setShowDropdown(false);
         setQuery('');
@@ -173,18 +182,18 @@ export default function Watchlist({
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+      setActiveSuggestionIndex((prev) => (prev + 1) % totalItems);
       setShowDropdown(true);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveSuggestionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+      setActiveSuggestionIndex((prev) => (prev - 1 + totalItems) % totalItems);
       setShowDropdown(true);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.length) {
         handleAddCustom(suggestions[activeSuggestionIndex].symbol);
-      } else if (suggestions.length > 0) {
-        handleAddCustom(suggestions[0].symbol);
+      } else {
+        handleAddCustom(query);
       }
     } else if (e.key === 'Escape') {
       setShowDropdown(false);
@@ -237,10 +246,7 @@ export default function Watchlist({
                   ref={railSearchInputRef}
                   type="text"
                   value={query}
-                  onChange={(e) => {
-                    setQuery(e.target.value);
-                    setShowDropdown(true);
-                  }}
+                  onChange={(e) => handleQueryChange(e.target.value)}
                   onFocus={() => setShowDropdown(true)}
                   onKeyDown={handleRailSearchKeyDown}
                   placeholder="Symbol or company..."
@@ -254,7 +260,7 @@ export default function Watchlist({
               </div>
 
               {/* Autocomplete Dropdown in Rail Popover */}
-              {showDropdown && query.trim().length >= 2 && (
+              {showDropdown && (
                 <div className="search-autocomplete-dropdown rail-dropdown">
                   {isLoadingSuggestions && suggestions.length === 0 && (
                     <div className="autocomplete-loading">
@@ -263,7 +269,7 @@ export default function Watchlist({
                     </div>
                   )}
 
-                  {!isLoadingSuggestions && suggestions.length === 0 && (
+                  {!isLoadingSuggestions && suggestions.length === 0 && query.trim().length >= 2 && (
                     <div className="autocomplete-empty-state">
                       <i className="fa-solid fa-circle-exclamation text-warning"></i>
                       <span>No verified stock found for "{query.trim().toUpperCase()}"</span>
@@ -291,6 +297,26 @@ export default function Watchlist({
                       </div>
                     );
                   })}
+
+                  {query.trim().length > 0 && (
+                    <div
+                      className={`autocomplete-item custom-add ${activeSuggestionIndex === suggestions.length ? 'active' : ''}`}
+                      onClick={() => handleAddCustom(query)}
+                      onMouseEnter={() => setActiveSuggestionIndex(suggestions.length)}
+                    >
+                      <div className="autocomplete-left">
+                        <span className="autocomplete-symbol custom-symbol">
+                          <i className="fa-solid fa-circle-plus text-cyan"></i>
+                        </span>
+                        <span className="autocomplete-name">
+                          Add <strong>"{query.toUpperCase().trim()}"</strong>
+                        </span>
+                      </div>
+                      <div className="autocomplete-right">
+                        <span className="autocomplete-tag custom">Custom</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -398,10 +424,7 @@ export default function Watchlist({
             ref={searchInputRef}
             type="text"
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setShowDropdown(true);
-            }}
+            onChange={(e) => handleQueryChange(e.target.value)}
             onFocus={() => setShowDropdown(true)}
             onKeyDown={handleKeyDown}
             placeholder="Search symbol or company..."
@@ -411,11 +434,7 @@ export default function Watchlist({
           )}
           {query.length > 0 && !isLoadingSuggestions && (
             <button
-              onClick={() => {
-                setQuery('');
-                setSuggestions([]);
-                setShowDropdown(false);
-              }}
+              onClick={() => handleQueryChange('')}
               className="clear-btn"
               title="Clear search"
             >
@@ -425,7 +444,7 @@ export default function Watchlist({
         </div>
 
         {/* Live Autocomplete Dropdown */}
-        {showDropdown && query.trim().length >= 2 && (
+        {showDropdown && (
           <div className="search-autocomplete-dropdown">
             {isLoadingSuggestions && suggestions.length === 0 && (
               <div className="autocomplete-loading">
@@ -434,7 +453,7 @@ export default function Watchlist({
               </div>
             )}
 
-            {!isLoadingSuggestions && suggestions.length === 0 && (
+            {!isLoadingSuggestions && suggestions.length === 0 && query.trim().length >= 2 && (
               <div className="autocomplete-empty-state">
                 <i className="fa-solid fa-circle-exclamation text-warning"></i>
                 <span>No verified stock found for "{query.trim().toUpperCase()}"</span>
@@ -474,6 +493,29 @@ export default function Watchlist({
                 </div>
               );
             })}
+
+            {query.trim().length > 0 && (
+              <div
+                className={`autocomplete-item custom-add ${activeSuggestionIndex === suggestions.length ? 'active' : ''}`}
+                onClick={() => {
+                  handleAddCustom(query);
+                  setShowDropdown(false);
+                }}
+                onMouseEnter={() => setActiveSuggestionIndex(suggestions.length)}
+              >
+                <div className="autocomplete-left">
+                  <span className="autocomplete-symbol custom-symbol">
+                    <i className="fa-solid fa-circle-plus text-cyan"></i>
+                  </span>
+                  <span className="autocomplete-name">
+                    Add custom ticker <strong>"{query.toUpperCase().trim()}"</strong>
+                  </span>
+                </div>
+                <div className="autocomplete-right">
+                  <span className="autocomplete-tag custom">Custom</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

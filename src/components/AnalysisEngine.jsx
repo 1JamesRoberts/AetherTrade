@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 
 export default function AnalysisEngine({
   activeTicker,
   currentPrice,
-  lines,
+  lines = [],
   setLinesMap,
   linesMap,
   currentCapital,
@@ -12,34 +12,36 @@ export default function AnalysisEngine({
   activeStockPrice = 0,
   liveRawValues = []
 }) {
-  const supports = [];
-  const resistances = [];
+  const { supports, resistances } = useMemo(() => {
+    const sups = [];
+    const res = [];
 
-  lines.forEach((price) => {
-    if (price < currentPrice) {
-      supports.push(price);
-    } else {
-      resistances.push(price);
-    }
-  });
+    (lines || []).forEach((price) => {
+      if (price < currentPrice) {
+        sups.push(price);
+      } else {
+        res.push(price);
+      }
+    });
 
-  // Sort: Supports Descending (closest support first), Resistances Ascending (closest resistance first)
-  supports.sort((a, b) => b - a);
-  resistances.sort((a, b) => a - b);
+    // Sort: Supports Descending (closest support first), Resistances Ascending (closest resistance first)
+    sups.sort((a, b) => b - a);
+    res.sort((a, b) => a - b);
+    return { supports: sups, resistances: res };
+  }, [lines, currentPrice]);
 
   const handleClearAll = () => {
-    setLinesMap({
-      ...linesMap,
+    setLinesMap(prev => ({
+      ...prev,
       [activeTicker]: []
-    });
+    }));
   };
 
   const handleRemoveLine = (priceToRemove) => {
-    const newLines = lines.filter((p) => p !== priceToRemove);
-    setLinesMap({
-      ...linesMap,
-      [activeTicker]: newLines
-    });
+    setLinesMap(prev => ({
+      ...prev,
+      [activeTicker]: (prev[activeTicker] || []).filter((p) => p !== priceToRemove)
+    }));
   };
 
   const handleAutoDetectLevels = () => {
@@ -50,25 +52,14 @@ export default function AnalysisEngine({
     // Prioritize existing manual lines if any
     const existing = linesMap[activeTicker] || [];
     existing.forEach((p) => {
-      if (p < price * 0.99) rawSupports.push({ price: p, priority: 100 });
-      else if (p > price * 1.01) rawResistances.push({ price: p, priority: 100 });
+      if (p < price) rawSupports.push({ price: p, priority: 100 });
+      else if (p > price) rawResistances.push({ price: p, priority: 100 });
     });
 
     if (liveRawValues && liveRawValues.length > 5) {
       const closes = liveRawValues.map((v) => parseFloat(v.close || v.open)).filter((p) => !isNaN(p) && p > 0);
       const highs = liveRawValues.map((v) => parseFloat(v.high || v.close)).filter((p) => !isNaN(p) && p > 0);
       const lows = liveRawValues.map((v) => parseFloat(v.low || v.close)).filter((p) => !isNaN(p) && p > 0);
-
-      const maxHigh = Math.max(...highs);
-      const minLow = Math.min(...lows);
-
-      // Add major period extremes as highest priority primary levels
-      if (maxHigh > price * 1.04) {
-        rawResistances.push({ price: parseFloat(maxHigh.toFixed(2)), priority: 90 });
-      }
-      if (minLow < price * 0.96) {
-        rawSupports.push({ price: parseFloat(minLow.toFixed(2)), priority: 90 });
-      }
 
       // Scan multi-bar swing peaks & valleys with prominence
       const window = Math.min(4, Math.max(2, Math.floor(closes.length / 10)));
@@ -87,48 +78,48 @@ export default function AnalysisEngine({
           }
         }
 
-        if (isPeak && currHigh > price * 1.03) {
-          rawResistances.push({ price: parseFloat(currHigh.toFixed(2)), priority: 50 });
+        if (isPeak && currHigh > price * 1.01) {
+          rawResistances.push({ price: parseFloat(currHigh.toFixed(2)), priority: 70 });
         }
-        if (isValley && currLow < price * 0.97) {
-          rawSupports.push({ price: parseFloat(currLow.toFixed(2)), priority: 50 });
+        if (isValley && currLow < price * 0.99) {
+          rawSupports.push({ price: parseFloat(currLow.toFixed(2)), priority: 70 });
         }
+      }
+
+      // Add psychological round numbers
+      const roundBase = price > 500 ? 50 : price > 100 ? 10 : price > 20 ? 5 : 1;
+      const lowerRound = Math.floor(price / roundBase) * roundBase;
+      const upperRound = Math.ceil(price / roundBase) * roundBase;
+
+      if (lowerRound < price * 0.99 && lowerRound > 0) {
+        rawSupports.push({ price: lowerRound, priority: 50 });
+      }
+      if (upperRound > price * 1.01) {
+        rawResistances.push({ price: upperRound, priority: 50 });
       }
     }
 
-    // Filter levels so every selected level is at least 5% different, keeping primary levels
-    const filterBy5Percent = (candidates) => {
-      // Sort primarily by priority (descending), secondarily by distance from price
-      const sorted = [...candidates].sort((a, b) => {
-        if (b.priority !== a.priority) return b.priority - a.priority;
-        return Math.abs(a.price - price) - Math.abs(b.price - price);
+    // Cluster and pick top 2 supports and top 2 resistances
+    const clusterLevels = (arr, isSup) => {
+      if (arr.length === 0) return [];
+      arr.sort((a, b) => b.priority - a.priority);
+
+      const clustered = [];
+      arr.forEach((item) => {
+        const isDuplicate = clustered.some((c) => Math.abs(c.price - item.price) / item.price < 0.02);
+        if (!isDuplicate) {
+          clustered.push(item);
+        }
       });
 
-      const selected = [];
-      for (const candidate of sorted) {
-        // Must be at least 3.5% away from current active price
-        const distFromPrice = Math.abs(candidate.price - price) / price;
-        if (distFromPrice < 0.035) continue;
-
-        // Check if candidate is at least 5% away from all already selected levels
-        const isTooClose = selected.some((existingPrice) => {
-          const diffPct = Math.abs(candidate.price - existingPrice) / Math.min(candidate.price, existingPrice);
-          return diffPct < 0.05; // 5% minimum separation threshold
-        });
-
-        if (!isTooClose) {
-          selected.push(candidate.price);
-        }
-
-        if (selected.length >= 4) break; // Keep top 3 clean primary levels per side
-      }
-      return selected;
+      clustered.sort((a, b) => isSup ? b.price - a.price : a.price - b.price);
+      return clustered.slice(0, 2).map((c) => c.price);
     };
 
-    let finalSupports = filterBy5Percent(rawSupports);
-    let finalResistances = filterBy5Percent(rawResistances);
+    let finalSupports = clusterLevels(rawSupports, true);
+    let finalResistances = clusterLevels(rawResistances, false);
 
-    // Ensure clean minimum 5% spaced fallback levels if data had few distinct swings
+    // Fallback if no dynamic levels found
     if (finalSupports.length === 0) {
       finalSupports = [
         parseFloat((price * 0.95).toFixed(2)),
@@ -149,19 +140,26 @@ export default function AnalysisEngine({
       finalResistances.push(parseFloat((res1 * 1.06).toFixed(2)));
     }
 
-    const allFinal = [...finalSupports, ...finalResistances].sort((a, b) => a - b);
-
-    setLinesMap({
-      ...linesMap,
-      [activeTicker]: allFinal
+    setLinesMap((prev) => {
+      const existingManual = prev[activeTicker] || [];
+      const merged = Array.from(new Set([...existingManual, ...finalSupports, ...finalResistances])).sort((a, b) => a - b);
+      return {
+        ...prev,
+        [activeTicker]: merged
+      };
     });
   };
 
   const handleCapitalChange = (e) => {
     const valString = String(e.target.value).replace(/,/g, '').trim();
-    let val = parseFloat(valString);
-    if (isNaN(val) || val <= 0) val = 100;
-    setCurrentCapital(val);
+    if (valString === '') {
+      setCurrentCapital('');
+      return;
+    }
+    const val = parseFloat(valString);
+    if (!isNaN(val)) {
+      setCurrentCapital(val);
+    }
   };
 
   const hasLevels = supports.length > 0 && resistances.length > 0;
@@ -176,7 +174,7 @@ export default function AnalysisEngine({
       resistances.forEach((res) => {
         if (sup < res) {
           const roi = ((res - sup) / sup) * 100;
-          const profit = (currentCapital / sup) * (res - sup);
+          const profit = (Number(currentCapital || 100) / sup) * (res - sup);
           const risk = currentPrice - sup > 0 ? currentPrice - sup : sup * 0.02;
           const reward = res - currentPrice > 0 ? res - currentPrice : res - sup;
           const rr = risk > 0 ? (reward / risk) : 1;
@@ -207,19 +205,26 @@ export default function AnalysisEngine({
             <span><i className="fa-solid fa-briefcase" style={{ marginRight: '6px', color: 'var(--cyan)' }}></i>Holdings — {activeTicker}</span>
           </div>
           {activeTickerHoldings.map(h => {
-            const pnl = (activeStockPrice - h.avgCost) * h.shares;
-            const pnlPct = h.avgCost ? ((activeStockPrice - h.avgCost) / h.avgCost * 100) : 0;
+            const hasLivePrice = activeStockPrice && activeStockPrice > 0;
+            const pnl = hasLivePrice ? (activeStockPrice - h.avgCost) * h.shares : 0;
+            const pnlPct = hasLivePrice && h.avgCost ? ((activeStockPrice - h.avgCost) / h.avgCost * 100) : 0;
             return (
               <div key={h.portfolioId} className="holding-row">
                 <div className="holding-row-header">
                   <span className="holding-row-name">{h.portfolioName}</span>
-                  <span className={`holding-row-pnl tabular-nums ${pnl >= 0 ? 'positive' : 'negative'}`}>
-                    {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ({pnlPct.toFixed(1)}%)
-                  </span>
+                  {hasLivePrice ? (
+                    <span className={`holding-row-pnl tabular-nums ${pnl >= 0 ? 'positive' : 'negative'}`}>
+                      {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} ({pnlPct.toFixed(1)}%)
+                    </span>
+                  ) : (
+                    <span className="holding-row-pnl tabular-nums text-muted">
+                      Syncing price...
+                    </span>
+                  )}
                 </div>
                 <div className="holding-row-details tabular-nums">
                   <span>{parseFloat(h.shares.toFixed(4))} shares @ ${h.avgCost.toFixed(2)}</span>
-                  <span>Value: ${(h.shares * activeStockPrice).toFixed(2)}</span>
+                  <span>Value: {hasLivePrice ? `$${(h.shares * activeStockPrice).toFixed(2)}` : '...'}</span>
                 </div>
               </div>
             );

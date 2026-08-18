@@ -30,7 +30,7 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
     persistStocks(stocks);
   }, [stocks]);
 
-  const loadStockData = useCallback(async (ticker, rangeVal, intervalVal, watchlist, setWatchlist, setActiveTicker) => {
+  const loadStockData = useCallback(async (ticker, rangeVal, intervalVal) => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -87,14 +87,9 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
                                err.message.toLowerCase().includes("invalid symbol");
 
       if (isSymbolNotFound) {
-        addToast(`Ticker "${ticker}" does not exist and cannot be added!`, 'error');
-        if (watchlist && setWatchlist) {
-          const next = watchlist.filter(t => t !== ticker);
-          setWatchlist(next);
-          if (setActiveTicker) setActiveTicker(next.length > 0 ? next[0] : 'AAPL');
-        }
+        addToast(`Ticker "${ticker}" was not found — please select from search suggestions.`, 'warning');
       } else {
-        addToast(`Failed to load data for ${ticker}.`, 'error');
+        addToast(`Failed to sync market data for ${ticker}.`, 'error');
       }
 
       return { success: false };
@@ -157,7 +152,7 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
 
   const fetchPortfolioHistory = useCallback(async (ticker) => {
     try {
-      const res = await fetch(`/api/stock?ticker=${ticker}&range=1Y&interval=1d`);
+      const res = await fetch(`/api/stock?ticker=${ticker}&range=5Y&interval=1d`);
       if (!res.ok) throw new Error();
       const json = await res.json();
       if (json.status !== 'ok') throw new Error();

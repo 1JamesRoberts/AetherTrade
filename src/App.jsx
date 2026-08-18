@@ -8,7 +8,7 @@ import ToastContainer from './components/ToastContainer';
 import AuthPage from './components/AuthPage';
 import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
-import { usePortfolio, rebuildPortfolioHoldings } from './hooks/usePortfolio';
+import { usePortfolio } from './hooks/usePortfolio';
 import { useAuth } from './hooks/useAuth';
 import { importTransactionsFromCSV, validateCSVImport, exportTransactionsAsCSV } from './utils/csvUtils';
 
@@ -23,13 +23,24 @@ function loadLinesMap() {
 function getMarketStatus() {
   try {
     const now = new Date();
-    const nyTimeStr = now.toLocaleString("en-US", { timeZone: "America/New_York" });
-    const nyDate = new Date(nyTimeStr);
-    const day = nyDate.getDay();
-    const hour = nyDate.getHours();
-    const minute = nyDate.getMinutes();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hourCycle: 'h23',
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric'
+    });
+    const parts = formatter.formatToParts(now);
+    const partObj = {};
+    parts.forEach(p => { partObj[p.type] = p.value; });
+
+    const weekdayStr = partObj.weekday || 'Mon';
+    const isWeekday = !['Sat', 'Sun'].includes(weekdayStr);
+    const hour = parseInt(partObj.hour, 10) || 0;
+    const minute = parseInt(partObj.minute, 10) || 0;
+    const second = parseInt(partObj.second, 10) || 0;
     const timeInMinutes = hour * 60 + minute;
-    const isWeekday = day >= 1 && day <= 5;
 
     // NYSE hours: 9:30 AM (570m) - 4:00 PM (960m)
     const isOpen = isWeekday && timeInMinutes >= 570 && timeInMinutes < 960;
@@ -49,9 +60,10 @@ function getMarketStatus() {
       statusClass = 'post';
     }
 
-    const timeStr = nyDate.toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-    return { label, statusClass, timeStr: `${timeStr} EST` };
-  } catch (e) {
+    const pad = (n) => String(n).padStart(2, '0');
+    const timeStr = `${pad(hour)}:${pad(minute)}:${pad(second)} EST`;
+    return { label, statusClass, timeStr };
+  } catch {
     return { label: 'US Market Live', statusClass: 'open', timeStr: 'EST' };
   }
 }
@@ -102,20 +114,16 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const { watchlist, setWatchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist();
+  const { watchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist();
   const { stocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory } = useStockData(activeTicker, selectedRange, selectedInterval, addToast);
   const { portfolios, setPortfolios, activePortfolioId, setActivePortfolioId, addTransaction, deleteTransaction, resetPortfolio, importCSVTransactions, createPortfolio, renamePortfolio, deletePortfolio } = usePortfolio(addToast, user);
 
   const loadStockDataRef = useRef(loadStockData);
   const fetchBackgroundPriceRef = useRef(fetchBackgroundPrice);
-  const setWatchlistRef = useRef(setWatchlist);
-  const setActiveTickerRef = useRef(setActiveTicker);
   const watchlistRef = useRef(watchlist);
 
   useEffect(() => { loadStockDataRef.current = loadStockData; }, [loadStockData]);
   useEffect(() => { fetchBackgroundPriceRef.current = fetchBackgroundPrice; }, [fetchBackgroundPrice]);
-  useEffect(() => { setWatchlistRef.current = setWatchlist; }, [setWatchlist]);
-  useEffect(() => { setActiveTickerRef.current = setActiveTicker; }, [setActiveTicker]);
   useEffect(() => { watchlistRef.current = watchlist; }, [watchlist]);
 
   // Persist S&R lines
@@ -134,14 +142,14 @@ export default function App() {
 
   // Load active ticker + stagger sidebar fetches
   useEffect(() => {
-    loadStockDataRef.current(activeTicker, selectedRange, selectedInterval, watchlistRef.current, setWatchlistRef.current, setActiveTickerRef.current);
+    loadStockDataRef.current(activeTicker, selectedRange, selectedInterval);
     fetchBackgroundPriceRef.current(activeTicker);
     watchlistRef.current.filter(t => t !== activeTicker).forEach((ticker, i) => {
       setTimeout(() => fetchBackgroundPriceRef.current(ticker), (i + 1) * 2000);
     });
   }, [activeTicker, selectedRange, selectedInterval]);
 
-  const handleRefresh = () => loadStockDataRef.current(activeTicker, selectedRange, selectedInterval, watchlistRef.current, setWatchlistRef.current, setActiveTickerRef.current);
+  const handleRefresh = () => loadStockDataRef.current(activeTicker, selectedRange, selectedInterval);
 
   const activeStockPrice = stocks[activeTicker]?.price || 0;
   const activeTickerHoldings = portfolios

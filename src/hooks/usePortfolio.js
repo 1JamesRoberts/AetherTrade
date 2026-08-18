@@ -24,39 +24,34 @@ export function rebuildPortfolioHoldings(txs) {
 
   txs.forEach(tx => {
     const txFees = parseFloat(tx.fees) || 0;
+    const txShares = parseFloat(tx.shares) || 0;
+    const txPrice = parseFloat(tx.price) || 0;
 
     if (tx.type === 'BUY') {
       if (!holdings[tx.ticker]) {
         holdings[tx.ticker] = { shares: 0, avgCost: 0, totalFees: 0 };
       }
       const h = holdings[tx.ticker];
-      const newCost = (h.shares * h.avgCost) + (tx.shares * tx.price);
-      h.shares += tx.shares;
+      const newCost = (h.shares * h.avgCost) + (txShares * txPrice);
+      h.shares += txShares;
       h.avgCost = h.shares > 0 ? (newCost / h.shares) : 0;
       h.totalFees += txFees;
     } else {
       if (holdings[tx.ticker]) {
         const h = holdings[tx.ticker];
-        realizedPL += tx.shares * (tx.price - h.avgCost) - txFees;
         const originalShares = h.shares;
-        h.shares = Math.max(0, h.shares - tx.shares);
-        h.totalFees = originalShares > 0 ? h.shares * (h.totalFees / originalShares) : 0;
+        const soldShares = Math.min(originalShares, txShares);
+        const proportionalBuyFee = originalShares > 0 ? (soldShares / originalShares) * (h.totalFees || 0) : 0;
+        
+        realizedPL += soldShares * (txPrice - h.avgCost) - txFees - proportionalBuyFee;
+        h.shares = Math.max(0, h.shares - soldShares);
+        h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
         if (h.shares < 1e-9) delete holdings[tx.ticker];
       }
     }
   });
 
   return { holdings, realizedPL };
-}
-
-function mergeTransactions(localTxs, dbTxs) {
-  const seen = new Set(dbTxs.map(t => t.id));
-  const merged = [...dbTxs];
-  localTxs.forEach(tx => {
-    if (!seen.has(tx.id)) merged.push(tx);
-  });
-  merged.sort((a, b) => a.timestamp - b.timestamp);
-  return merged;
 }
 
 export function usePortfolio(addToast, user) {
@@ -148,7 +143,18 @@ export function usePortfolio(addToast, user) {
 
   // Load from Supabase when user logs in or hook mounts
   useEffect(() => {
-    loadFromDB();
+    let isCancelled = false;
+    if (user) {
+      const initLoad = async () => {
+        if (!isCancelled) {
+          await loadFromDB();
+        }
+      };
+      initLoad();
+    }
+    return () => {
+      isCancelled = true;
+    };
   }, [user, loadFromDB]);
 
   // Supabase Real-time Sync subscription for transactions and portfolios
@@ -202,12 +208,10 @@ export function usePortfolio(addToast, user) {
     localStorage.setItem('aethertrade_active_portfolio_id', activePortfolioId);
   }, [activePortfolioId]);
 
-  // Keep activePortfolioId in sync with available portfolios
-  useEffect(() => {
-    if (portfolios.length > 0 && !portfolios.some(p => p.id === activePortfolioId)) {
-      setActivePortfolioId(portfolios[0].id);
-    }
-  }, [portfolios, activePortfolioId]);
+  // Keep activePortfolioId valid
+  const effectiveActivePortfolioId = portfolios.some(p => p.id === activePortfolioId)
+    ? activePortfolioId
+    : (portfolios[0]?.id || 'default');
 
   const addTransaction = useCallback(async (portfolioId, newTx) => {
     const txId = newTx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -444,7 +448,7 @@ export function usePortfolio(addToast, user) {
   return {
     portfolios,
     setPortfolios,
-    activePortfolioId,
+    activePortfolioId: effectiveActivePortfolioId,
     setActivePortfolioId,
     addTransaction,
     deleteTransaction,

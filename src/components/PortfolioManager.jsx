@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
@@ -16,7 +16,6 @@ const ALLOCATION_COLORS = [
 
 export default function PortfolioManager({
   portfolios,
-  setPortfolios,
   activePortfolioId,
   setActivePortfolioId,
   stocks,
@@ -38,15 +37,20 @@ export default function PortfolioManager({
   const [price, setPrice] = useState(185.50);
 
   // Get today's local date YYYY-MM-DD
-  const getTodayDateString = () => {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+  const getTodayLocalDate = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
-  const [txDate, setTxDate] = useState(getTodayDateString());
+
+  const [txDate, setTxDate] = useState(getTodayLocalDate);
   const [fees, setFees] = useState(0.00);
+
+  // Search filter autocomplete
+  const [searchResults, setSearchResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const activePortfolio = portfolios.find(p => p.id === activePortfolioId) || {
     id: 'default',
@@ -60,16 +64,19 @@ export default function PortfolioManager({
 
   // Sync accountName input when active portfolio changes
   useEffect(() => {
-    setAccountName(activePortfolio.name);
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) setAccountName(activePortfolio.name);
+    });
+    return () => { active = false; };
   }, [activePortfolioId, activePortfolio.name]);
-
-  // Autocomplete suggestions search list state
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
 
   // Handle Portfolio Switch
   const handlePortfolioSelect = (e) => {
-    setActivePortfolioId(e.target.value);
+    const nextId = e.target.value;
+    setActivePortfolioId(nextId);
+    const targetPort = portfolios.find(p => p.id === nextId);
+    if (targetPort) setAccountName(targetPort.name);
     setSelectedTicker(null);
     setSearchQuery('');
     setShowDropdown(false);
@@ -77,30 +84,31 @@ export default function PortfolioManager({
 
   // Create Portfolio
   const handleCreatePortfolio = () => {
-    const name = prompt("Enter a unique name for the new portfolio:");
-    if (!name || name.trim() === '') return;
-    if (onCreatePortfolio) {
-      onCreatePortfolio(name);
+    const name = prompt('Enter a name for the new portfolio account:', 'Secondary Portfolio');
+    if (name && name.trim()) {
+      if (onCreatePortfolio) {
+        onCreatePortfolio(name.trim());
+      }
     }
   };
 
   // Rename Portfolio
   const handleRenamePortfolio = () => {
-    const name = prompt("Enter a new name for the portfolio:", activePortfolio.name);
-    if (!name || name.trim() === '') return;
-    if (onRenamePortfolio) {
-      onRenamePortfolio(activePortfolio.id, name);
+    const newName = prompt(`Enter new name for portfolio "${activePortfolio.name}":`, activePortfolio.name);
+    if (newName && newName.trim() && newName.trim() !== activePortfolio.name) {
+      if (onRenamePortfolio) {
+        onRenamePortfolio(activePortfolio.id, newName.trim());
+      }
     }
   };
 
   // Delete Portfolio
   const handleDeletePortfolio = () => {
     if (portfolios.length <= 1) {
-      showNotification("You must keep at least one portfolio!", "error");
+      showNotification('Cannot delete the only remaining portfolio account.', 'warning');
       return;
     }
-
-    const confirmDelete = confirm(`Are you sure you want to permanently delete the portfolio "${activePortfolio.name}"?\nThis will erase all its holdings and transaction logs.`);
+    const confirmDelete = confirm(`Are you sure you want to delete portfolio "${activePortfolio.name}"?\nAll associated holdings and audit logs will be permanently deleted.`);
     if (!confirmDelete) return;
 
     if (onDeletePortfolio) {
@@ -109,8 +117,14 @@ export default function PortfolioManager({
   };
 
   const portfolioSearchRef = useRef(null);
+  const stocksRef = useRef(stocks);
   const [isSearchingServer, setIsSearchingServer] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+
+  // Keep stocksRef current without restarting search debounce
+  useEffect(() => {
+    stocksRef.current = stocks;
+  });
 
   // Dismiss dropdown on outside click
   useEffect(() => {
@@ -123,18 +137,22 @@ export default function PortfolioManager({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounced search with in-memory matching + server fallback
-  useEffect(() => {
-    const trimmed = searchQuery.trim();
+  // Autocomplete filter search input change
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+    const trimmed = val.trim();
+
     if (trimmed === '') {
       setSearchResults([]);
       setShowDropdown(false);
       setIsSearchingServer(false);
+      setActiveSuggestionIndex(0);
       return;
     }
 
-    // 1. In-memory local matches
-    const localMatches = Object.values(stocks).filter(stock =>
+    const currentStocks = stocksRef.current || {};
+    const localMatches = Object.values(currentStocks).filter(stock =>
       (stock.ticker && stock.ticker.toLowerCase().includes(trimmed.toLowerCase())) ||
       (stock.name && stock.name.toLowerCase().includes(trimmed.toLowerCase()))
     ).map(s => ({
@@ -148,43 +166,49 @@ export default function PortfolioManager({
     setSearchResults(localMatches);
     setShowDropdown(true);
     setActiveSuggestionIndex(0);
+    if (trimmed.length >= 2) {
+      setIsSearchingServer(true);
+    }
+  };
 
+  // Debounced search with server fallback
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
     if (trimmed.length < 2) {
-      setIsSearchingServer(false);
       return;
     }
 
-    // 2. Fetch live server results if query is at least 2 chars
     const controller = new AbortController();
-    setIsSearchingServer(true);
 
     const timer = setTimeout(async () => {
       try {
+        setIsSearchingServer(true);
         const res = await fetch(`/api/stock/search?q=${encodeURIComponent(trimmed)}`, {
           signal: controller.signal
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (json.status === 'ok' && json.data) {
+          const currentStocks = stocksRef.current || {};
           const serverItems = json.data.map(d => ({
             ticker: d.symbol,
             name: d.name,
-            price: stocks[d.symbol]?.price || 0,
+            price: currentStocks[d.symbol]?.price || 0,
             exchange: d.exchange,
             type: d.type
           }));
 
-          // Merge without duplicating symbols
-          const seen = new Set(localMatches.map(m => m.ticker));
-          const combined = [...localMatches];
-          for (const item of serverItems) {
-            if (!seen.has(item.ticker)) {
-              seen.add(item.ticker);
-              combined.push(item);
+          setSearchResults(prev => {
+            const seen = new Set(prev.map(m => m.ticker));
+            const combined = [...prev];
+            for (const item of serverItems) {
+              if (!seen.has(item.ticker)) {
+                seen.add(item.ticker);
+                combined.push(item);
+              }
             }
-          }
-          setSearchResults(combined);
-          setActiveSuggestionIndex(0);
+            return combined;
+          });
         }
       } catch (err) {
         if (err.name !== 'AbortError') {
@@ -199,13 +223,7 @@ export default function PortfolioManager({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchQuery, stocks]);
-
-  // Autocomplete filter search input change
-  const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
-    setShowDropdown(true);
-  };
+  }, [searchQuery]);
 
   // Select stock from search dropdown autocomplete list
   const handleSelectStock = async (stock) => {
@@ -268,9 +286,13 @@ export default function PortfolioManager({
   };
 
   useEffect(() => {
+    let active = true;
     if (selectedTicker && stocks[selectedTicker]?.price) {
-      setPrice(stocks[selectedTicker].price);
+      Promise.resolve().then(() => {
+        if (active) setPrice(stocks[selectedTicker].price);
+      });
     }
+    return () => { active = false; };
   }, [selectedTicker, stocks]);
 
   // Transaction fields inputs conversions
@@ -353,12 +375,10 @@ export default function PortfolioManager({
   const gross = qtyVal * priceVal;
   const net = txType === 'BUY' ? (gross + feeVal) : Math.max(0, gross - feeVal);
 
-  // Holdings allocations listing
-  const holdingsKeys = Object.keys(activePortfolio.holdings || {});
-
   const { holdingsList, totalAssetValue } = useMemo(() => {
     let total = 0;
-    const list = holdingsKeys
+    const keys = Object.keys(activePortfolio.holdings || {});
+    const list = keys
       .filter(t => (activePortfolio.holdings[t]?.shares || 0) > 0)
       .map(ticker => {
         const holding = activePortfolio.holdings[ticker];
@@ -376,8 +396,7 @@ export default function PortfolioManager({
       })
       .sort((a, b) => b.marketValue - a.marketValue);
     return { holdingsList: list, totalAssetValue: total };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activePortfolio.holdings, stocks, ...holdingsKeys]);
+  }, [activePortfolio.holdings, stocks]);
 
   // Render Allocation Doughnut Chart using Chart.js on holdings changes
   useEffect(() => {

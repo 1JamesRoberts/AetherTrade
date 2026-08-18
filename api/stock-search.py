@@ -48,34 +48,41 @@ def map_quote_type(qtype):
     return str(qtype).title()
 
 def search_twelve_data(query):
-    key = get_next_api_key()
-    if not key:
+    if not API_KEYS:
         return []
-    try:
-        url = f"https://api.twelvedata.com/symbol_search?symbol={urllib.parse.quote(query)}&apikey={key}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'AetherTrade/1.0'})
-        with urllib.request.urlopen(req, timeout=4) as response:
-            res = json.loads(response.read().decode('utf-8'))
-            items = res.get('data', [])
-            results = []
-            seen_symbols = set()
-            for it in items:
-                sym = it.get('symbol', '').strip().upper()
-                if not sym or sym in seen_symbols:
+    max_attempts = min(len(API_KEYS), 7)
+    for _ in range(max_attempts):
+        key = get_next_api_key()
+        if not key:
+            continue
+        try:
+            url = f"https://api.twelvedata.com/symbol_search?symbol={urllib.parse.quote(query)}&apikey={key}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'AetherTrade/1.0'})
+            with urllib.request.urlopen(req, timeout=4) as response:
+                res = json.loads(response.read().decode('utf-8'))
+                if res.get('code') == 429 or 'api_key' in str(res.get('message', '')).lower():
                     continue
-                seen_symbols.add(sym)
-                results.append({
-                    'symbol': sym,
-                    'name': it.get('instrument_name') or sym,
-                    'exchange': it.get('exchange') or 'US',
-                    'type': map_quote_type(it.get('instrument_type', 'Stock'))
-                })
-                if len(results) >= 10:
-                    break
-            return results
-    except Exception as e:
-        print("Twelve Data fallback search error:", e)
-        return []
+                items = res.get('data', [])
+                results = []
+                seen_symbols = set()
+                for it in items:
+                    sym = it.get('symbol', '').strip().upper()
+                    if not sym or sym in seen_symbols:
+                        continue
+                    seen_symbols.add(sym)
+                    results.append({
+                        'symbol': sym,
+                        'name': it.get('instrument_name') or sym,
+                        'exchange': it.get('exchange') or 'US',
+                        'type': map_quote_type(it.get('instrument_type', 'Stock'))
+                    })
+                    if len(results) >= 10:
+                        break
+                return results
+        except Exception as e:
+            print("Twelve Data fallback search error:", e)
+            continue
+    return []
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):

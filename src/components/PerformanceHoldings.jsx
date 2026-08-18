@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
@@ -19,6 +19,7 @@ export default function PerformanceHoldings({
   const performanceCanvasRef = useRef(null);
   const performanceChartRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [mountTime] = useState(() => Date.now());
 
   // Sorting state for active holdings table
   const [sortColumn, setSortColumn] = useState('marketValue');
@@ -28,13 +29,15 @@ export default function PerformanceHoldings({
   const [timeRange, setTimeRange] = useState('ALL'); // '1W' | '1M' | '1Y' | 'ALL'
   const [isLedgerCollapsed, setIsLedgerCollapsed] = useState(false);
 
-  const activePortfolio = portfolios.find(p => p.id === activePortfolioId) || {
-    id: 'default',
-    name: 'Primary Portfolio',
-    holdings: {},
-    transactions: [],
-    realizedPL: 0
-  };
+  const activePortfolio = useMemo(() => {
+    return portfolios.find(p => p.id === activePortfolioId) || {
+      id: 'default',
+      name: 'Primary Portfolio',
+      holdings: {},
+      transactions: [],
+      realizedPL: 0
+    };
+  }, [portfolios, activePortfolioId]);
 
   // Format currency helper
   const formatCurrency = (val) => {
@@ -223,10 +226,12 @@ export default function PerformanceHoldings({
           if (holdingsOnDate[ticker]) {
             const h = holdingsOnDate[ticker];
             const originalShares = h.shares;
-            const saleRealizedGain = (txPrice - h.avgCost) * txShares - txFees;
+            const soldShares = Math.min(originalShares, txShares);
+            const proportionalBuyFee = originalShares > 0 ? (soldShares / originalShares) * (h.totalFees || 0) : 0;
+            const saleRealizedGain = (txPrice - h.avgCost) * soldShares - txFees - proportionalBuyFee;
             cumulativeRealizedPL += saleRealizedGain;
 
-            h.shares = Math.max(0, h.shares - txShares);
+            h.shares = Math.max(0, h.shares - soldShares);
             h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
             h.lastPrice = txPrice;
             if (h.shares < 1e-9) delete holdingsOnDate[ticker];
@@ -255,7 +260,7 @@ export default function PerformanceHoldings({
 
     // Apply Time Range Cutoff Filter
     let cutoffTime = 0;
-    const now = Date.now();
+    const now = mountTime;
     if (timeRange === '1W') cutoffTime = now - 7 * 24 * 60 * 60 * 1000;
     else if (timeRange === '1M') cutoffTime = now - 30 * 24 * 60 * 60 * 1000;
     else if (timeRange === '1Y') cutoffTime = now - 365 * 24 * 60 * 60 * 1000;
@@ -346,7 +351,7 @@ export default function PerformanceHoldings({
         performanceChartRef.current = null;
       }
     };
-  }, [activePortfolio, stocks, chartMode, timeRange]);
+  }, [activePortfolio, stocks, chartMode, timeRange, mountTime]);
 
   const handleRefreshPrices = async () => {
     if (isRefreshing) return;
@@ -361,16 +366,23 @@ export default function PerformanceHoldings({
       return;
     }
 
-    await Promise.all(tickersToRefresh.map(async (t) => {
-      if (onFetchPortfolioHistory) await onFetchPortfolioHistory(t);
-      if (onRefreshPrices) await onRefreshPrices(t);
-    }));
-    setIsRefreshing(false);
-    showNotification('Chart history & live prices refreshed', 'success');
+    try {
+      await Promise.all(tickersToRefresh.map(async (t) => {
+        if (onFetchPortfolioHistory) await onFetchPortfolioHistory(t);
+        if (onRefreshPrices) await onRefreshPrices(t);
+      }));
+      showNotification('Chart history & live prices refreshed', 'success');
+    } catch (err) {
+      console.error('Refresh portfolio prices failed:', err);
+      showNotification('Some prices could not be refreshed', 'warning');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleSellAll = (ticker, shares, price) => {
     onAddTransaction(activePortfolio.id, {
+      // eslint-disable-next-line react-hooks/purity
       timestamp: Date.now(),
       ticker,
       type: 'SELL',
@@ -533,7 +545,7 @@ export default function PerformanceHoldings({
                 </tr>
               </thead>
               <tbody>
-                {sortedHoldings.map(h => {
+                {sortedHoldings.map((h) => {
                   const weight = totalAssetValue > 0 ? (h.marketValue / totalAssetValue) * 100 : 0;
                   return (
                     <tr key={h.ticker}>
@@ -601,8 +613,9 @@ export default function PerformanceHoldings({
                   const txFees = parseFloat(tx.fees) || 0;
                   const net = tx.type === 'BUY' ? (gross + txFees) : Math.max(0, gross - txFees);
                   const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
+                  const rowKey = tx.id || `tx-log-${actualIndex}`;
                   return (
-                    <li key={`tx-log-${actualIndex}`} className="tx-ledger-item">
+                    <li key={rowKey} className="tx-ledger-item">
                       <div className="ledger-left">
                         <div className="ledger-top-row">
                           <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>

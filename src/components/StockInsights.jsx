@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 function loadCachedFundamentals() {
   try {
@@ -114,13 +114,6 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
     let isMounted = true;
     const ticker = activeTicker;
     const cache = loadCachedFundamentals();
-
-    if (cache[ticker]) {
-      setLiveFundamentals(cache[ticker]);
-      setHasError(false);
-    } else {
-      setLiveFundamentals(null);
-    }
 
     async function fetchLiveFundamentals() {
       setIsLoadingApi(true);

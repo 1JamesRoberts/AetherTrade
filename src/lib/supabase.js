@@ -16,7 +16,8 @@ class MockQueryBuilder {
     this.dataToReturn = [];
   }
 
-  select(columns) {
+  select(_columns) {
+    void _columns;
     if (this.table === 'portfolios') {
       const local = localStorage.getItem('aethertrade_portfolios_list');
       this.dataToReturn = local ? JSON.parse(local) : [];
@@ -45,7 +46,9 @@ class MockQueryBuilder {
     return this;
   }
 
-  order(column, { ascending } = {}) {
+  order(_column, _options = {}) {
+    void _column;
+    void _options;
     return this;
   }
 
@@ -58,7 +61,9 @@ class MockQueryBuilder {
     return this;
   }
 
-  eq(column, value) {
+  eq(_column, _value) {
+    void _column;
+    void _value;
     return this;
   }
 
@@ -108,7 +113,7 @@ class MockAuth {
     }
   }
 
-  async signUp({ email, password }) {
+  async signUp({ email }) {
     const user = { id: 'mock-user-id', email };
     this.session = { user };
     localStorage.setItem('aethertrade_mock_session', JSON.stringify(this.session));
@@ -116,7 +121,7 @@ class MockAuth {
     return { data: { user }, error: null };
   }
 
-  async signInWithPassword({ email, password }) {
+  async signInWithPassword({ email }) {
     const user = { id: 'mock-user-id', email };
     this.session = { user };
     localStorage.setItem('aethertrade_mock_session', JSON.stringify(this.session));

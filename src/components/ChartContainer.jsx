@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { createChart, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
+import { useRef, useEffect, useState, useMemo } from 'react';
+import { createChart, CrosshairMode, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 import StockInsights from './StockInsights';
 
 const RANGE_INTERVALS = {
@@ -173,7 +173,7 @@ export default function ChartContainer({
 
   const formattedData = useMemo(() => {
     const rawValues = activeStock.liveRawValues || [];
-    let dataPoints = [];
+    let dataPoints;
 
     if (rawValues.length === 0 && activeStock.liveCloses.length > 0) {
       const closes = activeStock.liveCloses;
@@ -183,8 +183,9 @@ export default function ChartContainer({
         const o = parseFloat(prev.toFixed(2));
         const cl = parseFloat(c.toFixed(2));
         const spread = Math.abs(cl - o) || c * 0.005;
-        const h = parseFloat((Math.max(o, cl) + Math.random() * spread * 0.5).toFixed(2));
-        const l = parseFloat((Math.min(o, cl) - Math.random() * spread * 0.5).toFixed(2));
+        const pseudo = Math.abs((Math.sin(idx * 12.9898 + 78.233) * 43758.5453) % 1);
+        const h = parseFloat((Math.max(o, cl) + pseudo * spread * 0.5).toFixed(2));
+        const l = parseFloat((Math.min(o, cl) - pseudo * spread * 0.5).toFixed(2));
         return { open: o, close: cl, high: h, low: l, datetime: labels[idx] };
       });
     } else {
@@ -300,120 +301,99 @@ export default function ChartContainer({
     setZoomLevel(100);
   };
 
-  useEffect(() => {
-    if (!chartContainerRef.current || formattedData.length === 0) return;
+  // Sync mutable refs on each render to prevent stale closures in event listeners
+  const formattedDataRef = useRef(formattedData);
+  const linesMapRef = useRef(linesMap);
+  const showLevelsRef = useRef(showLevels);
+  const activeTickerRef = useRef(activeTicker);
+  const activeStockRef = useRef(activeStock);
+  const setLinesMapRef = useRef(setLinesMap);
+  const priceLinesRef = useRef([]);
+  const emaSeriesRef = useRef(null);
+  const smaSeriesRef = useRef(null);
+  const volumeSeriesRef = useRef(null);
 
+  useEffect(() => {
+    formattedDataRef.current = formattedData;
+    linesMapRef.current = linesMap;
+    showLevelsRef.current = showLevels;
+    activeTickerRef.current = activeTicker;
+    activeStockRef.current = activeStock;
+    setLinesMapRef.current = setLinesMap;
+  });
+
+  // 1. Chart Creation Effect (runs on ticker, series type, or indicator structure change)
+  useEffect(() => {
     const container = chartContainerRef.current;
-    const initialWidth = container.clientWidth || 350;
-    const initialHeight = container.clientHeight || 360;
+    if (!container) return;
+
+    const isUp = (activeStock.change ?? 0) >= 0;
 
     const chart = createChart(container, {
-      width: initialWidth,
-      height: initialHeight,
       layout: {
-        background: { type: 'solid', color: 'transparent' },
-        textColor: '#94a3b8',
-        fontFamily: '"Outfit", sans-serif',
-      },
-      localization: {
-        timeFormatter: (timestamp) => {
-          if (range === '1D' && formattedData.length > 0 && timestamp === formattedData[0].time) {
-            return 'Prev Close';
-          }
-          const d = new Date(timestamp * 1000);
-          if (interval === '1d') {
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          }
-          if (interval === '1w') {
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-          }
-          if (range !== '1D') {
-            const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            return `${datePart}  ${timePart}`;
-          }
-          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
+        background: { color: 'rgba(5, 8, 16, 0.95)' },
+        textColor: '#94A3B8',
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: 'rgba(255, 255, 255, 0.02)' },
-        horzLines: { color: 'rgba(255, 255, 255, 0.02)' },
+        vertLines: { color: 'rgba(255, 255, 255, 0.04)', style: 1 },
+        horzLines: { color: 'rgba(255, 255, 255, 0.04)', style: 1 },
       },
       rightPriceScale: {
-        visible: (container.clientWidth || window.innerWidth) >= 600,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
-        textColor: '#94a3b8',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        scaleMargins: {
+          top: 0.1,
+          bottom: indicators.volume ? 0.25 : 0.15,
+        },
       },
       timeScale: {
-        borderColor: 'rgba(255, 255, 255, 0.06)',
-        timeVisible: interval !== '1d' && interval !== '1w',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        timeVisible: true,
         secondsVisible: false,
-        tickMarkFormatter: (time) => {
-          if (range === '1D' && formattedData.length > 0 && time === formattedData[0].time) {
-            return 'Prev Close';
-          }
-          const d = new Date(time * 1000);
-          if (interval === '1d') {
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-          }
-          if (interval === '1w') {
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-          }
-          if (range !== '1D') {
-            const hour = d.getHours();
-            const minute = d.getMinutes();
-            if (hour === 0 && minute === 0) {
-              return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            }
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          }
-          return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
       },
       crosshair: {
-        mode: 0,
+        mode: CrosshairMode.Normal,
         vertLine: {
-          color: 'rgba(255, 255, 255, 0.3)',
+          color: 'rgba(6, 182, 212, 0.4)',
           width: 1,
-          style: 1,
-          labelBackgroundColor: '#060912',
+          style: 3,
         },
         horzLine: {
-          color: 'rgba(255, 255, 255, 0.3)',
+          color: 'rgba(6, 182, 212, 0.4)',
           width: 1,
-          style: 1,
-          labelBackgroundColor: '#060912',
+          style: 3,
         },
       },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+      },
       handleScale: {
+        axisPressedMouseMove: true,
         mouseWheel: true,
         pinch: true,
-      },
-      handleScroll: {
-        mouseDrag: true,
-        touchDrag: true,
       },
     });
 
     chartInstanceRef.current = chart;
 
+    // Technical Indicators Series
     if (indicators.volume) {
       try {
-        const volumeSeries = chart.addSeries(HistogramSeries, {
+        const volSeries = chart.addSeries(HistogramSeries, {
           priceFormat: { type: 'volume' },
           priceScaleId: 'volume_scale',
         });
         chart.priceScale('volume_scale').applyOptions({
-          scaleMargins: {
-            top: 0.82,
-            bottom: 0,
-          },
+          scaleMargins: { top: 0.8, bottom: 0 },
         });
-        const volData = calculateVolumeData(formattedData, activeStock.liveRawValues || []);
-        volumeSeries.setData(volData);
+        volumeSeriesRef.current = volSeries;
       } catch (e) {
         console.warn('Volume series init skipped:', e);
       }
+    } else {
+      volumeSeriesRef.current = null;
     }
 
     if (indicators.ema20) {
@@ -424,11 +404,12 @@ export default function ChartContainer({
           priceLineVisible: false,
           title: 'EMA 20',
         });
-        const emaData = calculateEMA(formattedData, 20);
-        emaSeries.setData(emaData);
+        emaSeriesRef.current = emaSeries;
       } catch (e) {
         console.warn('EMA series init skipped:', e);
       }
+    } else {
+      emaSeriesRef.current = null;
     }
 
     if (indicators.sma50) {
@@ -439,11 +420,12 @@ export default function ChartContainer({
           priceLineVisible: false,
           title: 'SMA 50',
         });
-        const smaData = calculateSMA(formattedData, 50);
-        smaSeries.setData(smaData);
+        smaSeriesRef.current = smaSeries;
       } catch (e) {
         console.warn('SMA series init skipped:', e);
       }
+    } else {
+      smaSeriesRef.current = null;
     }
 
     const seriesColor = isUp ? '#10B981' : '#F43F5E';
@@ -475,86 +457,60 @@ export default function ChartContainer({
 
     seriesRef.current = series;
 
-    try {
-      series.setData(formattedData);
-    } catch (err) {
-      console.warn('Lightweight Charts setData skipped error:', err);
-    }
-
-    const totalLength = formattedData.length;
-    if (totalLength > 0) {
-      const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
-      chart.timeScale().setVisibleLogicalRange({
-        from: totalLength - visibleCount,
-        to: totalLength - 1,
-      });
-
-      // Quick layout sync so chart immediately centers and renders on mobile viewports
-      requestAnimationFrame(() => {
-        if (chartContainerRef.current && chartInstanceRef.current) {
-          const w = chartContainerRef.current.clientWidth;
-          const h = chartContainerRef.current.clientHeight;
-          if (w > 0 && h > 0) {
-            chartInstanceRef.current.applyOptions({
-              width: w,
-              height: h,
-              rightPriceScale: {
-                visible: w >= 600,
-              },
-            });
-          }
+    // Populate initial data
+    if (formattedDataRef.current && formattedDataRef.current.length > 0) {
+      try {
+        series.setData(formattedDataRef.current);
+        if (volumeSeriesRef.current) {
+          const volData = calculateVolumeData(formattedDataRef.current, activeStockRef.current.liveRawValues || []);
+          volumeSeriesRef.current.setData(volData);
         }
-      });
+        if (emaSeriesRef.current) {
+          const emaData = calculateEMA(formattedDataRef.current, 20);
+          emaSeriesRef.current.setData(emaData);
+        }
+        if (smaSeriesRef.current) {
+          const smaData = calculateSMA(formattedDataRef.current, 50);
+          smaSeriesRef.current.setData(smaData);
+        }
+      } catch (err) {
+        console.warn('Initial chart data populate error:', err);
+      }
     }
 
-    const lines = linesMap[activeTicker] || [];
-    if (showLevels) {
-      lines.forEach(linePrice => {
-        const isResistance = linePrice > activeStock.price;
-        const lineColor = isResistance ? '#F43F5E' : '#10B981';
-        const labelTitle = isResistance ? `RES $${linePrice.toFixed(2)}` : `SUP $${linePrice.toFixed(2)}`;
-
-        series.createPriceLine({
-          price: linePrice,
-          color: lineColor,
-          lineWidth: 2,
-          lineStyle: 1,
-          axisLabelVisible: true,
-          title: labelTitle,
-        });
-      });
-    }
-
+    // Chart Click: Add Support / Resistance using Ref values
     const handleChartClick = (param) => {
-      if (!showLevels || !param.point) return;
-      const clickedPrice = series.coordinateToPrice(param.point.y);
+      if (!showLevelsRef.current || !param.point || !seriesRef.current) return;
+      const clickedPrice = seriesRef.current.coordinateToPrice(param.point.y);
       if (clickedPrice === null || clickedPrice === undefined) return;
 
       const roundedPrice = parseFloat(clickedPrice.toFixed(2));
-      const existingLines = linesMap[activeTicker] || [];
-      const isDuplicate = existingLines.some(price => Math.abs(price - roundedPrice) < (activeStock.price * 0.003));
+      const currentTicker = activeTickerRef.current;
+      const existingLines = linesMapRef.current[currentTicker] || [];
+      const isDuplicate = existingLines.some(price => Math.abs(price - roundedPrice) < (activeStockRef.current.price * 0.003));
 
-      if (!isDuplicate) {
+      if (!isDuplicate && setLinesMapRef.current) {
         const newLines = [...existingLines, roundedPrice];
-        setLinesMap({
-          ...linesMap,
-          [activeTicker]: newLines
-        });
+        setLinesMapRef.current((prev) => ({
+          ...prev,
+          [currentTicker]: newLines
+        }));
       }
     };
     chart.subscribeClick(handleChartClick);
 
+    // Crosshair Move
     const handleCrosshairMove = (param) => {
-      if (!param || !param.point) {
+      if (!param || !param.point || !seriesRef.current) {
         setHoverPrice(null);
         setHoverData(null);
         return;
       }
-      const price = series.coordinateToPrice(param.point.y);
+      const price = seriesRef.current.coordinateToPrice(param.point.y);
       setHoverPrice(price !== null ? parseFloat(price.toFixed(2)) : null);
 
-      if (param.time && series) {
-        const pointData = param.seriesData.get(series);
+      if (param.time && seriesRef.current) {
+        const pointData = param.seriesData.get(seriesRef.current);
         setHoverData(pointData || null);
       } else {
         setHoverData(null);
@@ -562,10 +518,13 @@ export default function ChartContainer({
     };
     chart.subscribeCrosshairMove(handleCrosshairMove);
 
+    // Visible Logical Range Change for Zoom Tracking
     const handleVisibleLogicalRangeChange = (logicalRange) => {
       if (isScaleUpdatingRef.current || !logicalRange) return;
+      const curLen = formattedDataRef.current.length;
+      if (curLen === 0) return;
       const visibleCount = logicalRange.to - logicalRange.from;
-      const percent = Math.round((visibleCount / totalLength) * 100);
+      const percent = Math.round((visibleCount / curLen) * 100);
       const boundedPercent = Math.max(20, Math.min(100, percent));
 
       isScaleUpdatingRef.current = true;
@@ -614,28 +573,96 @@ export default function ChartContainer({
       chart.remove();
       chartInstanceRef.current = null;
       seriesRef.current = null;
+      volumeSeriesRef.current = null;
+      emaSeriesRef.current = null;
+      smaSeriesRef.current = null;
+      priceLinesRef.current = [];
     };
   }, [
-    formattedData,
-    chartType,
-    showLevels,
-    linesMap,
     activeTicker,
+    activeStock.change,
+    chartType,
     range,
     interval,
     indicators.volume,
     indicators.ema20,
-    indicators.sma50
+    indicators.sma50,
+    setZoomLevel
   ]);
 
+  // 2. Data Update Effect (Updates series data without recreating the chart canvas)
+  useEffect(() => {
+    if (!seriesRef.current || formattedData.length === 0) return;
+    try {
+      seriesRef.current.setData(formattedData);
+      if (volumeSeriesRef.current) {
+        const volData = calculateVolumeData(formattedData, activeStock.liveRawValues || []);
+        volumeSeriesRef.current.setData(volData);
+      }
+      if (emaSeriesRef.current) {
+        const emaData = calculateEMA(formattedData, 20);
+        emaSeriesRef.current.setData(emaData);
+      }
+      if (smaSeriesRef.current) {
+        const smaData = calculateSMA(formattedData, 50);
+        smaSeriesRef.current.setData(smaData);
+      }
+    } catch (err) {
+      console.warn('Series setData update error:', err);
+    }
+  }, [formattedData, activeStock.liveRawValues]);
+
+  // 3. S/R Lines Sync Effect (Updates Lightweight Charts price lines independently)
+  useEffect(() => {
+    if (!seriesRef.current) return;
+
+    // Clear existing price lines
+    priceLinesRef.current.forEach((line) => {
+      try {
+        seriesRef.current.removePriceLine(line);
+      } catch {
+        // Safe ignore
+      }
+    });
+    priceLinesRef.current = [];
+
+    if (!showLevels) return;
+
+    const lines = linesMap[activeTicker] || [];
+    lines.forEach((linePrice) => {
+      const isResistance = linePrice > activeStock.price;
+      const lineColor = isResistance ? '#F43F5E' : '#10B981';
+      const labelTitle = isResistance ? `RES $${linePrice.toFixed(2)}` : `SUP $${linePrice.toFixed(2)}`;
+
+      try {
+        const pl = seriesRef.current.createPriceLine({
+          price: linePrice,
+          color: lineColor,
+          lineWidth: 2,
+          lineStyle: 1,
+          axisLabelVisible: true,
+          title: labelTitle,
+        });
+        priceLinesRef.current.push(pl);
+      } catch (err) {
+        console.warn('createPriceLine skipped:', err);
+      }
+    });
+  }, [linesMap, activeTicker, showLevels, activeStock.price]);
+
+  // 4. Zoom / Logical Range Effect
   useEffect(() => {
     if (!chartInstanceRef.current || formattedData.length === 0 || isScaleUpdatingRef.current) return;
     const totalLength = formattedData.length;
     const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
-    chartInstanceRef.current.timeScale().setVisibleLogicalRange({
-      from: totalLength - visibleCount,
-      to: totalLength - 1,
-    });
+    try {
+      chartInstanceRef.current.timeScale().setVisibleLogicalRange({
+        from: totalLength - visibleCount,
+        to: totalLength - 1,
+      });
+    } catch {
+      // Safe ignore
+    }
   }, [zoomLevel, formattedData.length]);
 
   const rangePercent = sessionStats.high > sessionStats.low
@@ -869,6 +896,7 @@ export default function ChartContainer({
 
       {!isFullscreen && (
         <StockInsights
+          key={activeTicker}
           activeTicker={activeTicker}
           currentPrice={activeStock.price}
           historicalData={formattedData}
