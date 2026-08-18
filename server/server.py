@@ -416,7 +416,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                                 dt_str = str(row_idx)
                             vol_raw = row.get('Volume', 0)
                             try:
-                                vol_int = int(float(vol_raw)) if vol_raw is not None and not pd.isna(vol_raw) else 0
+                                vol_int = int(float(vol_raw)) if vol_raw is not None and str(vol_raw).lower() != 'nan' else 0
                             except Exception:
                                 vol_int = 0
                             vals.append({
