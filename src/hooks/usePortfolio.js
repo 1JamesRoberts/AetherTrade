@@ -335,6 +335,50 @@ export function usePortfolio(addToast, user) {
     }
   }, [portfolios, activePortfolioId, user, addToast]);
 
+  const editTransaction = useCallback(async (portfolioId, index, updatedTx) => {
+    let targetPortId = portfolioId;
+    if (!portfolios.some(p => p.id === targetPortId)) {
+      targetPortId = activePortfolioId;
+    }
+
+    let existingTxId = null;
+    let finalTx = null;
+
+    setPortfolios(prev => prev.map(p => {
+      if (p.id === targetPortId) {
+        const transactions = [...p.transactions];
+        existingTxId = transactions[index]?.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        finalTx = {
+          ...updatedTx,
+          id: existingTxId,
+          portfolio_id: targetPortId
+        };
+        transactions[index] = finalTx;
+        // Re-sort chronologically by timestamp
+        transactions.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
+        return { ...p, transactions, holdings, realizedPL };
+      }
+      return p;
+    }));
+
+    addToast(`Updated ${updatedTx.type} transaction for ${updatedTx.ticker}!`, 'success');
+
+    if (user && existingTxId && finalTx) {
+      const { error } = await supabase.from('transactions').upsert({
+        id: existingTxId,
+        portfolio_id: targetPortId,
+        ticker: finalTx.ticker,
+        type: finalTx.type,
+        shares: finalTx.shares,
+        price: finalTx.price,
+        fees: finalTx.fees || 0,
+        date: new Date(finalTx.timestamp).toISOString()
+      });
+      if (error) console.error('Supabase edit transaction error:', error);
+    }
+  }, [portfolios, activePortfolioId, user, addToast]);
+
   const resetPortfolio = useCallback(async (portfolioId) => {
     let targetPortId = portfolioId;
     if (!portfolios.some(p => p.id === targetPortId)) {
@@ -570,6 +614,7 @@ export function usePortfolio(addToast, user) {
     activePortfolioId: effectiveActivePortfolioId,
     setActivePortfolioId,
     addTransaction,
+    editTransaction,
     deleteTransaction,
     resetPortfolio,
     importCSVTransactions,

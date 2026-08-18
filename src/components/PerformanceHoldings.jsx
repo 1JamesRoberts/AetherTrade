@@ -16,6 +16,7 @@ export default function PerformanceHoldings({
   onFetchPortfolioHistory,
   onUpdateTargetAllocations,
   onExecuteRebalance,
+  onPrefillTrade,
   showNotification
 }) {
   const performanceCanvasRef = useRef(null);
@@ -608,6 +609,8 @@ export default function PerformanceHoldings({
           stocks={stocks}
           onUpdateTargetAllocations={onUpdateTargetAllocations}
           onExecuteRebalance={onExecuteRebalance}
+          onPrefillTrade={onPrefillTrade}
+          onAddTransaction={onAddTransaction}
           showNotification={showNotification}
         />
       </div>

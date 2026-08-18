@@ -13,6 +13,8 @@ export default function RebalanceStudio({
   stocks = {},
   onUpdateTargetAllocations,
   onExecuteRebalance,
+  onPrefillTrade,
+  onAddTransaction,
   showNotification
 }) {
   const [rebalanceMode, setRebalanceMode] = useState('full'); // 'full' | 'deposit'
@@ -112,7 +114,7 @@ export default function RebalanceStudio({
 
     const orderCount = rebalanceResult.orders.length;
     const confirmExec = confirm(
-      `Are you ready to execute ${orderCount} rebalance order${orderCount === 1 ? '' : 's'} for "${activePortfolio.name}"?\nThese will be logged directly into your Transaction Audit Ledger.`
+      `Execute all ${orderCount} rebalance order${orderCount === 1 ? '' : 's'} at current market price estimates?\n\nTip: You can also click 'Fill in Form' on individual orders to adjust actual broker execution prices.`
     );
     if (!confirmExec) return;
 
@@ -124,19 +126,66 @@ export default function RebalanceStudio({
     }
   };
 
+  const handleCopyPlan = () => {
+    if (!rebalanceResult.orders || rebalanceResult.orders.length === 0) {
+      showNotification('No rebalance orders to copy.', 'info');
+      return;
+    }
+    const header = `AetherTrade Rebalance Plan — ${activePortfolio.name} (${rebalanceMode === 'full' ? 'Full Rebalance' : `Deposit $${depositAmount}`}):`;
+    const lines = rebalanceResult.orders.map(ord => {
+      return `• ${ord.type} ${parseFloat(ord.shares.toFixed(4))} ${ord.ticker} @ $${ord.price.toFixed(2)} (~$${ord.total.toFixed(2)}) [${ord.currentWeight.toFixed(1)}% ➜ ${ord.targetWeight.toFixed(1)}%]`;
+    });
+    const text = [header, ...lines].join('\n');
+
+    navigator.clipboard.writeText(text)
+      .then(() => showNotification('Rebalance plan copied to clipboard! Ready to paste into your broker.', 'success'))
+      .catch(() => showNotification('Could not access clipboard.', 'error'));
+  };
+
+  const handlePrefillOrder = (ord) => {
+    if (onPrefillTrade) {
+      onPrefillTrade({
+        ticker: ord.ticker,
+        type: ord.type,
+        shares: ord.shares,
+        price: ord.price,
+        account: activePortfolio.name
+      });
+      showNotification(`Pre-filled ${ord.type} ${ord.ticker} into Record Trade form. You can adjust the exact fill price!`, 'info');
+    }
+  };
+
+  const handleQuickLogOrder = async (ord) => {
+    if (onAddTransaction) {
+      try {
+        await onAddTransaction(activePortfolio.id, {
+          ticker: ord.ticker,
+          type: ord.type,
+          shares: ord.shares,
+          price: ord.price,
+          fees: 0,
+          account: activePortfolio.name,
+          timestamp: Date.now()
+        });
+        showNotification(`Logged ${ord.type} ${parseFloat(ord.shares.toFixed(4))} ${ord.ticker} at $${ord.price.toFixed(2)}`, 'success');
+      } catch (err) {
+        showNotification(`Failed to log trade: ${err.message}`, 'error');
+      }
+    }
+  };
+
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
   };
 
   return (
     <div className="rebalance-studio-container" aria-label="Target Strategy & Rebalance Studio">
-      {/* Target Allocation Configuration Card */}
-      <div className="analysis-section rebalance-targets-section">
-        <div className="section-subtitle rebalance-header-row">
-          <div className="rebalance-title-group">
-            <span>Target Asset Allocation</span>
+      <div className="rebalance-targets-section">
+        <div className="section-subtitle rebalance-studio-header">
+          <div className="rebalance-header-title-group">
+            <span className="studio-title">Target Asset Allocation</span>
             <span
-              className={`target-status-pill tabular-nums ${
+              className={`target-status-pill ${
                 Math.abs(totalTargetPct - 100) <= 0.05
                   ? 'balanced'
                   : totalTargetPct < 100
@@ -190,7 +239,6 @@ export default function RebalanceStudio({
           </div>
         </div>
 
-        {/* Warning if there are untargeted held assets */}
         {untargetedHeldCount > 0 && rebalanceMode === 'full' && (
           <div className="studio-warning-alert">
             <i className="fa-solid fa-triangle-exclamation"></i>
@@ -200,7 +248,6 @@ export default function RebalanceStudio({
           </div>
         )}
 
-        {/* Target Asset Allocation List */}
         {activeTickers.length === 0 ? (
           <div className="empty-allocation-card">
             <i className="fa-solid fa-bullseye empty-donut-icon"></i>
@@ -239,7 +286,6 @@ export default function RebalanceStudio({
                         {driftPct > 0 ? `+${driftPct.toFixed(1)}%` : `${driftPct.toFixed(1)}%`}
                       </span>
                     </div>
-                    {/* Visual Target Bar Track */}
                     <div className="matrix-progress-track">
                       <div
                         className="matrix-actual-fill"
@@ -250,24 +296,24 @@ export default function RebalanceStudio({
                         <div
                           className="matrix-target-marker"
                           style={{ left: `${Math.min(100, targetWeight)}%` }}
-                          title={`Target: ${targetWeight.toFixed(1)}%`}
+                          title={`Target Weight: ${targetWeight.toFixed(1)}%`}
                         ></div>
                       )}
                     </div>
                   </div>
 
                   <div className="matrix-col-input">
-                    <label htmlFor={`target-${ticker}`} className="sr-only">Target % for {ticker}</label>
                     <div className="target-input-wrapper">
                       <input
-                        id={`target-${ticker}`}
                         type="number"
                         min="0"
                         max="100"
-                        step="0.5"
-                        placeholder="0.0"
-                        value={targetAllocations[ticker] !== undefined ? targetAllocations[ticker] : ''}
+                        step="any"
+                        value={targetAllocations[ticker] ?? ''}
                         onChange={(e) => handleTargetChange(ticker, e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onWheel={(e) => e.currentTarget.blur()}
+                        placeholder="0"
                         className="target-pct-input tabular-nums"
                       />
                       <span className="target-suffix">%</span>
@@ -280,10 +326,9 @@ export default function RebalanceStudio({
         )}
       </div>
 
-      {/* Rebalance Mode & Execution Section */}
-      <div className="analysis-section rebalance-action-section">
-        <div className="section-subtitle">
-          <span>Rebalancing Engine</span>
+      <div className="rebalance-action-section">
+        <div className="section-subtitle rebalance-studio-header">
+          <span className="studio-title">Rebalancing Engine</span>
           <div className="rebalance-mode-pill-group">
             <button
               type="button"
@@ -304,17 +349,13 @@ export default function RebalanceStudio({
           </div>
         </div>
 
-        {/* Deposit Rebalance Cash Amount Input */}
         {rebalanceMode === 'deposit' && (
           <div className="deposit-config-card">
             <div className="deposit-input-row">
-              <label htmlFor="depositCashInput" className="deposit-label">
-                <span>New Cash to Deposit & Rebalance:</span>
-              </label>
+              <span className="deposit-label">Deposit Cash Amount:</span>
               <div className="deposit-field-wrapper">
                 <span className="field-prefix">$</span>
                 <input
-                  id="depositCashInput"
                   type="number"
                   min="1"
                   step="10"
@@ -342,7 +383,6 @@ export default function RebalanceStudio({
           </div>
         )}
 
-        {/* Proposed Rebalance Orders Summary */}
         <div className="rebalance-orders-card">
           <div className="orders-summary-bar">
             <div className="orders-summary-left">
@@ -360,28 +400,40 @@ export default function RebalanceStudio({
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={handleExecute}
-              disabled={isExecuting || rebalanceResult.orders.length === 0}
-              className="btn-execute-rebalance"
-              title="Execute all proposed rebalancing trades"
-            >
-              {isExecuting ? (
-                <>
-                  <i className="fa-solid fa-spinner fa-spin"></i>
-                  <span>Executing...</span>
-                </>
-              ) : (
-                <>
-                  <i className="fa-solid fa-bolt"></i>
-                  <span>Execute Rebalance ({rebalanceResult.orders.length})</span>
-                </>
-              )}
-            </button>
+            <div className="orders-summary-actions">
+              <button
+                type="button"
+                onClick={handleCopyPlan}
+                disabled={rebalanceResult.orders.length === 0}
+                className="btn-copy-plan"
+                title="Copy order plan to clipboard"
+              >
+                <i className="fa-solid fa-copy"></i>
+                <span>Copy Plan</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExecute}
+                disabled={isExecuting || rebalanceResult.orders.length === 0}
+                className="btn-execute-rebalance"
+                title="Execute all proposed rebalancing trades at market estimate"
+              >
+                {isExecuting ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    <span>Executing...</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-bolt"></i>
+                    <span>Execute All ({rebalanceResult.orders.length})</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Orders Table / List */}
           {rebalanceResult.orders.length === 0 ? (
             <div className="empty-orders-msg">
               <i className="fa-solid fa-circle-check text-green"></i>
@@ -405,13 +457,34 @@ export default function RebalanceStudio({
                       </div>
                     </div>
 
-                    <div className="order-right">
+                    <div className="order-center-metric">
                       <span className={`order-total tabular-nums ${isBuy ? 'text-green' : 'text-red'}`}>
                         {isBuy ? '+' : '-'}{formatCurrency(ord.total)}
                       </span>
                       <span className="order-weight-transition tabular-nums">
                         {ord.currentWeight.toFixed(1)}% ➜ {ord.targetWeight.toFixed(1)}%
                       </span>
+                    </div>
+
+                    <div className="order-actions-cluster">
+                      <button
+                        type="button"
+                        onClick={() => handlePrefillOrder(ord)}
+                        className="btn-order-action fill"
+                        title={`Pre-fill ${ord.type} ${ord.ticker} in Record Trade form to adjust exact execution price`}
+                      >
+                        <i className="fa-solid fa-pen-to-square"></i>
+                        <span>Fill in Form</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleQuickLogOrder(ord)}
+                        className="btn-order-action quick"
+                        title={`Quick-log ${ord.type} ${ord.ticker} immediately at market estimate ($${ord.price.toFixed(2)})`}
+                      >
+                        <i className="fa-solid fa-bolt"></i>
+                        <span>Log</span>
+                      </button>
                     </div>
                   </div>
                 );

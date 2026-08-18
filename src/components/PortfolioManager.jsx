@@ -20,10 +20,12 @@ export default function PortfolioManager({
   setActivePortfolioId,
   stocks,
   onAddTransaction,
+  onEditTransaction,
   onDeleteTransaction,
   onCreatePortfolio,
   onRenamePortfolio,
   onDeletePortfolio,
+  prefilledTrade,
   showNotification,
   onFetchPrice
 }) {
@@ -32,6 +34,9 @@ export default function PortfolioManager({
 
   // Sub-tab selection ('trade' | 'history')
   const [activeSubTab, setActiveSubTab] = useState('trade');
+
+  // Editing state for existing transaction
+  const [editingTxIndex, setEditingTxIndex] = useState(null);
 
   // Form states
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,6 +79,25 @@ export default function PortfolioManager({
     });
     return () => { active = false; };
   }, [activePortfolioId, activePortfolio.name]);
+
+  // Pre-fill form when user clicks "Fill in Form" from Rebalance Studio
+  useEffect(() => {
+    if (!prefilledTrade) return;
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      setActiveSubTab('trade');
+      if (prefilledTrade.ticker) {
+        setSelectedTicker(prefilledTrade.ticker);
+        setSearchQuery(prefilledTrade.ticker);
+      }
+      if (prefilledTrade.type) setTxType(prefilledTrade.type);
+      if (prefilledTrade.shares) setShares(parseFloat(prefilledTrade.shares.toFixed(4)));
+      if (prefilledTrade.price) setPrice(parseFloat(prefilledTrade.price.toFixed(2)));
+      if (prefilledTrade.account) setAccountName(prefilledTrade.account);
+    });
+    return () => { active = false; };
+  }, [prefilledTrade]);
 
   // Handle Portfolio Switch
   const handlePortfolioSelect = (e) => {
@@ -304,7 +328,38 @@ export default function PortfolioManager({
     return parseFloat(String(val).replace(/,/g, '').trim());
   };
 
-  // Record transaction submit
+  // Start editing existing transaction
+  const handleStartEdit = (index, tx) => {
+    setEditingTxIndex(index);
+    setActiveSubTab('trade');
+    setSelectedTicker(tx.ticker);
+    setSearchQuery(tx.ticker);
+    setTxType(tx.type || 'BUY');
+    setShares(parseFloat(tx.shares.toFixed(6)));
+    setPrice(parseFloat(tx.price.toFixed(2)));
+    setFees(tx.fees !== undefined ? parseFloat(tx.fees) || 0 : 0);
+    if (tx.account) setAccountName(tx.account);
+    if (tx.timestamp) {
+      const d = new Date(tx.timestamp);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      setTxDate(`${year}-${month}-${day}`);
+    }
+  };
+
+  // Cancel editing existing transaction
+  const handleCancelEdit = () => {
+    setEditingTxIndex(null);
+    setSelectedTicker(null);
+    setSearchQuery('');
+    setShares(10);
+    setPrice(185.50);
+    setFees(0.00);
+    setTxDate(getTodayLocalDate());
+  };
+
+  // Record or Update transaction submit
   const handleRecordTransaction = () => {
     if (!selectedTicker) {
       alert("Please select a stock asset first.");
@@ -344,7 +399,7 @@ export default function PortfolioManager({
       }
     }
 
-    if (txType === 'SELL') {
+    if (txType === 'SELL' && editingTxIndex === null) {
       const holding = activePortfolio.holdings[selectedTicker];
       if (!holding || holding.shares + 1e-9 < sharesQty) {
         alert(`Insufficient shares. You are attempting to sell ${sharesQty} shares of ${selectedTicker}, but you only own ${holding ? holding.shares : 0} shares.`);
@@ -353,7 +408,7 @@ export default function PortfolioManager({
     }
 
     const timestamp = txDate ? new Date(txDate + 'T00:00:00').getTime() : Date.now();
-    const newTx = {
+    const finalTxData = {
       timestamp: timestamp,
       ticker: selectedTicker,
       type: txType,
@@ -363,7 +418,12 @@ export default function PortfolioManager({
       account: accountName.trim() || 'Default'
     };
 
-    onAddTransaction(activePortfolio.id, newTx);
+    if (editingTxIndex !== null && onEditTransaction) {
+      onEditTransaction(activePortfolio.id, editingTxIndex, finalTxData);
+      setEditingTxIndex(null);
+    } else {
+      onAddTransaction(activePortfolio.id, finalTxData);
+    }
 
     // Reset inputs
     setShares(10);
@@ -611,9 +671,22 @@ export default function PortfolioManager({
         /* Section 2: Record Transaction Form */
         <div className="analysis-section transaction-section">
           <div className="section-subtitle">
-            <span>Record Transaction</span>
+            <span>{editingTxIndex !== null ? 'Edit Transaction' : 'Record Transaction'}</span>
             <span className="tx-target-account">{activePortfolio.name}</span>
           </div>
+
+          {/* Active Editing Notification Banner */}
+          {editingTxIndex !== null && (
+            <div className="editing-tx-banner">
+              <div className="editing-tx-info">
+                <i className="fa-solid fa-pen-to-square text-cyan"></i>
+                <span>Editing Record #{editingTxIndex + 1} ({selectedTicker || 'Asset'})</span>
+              </div>
+              <button type="button" onClick={handleCancelEdit} className="btn-cancel-editing" title="Cancel editing">
+                <i className="fa-solid fa-xmark"></i> Cancel
+              </button>
+            </div>
+          )}
 
           {/* Order Type Toggle (BUY / SELL) */}
           <div className="tx-type-toggle-group">
@@ -834,10 +907,10 @@ export default function PortfolioManager({
             type="button"
             onClick={handleRecordTransaction}
             id="btnRecordTx"
-            className={`btn-record-tx ${txType === 'BUY' ? 'buy' : 'sell'}`}
+            className={`btn-record-tx ${txType === 'BUY' ? 'buy' : 'sell'} ${editingTxIndex !== null ? 'editing' : ''}`}
           >
-            <i className={`fa-solid ${txType === 'BUY' ? 'fa-circle-plus' : 'fa-circle-minus'}`}></i>
-            <span>Record {txType === 'BUY' ? 'Buy Order' : 'Sell Order'}</span>
+            <i className={`fa-solid ${editingTxIndex !== null ? 'fa-floppy-disk' : txType === 'BUY' ? 'fa-circle-plus' : 'fa-circle-minus'}`}></i>
+            <span>{editingTxIndex !== null ? 'Save Changes' : txType === 'BUY' ? 'Record Buy Order' : 'Record Sell Order'}</span>
           </button>
         </div>
       ) : (
@@ -866,10 +939,12 @@ export default function PortfolioManager({
                   const formatUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v);
 
                   return (
-                    <li key={rowKey} className="tx-ledger-item">
+                    <li key={rowKey} className={`tx-ledger-item ${tx.type.toLowerCase()}`}>
                       <div className="ledger-left">
                         <div className="ledger-top-row">
-                          <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
+                          <span className={`type-badge ${tx.type.toLowerCase()}`}>
+                            {tx.type}
+                          </span>
                           <span className="ledger-shares-ticker tabular-nums">
                             <strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatUSD(tx.price)}
                           </span>
@@ -877,26 +952,39 @@ export default function PortfolioManager({
                         <div className="ledger-meta-row tabular-nums">
                           <span>Gross: {formatUSD(grossVal)}</span>
                           <span>Fee: {formatUSD(txFees)}</span>
-                          <span>Net: <strong>{formatUSD(netVal)}</strong></span>
+                          <span>Net: <strong className={tx.type === 'BUY' ? 'text-green' : 'text-red'}>{formatUSD(netVal)}</strong></span>
                           {accountStr && <span className="account-tag">{accountStr}</span>}
                         </div>
                       </div>
                       <div className="ledger-right">
                         <span className="tx-time tabular-nums">{txDateStr}</span>
-                        {onDeleteTransaction && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings.");
-                              if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex);
-                            }}
-                            className="btn-tx-delete"
-                            title="Delete transaction entry"
-                            aria-label="Delete transaction entry"
-                          >
-                            <i className="fa-solid fa-trash-can"></i>
-                          </button>
-                        )}
+                        <div className="ledger-actions-group">
+                          {onEditTransaction && (
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(actualIndex, tx)}
+                              className="btn-tx-edit"
+                              title="Edit transaction entry"
+                              aria-label="Edit transaction entry"
+                            >
+                              <i className="fa-solid fa-pen-to-square"></i>
+                            </button>
+                          )}
+                          {onDeleteTransaction && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings.");
+                                if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex);
+                              }}
+                              className="btn-tx-delete"
+                              title="Delete transaction entry"
+                              aria-label="Delete transaction entry"
+                            >
+                              <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </li>
                   );

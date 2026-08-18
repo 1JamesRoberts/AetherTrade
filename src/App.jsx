@@ -82,6 +82,62 @@ export default function App() {
   const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
   const [terminalMobileTab, setTerminalMobileTab] = useState('chart'); // 'chart' | 'watchlist' | 'analysis'
   const [marketStatus, setMarketStatus] = useState(getMarketStatus);
+  const [prefilledTrade, setPrefilledTrade] = useState(null);
+
+  // Desktop Horizontal Split Resizer State between Portfolio Manager & Performance Holdings
+  const [portfolioSidebarWidth, setPortfolioSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aethertrade_portfolio_sidebar_width');
+      if (saved) {
+        const num = parseInt(saved, 10);
+        if (!isNaN(num) && num >= 280 && num <= 700) return num;
+      }
+    } catch (e) { console.error(e); }
+    return 380;
+  });
+
+  const [isDraggingPortfolioSplit, setIsDraggingPortfolioSplit] = useState(false);
+  const splitDragRef = useRef({ startX: 0, startWidth: 380 });
+
+  // Save portfolioSidebarWidth to localStorage
+  useEffect(() => {
+    localStorage.setItem('aethertrade_portfolio_sidebar_width', String(portfolioSidebarWidth));
+  }, [portfolioSidebarWidth]);
+
+  // Window mouse drag listeners for resizer
+  useEffect(() => {
+    if (!isDraggingPortfolioSplit) return;
+
+    const handleMouseMove = (e) => {
+      const delta = e.clientX - splitDragRef.current.startX;
+      const newWidth = Math.max(300, Math.min(650, splitDragRef.current.startWidth + delta));
+      setPortfolioSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingPortfolioSplit(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingPortfolioSplit]);
+
+  const handleSplitMouseDown = (e) => {
+    e.preventDefault();
+    setIsDraggingPortfolioSplit(true);
+    splitDragRef.current = {
+      startX: e.clientX,
+      startWidth: portfolioSidebarWidth
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   // Live Market Status Clock
   useEffect(() => {
@@ -122,6 +178,7 @@ export default function App() {
     activePortfolioId,
     setActivePortfolioId,
     addTransaction,
+    editTransaction,
     deleteTransaction,
     resetPortfolio,
     importCSVTransactions,
@@ -372,7 +429,13 @@ export default function App() {
             />
           </div>
         ) : (
-          <div id="viewPortfolio" className="workspace-view active">
+          <div
+            id="viewPortfolio"
+            className={`workspace-view active ${isDraggingPortfolioSplit ? 'is-resizing' : ''}`}
+            style={{
+              '--portfolio-sidebar-width': `${portfolioSidebarWidth}px`
+            }}
+          >
             <PortfolioManager
               portfolios={portfolios}
               setPortfolios={setPortfolios}
@@ -380,13 +443,27 @@ export default function App() {
               setActivePortfolioId={setActivePortfolioId}
               stocks={stocks}
               onAddTransaction={addTransaction}
+              onEditTransaction={editTransaction}
               onDeleteTransaction={deleteTransaction}
               onCreatePortfolio={createPortfolio}
               onRenamePortfolio={renamePortfolio}
               onDeletePortfolio={deletePortfolio}
+              prefilledTrade={prefilledTrade}
               showNotification={addToast}
               onFetchPrice={fetchBackgroundPrice}
             />
+
+            {/* Desktop Horizontal Split Drag Handle */}
+            <div
+              className={`panel-resizer-horizontal ${isDraggingPortfolioSplit ? 'dragging' : ''}`}
+              onMouseDown={handleSplitMouseDown}
+              onDoubleClick={() => setPortfolioSidebarWidth(380)}
+              title="Drag horizontally to resize panels (Double-click to reset)"
+              aria-label="Drag horizontally to resize panels"
+            >
+              <div className="resizer-handle-pill"></div>
+            </div>
+
             <PerformanceHoldings
               portfolios={portfolios}
               activePortfolioId={activePortfolioId}
@@ -399,6 +476,7 @@ export default function App() {
               onFetchPortfolioHistory={fetchPortfolioHistory}
               onUpdateTargetAllocations={updateTargetAllocations}
               onExecuteRebalance={executeRebalance}
+              onPrefillTrade={setPrefilledTrade}
               showNotification={addToast}
             />
           </div>
