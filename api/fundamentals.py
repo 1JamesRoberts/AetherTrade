@@ -13,21 +13,26 @@ class handler(BaseHTTPRequestHandler):
             clean_ticker = 'BTC-USD'
         elif ticker == 'EUR/USD':
             clean_ticker = 'EURUSD=X'
+        elif ticker == 'USD/THB':
+            clean_ticker = 'USDTHB=X'
 
         try:
             t = yf.Ticker(clean_ticker)
             info = t.info
 
+            currency = 'THB' if clean_ticker.endswith('.BK') or info.get('currency') == 'THB' else 'USD'
+            curr_sym = '฿' if currency == 'THB' else '$'
+
             market_cap_raw = info.get('marketCap')
             if market_cap_raw:
                 if market_cap_raw >= 1e12:
-                    market_cap_fmt = f"${market_cap_raw / 1e12:.2f}T"
+                    market_cap_fmt = f"{curr_sym}{market_cap_raw / 1e12:.2f}T"
                 elif market_cap_raw >= 1e9:
-                    market_cap_fmt = f"${market_cap_raw / 1e9:.2f}B"
+                    market_cap_fmt = f"{curr_sym}{market_cap_raw / 1e9:.2f}B"
                 elif market_cap_raw >= 1e6:
-                    market_cap_fmt = f"${market_cap_raw / 1e6:.2f}M"
+                    market_cap_fmt = f"{curr_sym}{market_cap_raw / 1e6:.2f}M"
                 else:
-                    market_cap_fmt = f"${market_cap_raw:,.0f}"
+                    market_cap_fmt = f"{curr_sym}{market_cap_raw:,.0f}"
             else:
                 market_cap_fmt = 'N/A'
 
@@ -38,7 +43,7 @@ class handler(BaseHTTPRequestHandler):
             fpe_fmt = f"{fpe_val:.1f}x" if fpe_val else 'N/A'
 
             eps_val = info.get('trailingEps')
-            eps_fmt = f"${eps_val:.2f}" if eps_val is not None else 'N/A'
+            eps_fmt = f"{curr_sym}{eps_val:.2f}" if eps_val is not None else 'N/A'
 
             div_yield = info.get('dividendYield')
             div_fmt = f"{float(div_yield):.2f}%" if div_yield is not None else '0.00%'
@@ -67,7 +72,7 @@ class handler(BaseHTTPRequestHandler):
             ceo_name = officers[0].get('name') if officers else 'Executive Management'
 
             hq_parts = [info.get('city'), info.get('state'), info.get('country')]
-            hq_str = ", ".join([p for p in hq_parts if p]) or 'United States'
+            hq_str = ", ".join([p for p in hq_parts if p]) or ('Thailand' if clean_ticker.endswith('.BK') else 'United States')
 
             employees_val = info.get('fullTimeEmployees')
             employees_fmt = f"{int(employees_val):,}" if employees_val else 'Corporate'
@@ -98,6 +103,7 @@ class handler(BaseHTTPRequestHandler):
             payload_obj = {
                 "status": "ok",
                 "symbol": ticker,
+                "currency": currency,
                 "name": info.get('shortName') or info.get('longName') or f"{ticker} Stock",
                 "sector": info.get('sector') or 'Equity Market',
                 "industry": info.get('industry') or 'Public Company',

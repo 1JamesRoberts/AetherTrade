@@ -155,7 +155,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                         qtype = map_quote_type(item.get('quoteType') or item.get('typeDisp'))
                         
                         score = 0
-                        if sym == q.upper():
+                        if sym == q.upper() or sym == f"{q.upper()}.BK":
                             score += 100
                         elif sym.startswith(q.upper()):
                             score += 40
@@ -166,6 +166,8 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                             score += 15
 
                         if exchange.upper() in PRIMARY_EXCHANGES:
+                            score += 25
+                        elif exchange.upper() in ('SET', 'MAI', 'BKK', 'THAILAND') or sym.endswith('.BK'):
                             score += 25
 
                         if name.lower().startswith(q.lower()):
@@ -214,6 +216,8 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 clean_ticker = 'BTC-USD'
             elif ticker == 'EUR/USD':
                 clean_ticker = 'EURUSD=X'
+            elif ticker == 'USD/THB':
+                clean_ticker = 'USDTHB=X'
 
             # Check server-side memory cache first (instant 0ms response)
             if clean_ticker in _FUNDAMENTALS_CACHE:
@@ -231,16 +235,19 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     t = yf.Ticker(clean_ticker)
                     info = t.info
                     
+                    currency = 'THB' if clean_ticker.endswith('.BK') or info.get('currency') == 'THB' else 'USD'
+                    curr_sym = '฿' if currency == 'THB' else '$'
+
                     market_cap_raw = info.get('marketCap')
                     if market_cap_raw:
                         if market_cap_raw >= 1e12:
-                            market_cap_fmt = f"${market_cap_raw / 1e12:.2f}T"
+                            market_cap_fmt = f"{curr_sym}{market_cap_raw / 1e12:.2f}T"
                         elif market_cap_raw >= 1e9:
-                            market_cap_fmt = f"${market_cap_raw / 1e9:.2f}B"
+                            market_cap_fmt = f"{curr_sym}{market_cap_raw / 1e9:.2f}B"
                         elif market_cap_raw >= 1e6:
-                            market_cap_fmt = f"${market_cap_raw / 1e6:.2f}M"
+                            market_cap_fmt = f"{curr_sym}{market_cap_raw / 1e6:.2f}M"
                         else:
-                            market_cap_fmt = f"${market_cap_raw:,.0f}"
+                            market_cap_fmt = f"{curr_sym}{market_cap_raw:,.0f}"
                     else:
                         market_cap_fmt = 'N/A'
 
@@ -251,7 +258,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     fpe_fmt = f"{fpe_val:.1f}x" if fpe_val else 'N/A'
 
                     eps_val = info.get('trailingEps')
-                    eps_fmt = f"${eps_val:.2f}" if eps_val is not None else 'N/A'
+                    eps_fmt = f"{curr_sym}{eps_val:.2f}" if eps_val is not None else 'N/A'
 
                     div_yield = info.get('dividendYield')
                     if div_yield is not None:
@@ -283,7 +290,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     ceo_name = officers[0].get('name') if officers else 'Executive Management'
 
                     hq_parts = [info.get('city'), info.get('state'), info.get('country')]
-                    hq_str = ", ".join([p for p in hq_parts if p]) or 'United States'
+                    hq_str = ", ".join([p for p in hq_parts if p]) or ('Thailand' if clean_ticker.endswith('.BK') else 'United States')
 
                     employees_val = info.get('fullTimeEmployees')
                     employees_fmt = f"{int(employees_val):,}" if employees_val else 'Corporate'
@@ -314,6 +321,7 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     payload_obj = {
                         "status": "ok",
                         "symbol": ticker,
+                        "currency": currency,
                         "name": info.get('shortName') or info.get('longName') or f"{ticker} Stock",
                         "sector": info.get('sector') or 'Equity Market',
                         "industry": info.get('industry') or 'Public Company',
@@ -360,6 +368,79 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"error": f"Failed to fetch fundamentals for {ticker}: {str(e)}"}).encode('utf-8'))
                 return
 
+        # Helper to fetch timeseries via yfinance with Twelve Data JSON format mapping
+        def fetch_yfinance_timeseries(query_ticker, range_v, interval_v):
+            if yf is None:
+                return None
+            YF_MAPPING = {
+                ('1D', '1m'): ('1d', '1m'),
+                ('1D', '5m'): ('1d', '5m'),
+                ('1D', '15m'): ('1d', '15m'),
+                ('1D', '1h'): ('1d', '1h'),
+                
+                ('1W', '5m'): ('5d', '5m'),
+                ('1W', '15m'): ('5d', '15m'),
+                ('1W', '1h'): ('5d', '1h'),
+                ('1W', '1d'): ('5d', '1d'),
+                
+                ('1M', '15m'): ('1mo', '15m'),
+                ('1M', '1h'): ('1mo', '1h'),
+                ('1M', '1d'): ('1mo', '1d'),
+                ('1M', '1w'): ('1mo', '1wk'),
+                
+                ('1Y', '1d'): ('1y', '1d'),
+                ('1Y', '1w'): ('1y', '1wk'),
+
+                ('5Y', '1d'): ('5y', '1d'),
+                ('5Y', '1w'): ('5y', '1wk'),
+            }
+            period, yf_int = YF_MAPPING.get((range_v, interval_v), ('1mo', '1d'))
+            
+            candidates = [query_ticker]
+            if not query_ticker.endswith('.BK') and '/' not in query_ticker and '=' not in query_ticker:
+                candidates.append(f"{query_ticker}.BK")
+
+            for sym_try in candidates:
+                try:
+                    t_obj = yf.Ticker(sym_try)
+                    hist = t_obj.history(period=period, interval=yf_int)
+                    if hist is not None and not hist.empty and len(hist) > 0:
+                        vals = []
+                        for row_idx, row in hist.iterrows():
+                            if hasattr(row_idx, 'strftime'):
+                                if 'm' in yf_int or 'h' in yf_int:
+                                    dt_str = row_idx.strftime('%Y-%m-%d %H:%M:%S')
+                                else:
+                                    dt_str = row_idx.strftime('%Y-%m-%d')
+                            else:
+                                dt_str = str(row_idx)
+                            vol_raw = row.get('Volume', 0)
+                            try:
+                                vol_int = int(float(vol_raw)) if vol_raw is not None and not pd.isna(vol_raw) else 0
+                            except Exception:
+                                vol_int = 0
+                            vals.append({
+                                "datetime": dt_str,
+                                "open": f"{row['Open']:.4f}",
+                                "high": f"{row['High']:.4f}",
+                                "low": f"{row['Low']:.4f}",
+                                "close": f"{row['Close']:.4f}",
+                                "volume": str(vol_int)
+                            })
+                        
+                        sym_curr = 'THB' if sym_try.endswith('.BK') else 'USD'
+                        meta_obj = {
+                            "symbol": sym_try,
+                            "interval": interval_v,
+                            "currency": sym_curr,
+                            "exchange_timezone": "Asia/Bangkok" if sym_try.endswith('.BK') else "America/New_York",
+                            "status": "ok"
+                        }
+                        return json.dumps({"meta": meta_obj, "values": vals, "status": "ok"}).encode('utf-8')
+                except Exception:
+                    continue
+            return None
+
         # Intercept Proxy Stock request
         if parsed_url.path == '/api/stock':
             query_params = urllib.parse.parse_qs(parsed_url.query)
@@ -401,64 +482,75 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(cached_payload)
                     return
 
+            twelve_ticker = ticker
             if ticker == 'BTC-USD':
-                ticker = 'BTC/USD'
+                twelve_ticker = 'BTC/USD'
             elif ticker == 'EURUSD=X':
-                ticker = 'EUR/USD'
-            
-            # Map combinations of Range and Interval to Twelve Data interval & outputsize
-            MAPPING = {
-                ('1D', '1m'): ('1min', '390'),
-                ('1D', '5m'): ('5min', '78'),
-                ('1D', '15m'): ('15min', '26'),
-                ('1D', '1h'): ('1h', '7'),
-                
-                ('1W', '5m'): ('5min', '390'),
-                ('1W', '15m'): ('15min', '130'),
-                ('1W', '1h'): ('1h', '35'),
-                ('1W', '1d'): ('1day', '7'),
-                
-                ('1M', '15m'): ('15min', '500'),
-                ('1M', '1h'): ('1h', '150'),
-                ('1M', '1d'): ('1day', '30'),
-                ('1M', '1w'): ('1week', '5'),
-                
-                ('1Y', '1d'): ('1day', '260'),
-                ('1Y', '1w'): ('1week', '52'),
-
-                ('5Y', '1d'): ('1day', '1260'),
-                ('5Y', '1w'): ('1week', '260'),
-            }
-            
-            mapped_interval, mapped_outputsize = MAPPING.get((range_val, interval_val), ('1day', '30'))
+                twelve_ticker = 'EUR/USD'
+            elif ticker == 'USDTHB=X':
+                twelve_ticker = 'USD/THB'
             
             data = None
             last_error = None
-            
-            # Rotate through all available API keys in case one is rate limited (8 req/min on free tier)
-            for _ in range(len(API_KEYS)):
-                key = get_next_api_key()
-                url = f"https://api.twelvedata.com/time_series?symbol={ticker}&interval={mapped_interval}&outputsize={mapped_outputsize}&order=asc&apikey={key}"
+
+            # If ticker is explicitly Thai (.BK), fetch via yfinance first
+            if ticker.endswith('.BK'):
+                data = fetch_yfinance_timeseries(ticker, range_val, interval_val)
+
+            if data is None:
+                # Map combinations of Range and Interval to Twelve Data interval & outputsize
+                MAPPING = {
+                    ('1D', '1m'): ('1min', '390'),
+                    ('1D', '5m'): ('5min', '78'),
+                    ('1D', '15m'): ('15min', '26'),
+                    ('1D', '1h'): ('1h', '7'),
+                    
+                    ('1W', '5m'): ('5min', '390'),
+                    ('1W', '15m'): ('15min', '130'),
+                    ('1W', '1h'): ('1h', '35'),
+                    ('1W', '1d'): ('1day', '7'),
+                    
+                    ('1M', '15m'): ('15min', '500'),
+                    ('1M', '1h'): ('1h', '150'),
+                    ('1M', '1d'): ('1day', '30'),
+                    ('1M', '1w'): ('1week', '5'),
+                    
+                    ('1Y', '1d'): ('1day', '260'),
+                    ('1Y', '1w'): ('1week', '52'),
+
+                    ('5Y', '1d'): ('1day', '1260'),
+                    ('5Y', '1w'): ('1week', '260'),
+                }
                 
-                try:
-                    req = urllib.request.Request(
-                        url, 
-                        headers={'User-Agent': 'Mozilla/5.0'}
-                    )
-                    with urllib.request.urlopen(req) as response:
-                        res_data = response.read()
-                        res_json = json.loads(res_data.decode('utf-8'))
-                        
-                        # Twelve Data returns 200 OK even for key limits, so we check status field!
-                        if res_json.get('status') == 'ok':
-                            data = res_data
-                            break
-                        else:
-                            last_error = res_json.get('message', 'Twelve Data API Error')
-                except Exception as e:
-                    last_error = str(e)
-                    continue
-            
+                mapped_interval, mapped_outputsize = MAPPING.get((range_val, interval_val), ('1day', '30'))
+                
+                # Rotate through all available API keys in case one is rate limited
+                for _ in range(len(API_KEYS)):
+                    key = get_next_api_key()
+                    url = f"https://api.twelvedata.com/time_series?symbol={twelve_ticker}&interval={mapped_interval}&outputsize={mapped_outputsize}&order=asc&apikey={key}"
+                    
+                    try:
+                        req = urllib.request.Request(
+                            url, 
+                            headers={'User-Agent': 'Mozilla/5.0'}
+                        )
+                        with urllib.request.urlopen(req) as response:
+                            res_data = response.read()
+                            res_json = json.loads(res_data.decode('utf-8'))
+                            
+                            if res_json.get('status') == 'ok':
+                                data = res_data
+                                break
+                            else:
+                                last_error = res_json.get('message', 'Twelve Data API Error')
+                    except Exception as e:
+                        last_error = str(e)
+                        continue
+
+            # If Twelve Data failed or was not found, attempt yfinance fallback
+            if data is None:
+                data = fetch_yfinance_timeseries(ticker, range_val, interval_val)
+
             if data is not None:
                 _STOCK_CACHE[clean_cache_key] = (now, data)
                 self.send_response(200)
@@ -470,8 +562,9 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_response(500)
                 self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
-                error_response = json.dumps({"error": f"Twelve Data failed: {last_error}"}).encode('utf-8')
+                error_response = json.dumps({"error": f"Symbol not found or data fetch failed: {last_error or 'Unknown error'}"}).encode('utf-8')
                 self.wfile.write(error_response)
                 return
                 

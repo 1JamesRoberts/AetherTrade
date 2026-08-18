@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import RebalanceStudio from './RebalanceStudio';
+import {
+  detectTickerCurrency,
+  formatMoney,
+  convertCurrency
+} from '../utils/currencyUtils';
 
 Chart.register(...registerables);
 
@@ -37,14 +42,13 @@ export default function PerformanceHoldings({
       name: 'Primary Portfolio',
       holdings: {},
       transactions: [],
-      realizedPL: 0
+      realizedPL: 0,
+      baseCurrency: 'USD'
     };
   }, [portfolios, activePortfolioId]);
 
-  // Format currency helper
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-  };
+  const baseCurrency = activePortfolio.baseCurrency || 'USD';
+  const fxRate = parseFloat(stocks['USDTHB=X']?.price) || 35.5;
 
   let totalAssetValue = 0;
   let totalCostBasis = 0;
@@ -56,13 +60,18 @@ export default function PerformanceHoldings({
       const holding = activePortfolio.holdings[ticker];
       const stockMeta = stocks[ticker] || { price: holding.avgCost, name: `${ticker} Stock` };
       const stockPrice = stockMeta.price || holding.avgCost;
-      const totalCost = (holding.shares * holding.avgCost) + (holding.totalFees || 0);
-      const marketValue = holding.shares * stockPrice;
-      const pnlVal = marketValue - totalCost;
-      const pnlPct = totalCost > 0 ? (pnlVal / totalCost) * 100 : 0;
+      const nativeCost = (holding.shares * holding.avgCost) + (holding.totalFees || 0);
+      const nativeMarketValue = holding.shares * stockPrice;
+      const nativePnlVal = nativeMarketValue - nativeCost;
+      const pnlPct = nativeCost > 0 ? (nativePnlVal / nativeCost) * 100 : 0;
+      const currency = detectTickerCurrency(ticker);
 
-      totalAssetValue += marketValue;
-      totalCostBasis += totalCost;
+      const baseMarketValue = convertCurrency(nativeMarketValue, currency, baseCurrency, fxRate);
+      const baseCost = convertCurrency(nativeCost, currency, baseCurrency, fxRate);
+      const basePnlVal = baseMarketValue - baseCost;
+
+      totalAssetValue += baseMarketValue;
+      totalCostBasis += baseCost;
 
       return {
         ticker,
@@ -70,27 +79,39 @@ export default function PerformanceHoldings({
         shares: holding.shares,
         avgCost: holding.avgCost,
         currentPrice: stockPrice,
-        totalCost,
-        marketValue,
-        pnlVal,
-        pnlPct
+        currency,
+        totalCost: nativeCost,
+        marketValue: nativeMarketValue,
+        pnlVal: nativePnlVal,
+        pnlPct,
+        baseMarketValue,
+        baseCost,
+        basePnlVal
       };
     });
 
   const netProfit = totalAssetValue - totalCostBasis;
   const netReturnPct = totalCostBasis > 0 ? (netProfit / totalCostBasis) * 100 : 0;
 
+  // Realized P&L in base currency
+  const realizedPL = activePortfolio.realizedPLByCurrency
+    ? (convertCurrency(activePortfolio.realizedPLByCurrency.USD || 0, 'USD', baseCurrency, fxRate) +
+       convertCurrency(activePortfolio.realizedPLByCurrency.THB || 0, 'THB', baseCurrency, fxRate))
+    : convertCurrency(activePortfolio.realizedPL || 0, 'USD', baseCurrency, fxRate);
+
   const sortedHoldings = [...rawHoldings].sort((a, b) => {
     let valA = a[sortColumn];
     let valB = b[sortColumn];
 
     if (valA === valB) return 0;
-    if (typeof valA === 'string') {
+    if (typeof valA === 'string' || typeof valB === 'string') {
       return sortDirection === 'asc'
-        ? valA.localeCompare(valB)
-        : valB.localeCompare(valA);
+        ? String(valA || '').localeCompare(String(valB || ''))
+        : String(valB || '').localeCompare(String(valA || ''));
     } else {
-      return sortDirection === 'asc' ? valA - valB : valB - valA;
+      const numA = typeof valA === 'number' && !isNaN(valA) ? valA : 0;
+      const numB = typeof valB === 'number' && !isNaN(valB) ? valB : 0;
+      return sortDirection === 'asc' ? numA - numB : numB - numA;
     }
   });
 
@@ -118,24 +139,32 @@ export default function PerformanceHoldings({
       performanceChartRef.current = null;
     }
 
-    const txs = [...activePortfolio.transactions].sort((a, b) => a.timestamp - b.timestamp);
+    const txs = [...(activePortfolio?.transactions || [])].sort((a, b) => {
+      const timeA = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.date || a.timestamp || 0).getTime();
+      const timeB = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.date || b.timestamp || 0).getTime();
+      return timeA - timeB;
+    });
     if (txs.length === 0) return;
 
     let earliestActiveTimestamp = Infinity;
     txs.forEach(tx => {
-      if (tx.type === 'BUY' && tx.timestamp < earliestActiveTimestamp) {
-        earliestActiveTimestamp = tx.timestamp;
+      const txTime = typeof tx.timestamp === 'number' ? tx.timestamp : new Date(tx.date || tx.timestamp || 0).getTime();
+      if (tx.type === 'BUY' && txTime < earliestActiveTimestamp && !isNaN(txTime)) {
+        earliestActiveTimestamp = txTime;
       }
     });
 
-    if (earliestActiveTimestamp === Infinity) earliestActiveTimestamp = txs[0].timestamp;
+    if (earliestActiveTimestamp === Infinity) {
+      const firstTime = typeof txs[0].timestamp === 'number' ? txs[0].timestamp : new Date(txs[0].date || txs[0].timestamp || 0).getTime();
+      earliestActiveTimestamp = !isNaN(firstTime) ? firstTime : Date.now();
+    }
 
     const startDate = new Date(earliestActiveTimestamp);
     const endDate = new Date();
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(0, 0, 0, 0);
 
-    const diffDays = Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.max(1, Math.ceil(Math.abs(endDate - startDate) / (1000 * 60 * 60 * 24)));
     const stepDays = (diffDays <= 30) ? 1 : 7;
     const stepMs = stepDays * 24 * 60 * 60 * 1000;
 
@@ -149,6 +178,22 @@ export default function PerformanceHoldings({
       timelineDates.push(new Date(endDate.getTime()));
     }
 
+    const parseLocalDate = (dateStr) => {
+      if (!dateStr) return new Date(0);
+      if (typeof dateStr !== 'string') {
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? new Date(0) : d;
+      }
+      if (dateStr.includes('-')) {
+        const parts = dateStr.split(' ')[0].split('T')[0].split('-').map(Number);
+        if (parts.length === 3 && !parts.some(isNaN)) {
+          return new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+      }
+      const parsed = new Date(dateStr);
+      return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+    };
+
     const getPriceOnDate = (ticker, targetDate, fallbackPrice) => {
       const stock = stocks[ticker];
       if (!stock) return fallbackPrice;
@@ -156,11 +201,6 @@ export default function PerformanceHoldings({
       const closes = stock.portfolioHistory || stock.liveCloses || [];
       const labels = stock.portfolioLabels || stock.liveLabels || [];
       const livePrice = parseFloat(stock.price) || 0;
-
-      const parseLocalDate = (dateStr) => {
-        const [y, m, d] = dateStr.split('-').map(Number);
-        return new Date(y, m - 1, d);
-      };
 
       if (closes.length > 0 && labels.length === closes.length) {
         const today = new Date();
@@ -206,17 +246,22 @@ export default function PerformanceHoldings({
 
     timelineDates.forEach(D => {
       const endOfDayMs = D.getTime() + 86399999;
+      const fxRateOnDate = getPriceOnDate('USDTHB=X', D, fxRate);
 
-      while (txIdx < txs.length && txs[txIdx].timestamp <= endOfDayMs) {
+      while (txIdx < txs.length) {
         const tx = txs[txIdx];
+        const txTime = typeof tx.timestamp === 'number' ? tx.timestamp : new Date(tx.date || tx.timestamp || 0).getTime();
+        if (txTime > endOfDayMs) break;
+
         const ticker = tx.ticker;
         const txPrice = parseFloat(tx.price) || 0;
         const txShares = parseFloat(tx.shares) || 0;
         const txFees = parseFloat(tx.fees) || 0;
+        const txCurr = detectTickerCurrency(ticker);
 
         if (tx.type === 'BUY') {
           if (!holdingsOnDate[ticker]) {
-            holdingsOnDate[ticker] = { shares: 0, avgCost: 0, totalFees: 0, lastPrice: txPrice };
+            holdingsOnDate[ticker] = { shares: 0, avgCost: 0, totalFees: 0, lastPrice: txPrice, currency: txCurr };
           }
           const h = holdingsOnDate[ticker];
           const newPureTotalCost = (h.shares * h.avgCost) + (txShares * txPrice);
@@ -230,8 +275,11 @@ export default function PerformanceHoldings({
             const originalShares = h.shares;
             const soldShares = Math.min(originalShares, txShares);
             const proportionalBuyFee = originalShares > 0 ? (soldShares / originalShares) * (h.totalFees || 0) : 0;
-            const saleRealizedGain = (txPrice - h.avgCost) * soldShares - txFees - proportionalBuyFee;
-            cumulativeRealizedPL += saleRealizedGain;
+            const saleRealizedGainNative = (txPrice - h.avgCost) * soldShares - txFees - proportionalBuyFee;
+
+            const txFxRate = getPriceOnDate('USDTHB=X', new Date(txTime), fxRate);
+            const saleRealizedGainBase = convertCurrency(saleRealizedGainNative, h.currency, baseCurrency, txFxRate);
+            cumulativeRealizedPL += (isNaN(saleRealizedGainBase) ? 0 : saleRealizedGainBase);
 
             h.shares = Math.max(0, h.shares - soldShares);
             h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
@@ -247,9 +295,11 @@ export default function PerformanceHoldings({
         const h = holdingsOnDate[t];
         if (h.shares > 0) {
           const price = getPriceOnDate(t, D, h.lastPrice || h.avgCost || 0);
-          const totalCostOnDate = (h.shares * h.avgCost) + (h.totalFees || 0);
-          const marketValueOnDate = h.shares * price;
-          unrealizedPLOnDate += marketValueOnDate - totalCostOnDate;
+          const totalCostOnDateNative = (h.shares * h.avgCost) + (h.totalFees || 0);
+          const marketValueOnDateNative = h.shares * price;
+          const unrealizedNative = marketValueOnDateNative - totalCostOnDateNative;
+          const unrealizedBase = convertCurrency(unrealizedNative, h.currency, baseCurrency, fxRateOnDate);
+          unrealizedPLOnDate += unrealizedBase;
         }
       });
 
@@ -335,14 +385,14 @@ export default function PerformanceHoldings({
               label: function (context) {
                 const val = context.parsed.y;
                 const sign = val >= 0 ? '+' : '';
-                return `${context.dataset.label}: ${sign}$${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                return `${context.dataset.label}: ${sign}${formatMoney(val, baseCurrency)}`;
               }
             }
           }
         },
         scales: {
           x: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
-          y: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, callback: function (val) { const sign = val >= 0 ? '+' : ''; return `${sign}$${val.toLocaleString('en-US', { notation: 'compact' })}`; } } }
+          y: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, callback: function (val) { const sign = val >= 0 ? '+' : '-'; const sym = baseCurrency === 'THB' ? '฿' : '$'; return `${sign}${sym}${Math.abs(val).toLocaleString('en-US', { notation: 'compact' })}`; } } }
         }
       }
     });
@@ -353,7 +403,7 @@ export default function PerformanceHoldings({
         performanceChartRef.current = null;
       }
     };
-  }, [activePortfolio, stocks, chartMode, timeRange, mountTime]);
+  }, [activePortfolio, stocks, chartMode, timeRange, mountTime, baseCurrency, fxRate]);
 
   const handleRefreshPrices = async () => {
     if (isRefreshing) return;
@@ -432,17 +482,17 @@ export default function PerformanceHoldings({
       <div className="analysis-cards-grid portfolio-kpi-grid">
         <div className="metric-card card-cyan">
           <div className="metric-card-header"><span className="title">Portfolio Net Worth</span><i className="fa-solid fa-vault text-cyan"></i></div>
-          <div className="metric-val tabular-nums">{formatCurrency(totalAssetValue)}</div>
-          <div className="metric-subtext tabular-nums">Invested Capital: {formatCurrency(totalCostBasis)}</div>
+          <div className="metric-val tabular-nums">{formatMoney(totalAssetValue, baseCurrency)}</div>
+          <div className="metric-subtext tabular-nums">Invested Capital: {formatMoney(totalCostBasis, baseCurrency)}</div>
         </div>
         <div className={`metric-card ${netProfit >= 0 ? 'card-green' : 'card-red'}`}>
           <div className="metric-card-header"><span className="title">Unrealized P&L</span><i className={`fa-solid ${netProfit >= 0 ? 'fa-arrow-trend-up text-green' : 'fa-arrow-trend-down text-red'}`}></i></div>
-          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>{netProfit >= 0 ? '+' : ''}{formatCurrency(netProfit)}</div>
+          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>{netProfit >= 0 ? '+' : ''}{formatMoney(netProfit, baseCurrency)}</div>
           <div className="metric-subtext tabular-nums">Open Returns: {netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%</div>
         </div>
-        <div className={`metric-card ${activePortfolio.realizedPL >= 0 ? 'card-green' : 'card-red'}`}>
+        <div className={`metric-card ${realizedPL >= 0 ? 'card-green' : 'card-red'}`}>
           <div className="metric-card-header"><span className="title">Realized P&L</span><i className="fa-solid fa-sack-dollar text-cyan"></i></div>
-          <div className={`metric-val tabular-nums ${activePortfolio.realizedPL >= 0 ? 'text-green' : 'text-red'}`}>{activePortfolio.realizedPL >= 0 ? '+' : ''}{formatCurrency(activePortfolio.realizedPL)}</div>
+          <div className={`metric-val tabular-nums ${realizedPL >= 0 ? 'text-green' : 'text-red'}`}>{realizedPL >= 0 ? '+' : ''}{formatMoney(realizedPL, baseCurrency)}</div>
           <div className="metric-subtext">Profit/loss closed from asset sales</div>
         </div>
         <div className="metric-card card-cyan">
@@ -475,7 +525,7 @@ export default function PerformanceHoldings({
                 </button>
               ))}
             </div>
-            {activePortfolio.transactions.length > 0 && (
+            {(activePortfolio?.transactions || []).length > 0 && (
               <button
                 type="button"
                 onClick={handleRefreshPrices}
@@ -492,7 +542,7 @@ export default function PerformanceHoldings({
 
         <div className="performance-chart-wrapper" id="performanceChartContainer">
           <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart"></canvas>
-          {activePortfolio.transactions.length === 0 && (
+          {(activePortfolio?.transactions || []).length === 0 && (
             <div id="performanceEmptyMsg" className="empty-chart-overlay">
               <i className="fa-solid fa-chart-line empty-chart-icon"></i> <span>No performance history available yet. Record transactions to plot growth.</span>
             </div>
@@ -543,20 +593,20 @@ export default function PerformanceHoldings({
               </thead>
               <tbody>
                 {sortedHoldings.map((h) => {
-                  const weight = totalAssetValue > 0 ? (h.marketValue / totalAssetValue) * 100 : 0;
+                  const weight = totalAssetValue > 0 ? (h.baseMarketValue / totalAssetValue) * 100 : 0;
                   return (
                     <tr key={h.ticker}>
                       <td className="cell-asset">
                         <div className="asset-cell-flex"><span className="asset-ticker">{h.ticker}</span><span className="asset-name">{h.name}</span></div>
                       </td>
-                      <td className="tabular-nums font-bold">{parseFloat(h.shares.toFixed(6))}</td>
-                      <td className="tabular-nums">{formatCurrency(h.avgCost)}</td>
-                      <td className="tabular-nums font-bold text-white">{formatCurrency(h.currentPrice)}</td>
-                      <td className="tabular-nums">{formatCurrency(h.totalCost)}</td>
-                      <td className="tabular-nums font-bold text-cyan">{formatCurrency(h.marketValue)}</td>
+                      <td className="tabular-nums font-bold">{parseFloat(Number(h.shares || 0).toFixed(6))}</td>
+                      <td className="tabular-nums">{formatMoney(h.avgCost, h.currency)}</td>
+                      <td className="tabular-nums font-bold text-white">{formatMoney(h.currentPrice, h.currency)}</td>
+                      <td className="tabular-nums">{formatMoney(h.totalCost, h.currency)}</td>
+                      <td className="tabular-nums font-bold text-cyan">{formatMoney(h.baseMarketValue, baseCurrency)}</td>
                       <td className="tabular-nums font-bold">
-                        <span className={h.pnlVal >= 0 ? 'text-green' : 'text-red'}>{h.pnlVal >= 0 ? '+' : ''}{formatCurrency(h.pnlVal)}</span>
-                        <span className={`cell-pct-sub ${h.pnlVal >= 0 ? 'text-green' : 'text-red'}`}>({h.pnlVal >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)</span>
+                        <span className={h.basePnlVal >= 0 ? 'text-green' : 'text-red'}>{h.basePnlVal >= 0 ? '+' : ''}{formatMoney(h.basePnlVal, baseCurrency)}</span>
+                        <span className={`cell-pct-sub ${h.basePnlVal >= 0 ? 'text-green' : 'text-red'}`}>({h.basePnlVal >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)</span>
                       </td>
                       <td className="cell-weight">
                         {(() => {

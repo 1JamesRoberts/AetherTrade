@@ -1,4 +1,9 @@
 import { useState, useEffect } from 'react';
+import {
+  detectTickerCurrency,
+  getCurrencySymbol,
+  formatMoney
+} from '../utils/currencyUtils';
 
 function loadCachedFundamentals() {
   try {
@@ -86,14 +91,14 @@ function formatPercentValue(val) {
   return isNaN(num) ? '0.00%' : `${num.toFixed(2)}%`;
 }
 
-function formatLargeNumber(val, isCurrency = false) {
+function formatLargeNumber(val, isCurrency = false, currency = 'USD') {
   if (val === null || val === undefined || val === 'N/A' || val === '') return '--';
   const str = String(val).trim();
-  if (/[KMBT]$/i.test(str) || str.startsWith('$')) return str;
+  if (/[KMBT]$/i.test(str) || str.startsWith('$') || str.startsWith('฿')) return str;
   const cleanStr = str.replace(/,/g, '');
   const num = parseFloat(cleanStr);
   if (isNaN(num)) return str;
-  const prefix = isCurrency ? '$' : '';
+  const prefix = isCurrency ? getCurrencySymbol(currency) : '';
   if (num >= 1e12) return `${prefix}${(num / 1e12).toFixed(2)}T`;
   if (num >= 1e9) return `${prefix}${(num / 1e9).toFixed(2)}B`;
   if (num >= 1e6) return `${prefix}${(num / 1e6).toFixed(2)}M`;
@@ -148,6 +153,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
 
   const data = liveFundamentals;
   const price = currentPrice || 0;
+  const tickerCurr = data?.currency || detectTickerCurrency(activeTicker);
 
   const low52 = data ? Number(data.fiftyTwoWeekLow || 0) : 0;
   const high52 = data ? Number(data.fiftyTwoWeekHigh || 0) : 0;
@@ -183,10 +189,9 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
           <button
             type="button"
             className="btn-insights-toggle"
-            aria-label={isCollapsed ? "Expand Fundamentals" : "Collapse Fundamentals"}
+            aria-label={isCollapsed ? 'Expand insights panel' : 'Collapse insights panel'}
           >
-            <span>{isCollapsed ? 'Expand' : 'Collapse'}</span>
-            <i className={`fa-solid ${isCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}`}></i>
+            <i className={`fa-solid fa-chevron-${isCollapsed ? 'down' : 'up'}`}></i>
           </button>
         </div>
       </div>
@@ -194,9 +199,13 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
       {!isCollapsed && (
         <div className="insights-body">
           {isLoadingApi && !data ? (
-            <div className="insights-loading-state">
-              <div className="loading-spinner"></div>
-              <span>Fetching live {activeTicker} fundamental statistics...</span>
+            <div className="insights-loading-skeleton">
+              <div className="skeleton-line"></div>
+              <div className="skeleton-grid">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="skeleton-chip"></div>
+                ))}
+              </div>
             </div>
           ) : hasError && !data ? (
             <div className="insights-empty-state">
@@ -226,17 +235,17 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                   <div className="range-52w-labels">
                     <div className="range-point low">
                       <span className="label">52W LOW</span>
-                      <span className="val tabular-nums">${low52.toFixed(2)}</span>
+                      <span className="val tabular-nums">{formatMoney(low52, tickerCurr)}</span>
                     </div>
                     {price > 0 && (
                       <div className="range-point current">
                         <span className="label">CURRENT PRICE</span>
-                        <span className="val tabular-nums text-cyan">${price.toFixed(2)}</span>
+                        <span className="val tabular-nums text-cyan">{formatMoney(price, tickerCurr)}</span>
                       </div>
                     )}
                     <div className="range-point high">
                       <span className="label">52W HIGH</span>
-                      <span className="val tabular-nums">${high52.toFixed(2)}</span>
+                      <span className="val tabular-nums">{formatMoney(high52, tickerCurr)}</span>
                     </div>
                   </div>
 
@@ -249,7 +258,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                       <div
                         className="range-52w-pointer"
                         style={{ left: `${range52Pct}%` }}
-                        title={`Current: $${price.toFixed(2)} (${range52Pct.toFixed(1)}% of 52W Range)`}
+                        title={`Current: ${formatMoney(price, tickerCurr)} (${range52Pct.toFixed(1)}% of 52W Range)`}
                       >
                         <div className="pointer-pulse"></div>
                       </div>
@@ -265,7 +274,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                     <span className="chip-label">Market Cap</span>
                     <i className="fa-solid fa-building-columns chip-icon text-cyan"></i>
                   </div>
-                  <div className="chip-value tabular-nums">{formatLargeNumber(data.marketCap, true)}</div>
+                  <div className="chip-value tabular-nums">{formatLargeNumber(data.marketCap, true, tickerCurr)}</div>
                   <div className="chip-subtext">Enterprise Valuation</div>
                 </div>
 
@@ -432,7 +441,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                   <div className="analyst-stats-callout">
                     <div className="callout-block">
                       <span className="callout-label">CONSENSUS 1Y TARGET</span>
-                      <span className="callout-val tabular-nums text-cyan">${Number(data.targetMean).toFixed(2)}</span>
+                      <span className="callout-val tabular-nums text-cyan">{formatMoney(Number(data.targetMean), tickerCurr)}</span>
                     </div>
 
                     {price > 0 && (
@@ -457,15 +466,15 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                       <div className="target-range-labels">
                         <div className="range-point low">
                           <span className="label">LOW TARGET</span>
-                          <span className="val tabular-nums">${Number(data.targetLow).toFixed(2)}</span>
+                          <span className="val tabular-nums">{formatMoney(Number(data.targetLow), tickerCurr)}</span>
                         </div>
                         <div className="range-point current">
                           <span className="label">AVG TARGET</span>
-                          <span className="val tabular-nums text-cyan">${Number(data.targetMean).toFixed(2)}</span>
+                          <span className="val tabular-nums text-cyan">{formatMoney(Number(data.targetMean), tickerCurr)}</span>
                         </div>
                         <div className="range-point high">
                           <span className="label">HIGH TARGET</span>
-                          <span className="val tabular-nums">${Number(data.targetHigh).toFixed(2)}</span>
+                          <span className="val tabular-nums">{formatMoney(Number(data.targetHigh), tickerCurr)}</span>
                         </div>
                       </div>
 
@@ -479,11 +488,11 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                             return (
                               <>
                                 <div className="target-fill" style={{ width: `${meanPos}%` }}></div>
-                                <div className="target-mean-marker" style={{ left: `${meanPos}%` }} title={`Avg Target: $${Number(data.targetMean).toFixed(2)}`}>
+                                <div className="target-mean-marker" style={{ left: `${meanPos}%` }} title={`Avg Target: ${formatMoney(Number(data.targetMean), tickerCurr)}`}>
                                   <div className="mean-line"></div>
                                 </div>
                                 {currentPos !== null && (
-                                  <div className="target-current-marker" style={{ left: `${currentPos}%` }} title={`Current Price: $${price.toFixed(2)}`}>
+                                  <div className="target-current-marker" style={{ left: `${currentPos}%` }} title={`Current Price: ${formatMoney(price, tickerCurr)}`}>
                                     <div className="current-pin"></div>
                                   </div>
                                 )}

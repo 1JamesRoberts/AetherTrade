@@ -7,6 +7,12 @@ import {
   computeFullRebalance,
   computeDepositRebalance
 } from '../utils/rebalanceUtils';
+import {
+  detectTickerCurrency,
+  getCurrencySymbol,
+  formatMoney,
+  convertCurrency
+} from '../utils/currencyUtils';
 
 export default function RebalanceStudio({
   activePortfolio,
@@ -21,6 +27,9 @@ export default function RebalanceStudio({
   const [depositAmount, setDepositAmount] = useState(1000);
   const [isExecuting, setIsExecuting] = useState(false);
 
+  const baseCurrency = activePortfolio.baseCurrency || 'USD';
+  const fxRate = parseFloat(stocks['USDTHB=X']?.price) || 35.5;
+
   const holdings = useMemo(() => activePortfolio.holdings || {}, [activePortfolio.holdings]);
   const targetAllocations = useMemo(() => activePortfolio.targetAllocations || {}, [activePortfolio.targetAllocations]);
 
@@ -31,14 +40,17 @@ export default function RebalanceStudio({
     return Array.from(new Set([...held, ...targeted])).sort();
   }, [holdings, targetAllocations]);
 
-  // Compute total asset value
+  // Compute total asset value normalized to base currency
   const totalAssetValue = useMemo(() => {
     return activeTickers.reduce((acc, ticker) => {
-      const price = resolveAssetPrice(ticker, holdings, stocks);
+      const nativePrice = resolveAssetPrice(ticker, holdings, stocks);
       const shares = holdings[ticker]?.shares || 0;
-      return acc + (shares * price);
+      const nativeVal = shares * nativePrice;
+      const tickerCurr = detectTickerCurrency(ticker);
+      const baseVal = convertCurrency(nativeVal, tickerCurr, baseCurrency, fxRate);
+      return acc + baseVal;
     }, 0);
-  }, [activeTickers, holdings, stocks]);
+  }, [activeTickers, holdings, stocks, baseCurrency, fxRate]);
 
   // Compute total target percentage allocated
   const totalTargetPct = useMemo(() => {
@@ -89,14 +101,14 @@ export default function RebalanceStudio({
     showNotification('Cleared target allocations.', 'info');
   };
 
-  // Calculate rebalancing trade proposals
+  // Calculate rebalancing trade proposals in base currency
   const rebalanceResult = useMemo(() => {
     if (rebalanceMode === 'full') {
-      return computeFullRebalance(holdings, targetAllocations, stocks);
+      return computeFullRebalance(holdings, targetAllocations, stocks, undefined, baseCurrency, fxRate);
     } else {
-      return computeDepositRebalance(holdings, targetAllocations, stocks, depositAmount);
+      return computeDepositRebalance(holdings, targetAllocations, stocks, depositAmount, undefined, baseCurrency, fxRate);
     }
-  }, [rebalanceMode, holdings, targetAllocations, stocks, depositAmount]);
+  }, [rebalanceMode, holdings, targetAllocations, stocks, depositAmount, baseCurrency, fxRate]);
 
   // Execute Rebalance Action
   const handleExecute = async () => {
@@ -131,9 +143,10 @@ export default function RebalanceStudio({
       showNotification('No rebalance orders to copy.', 'info');
       return;
     }
-    const header = `AetherTrade Rebalance Plan — ${activePortfolio.name} (${rebalanceMode === 'full' ? 'Full Rebalance' : `Deposit $${depositAmount}`}):`;
+    const header = `AetherTrade Rebalance Plan — ${activePortfolio?.name || 'Portfolio'} (${rebalanceMode === 'full' ? 'Full Rebalance' : `Deposit ${formatMoney(depositAmount, baseCurrency)}`}):`;
     const lines = rebalanceResult.orders.map(ord => {
-      return `• ${ord.type} ${parseFloat(ord.shares.toFixed(4))} ${ord.ticker} @ $${ord.price.toFixed(2)} (~$${ord.total.toFixed(2)}) [${ord.currentWeight.toFixed(1)}% ➜ ${ord.targetWeight.toFixed(1)}%]`;
+      const ordCurr = detectTickerCurrency(ord.ticker);
+      return `• ${ord.type} ${parseFloat(Number(ord.shares || 0).toFixed(4))} ${ord.ticker} @ ${formatMoney(ord.price, ordCurr)} (~${formatMoney(ord.total, ordCurr)}) [${ord.currentWeight.toFixed(1)}% ➜ ${ord.targetWeight.toFixed(1)}%]`;
     });
     const text = [header, ...lines].join('\n');
 
@@ -149,7 +162,7 @@ export default function RebalanceStudio({
         type: ord.type,
         shares: ord.shares,
         price: ord.price,
-        account: activePortfolio.name
+        account: activePortfolio?.name || 'Primary Portfolio'
       });
       showNotification(`Pre-filled ${ord.type} ${ord.ticker} into Record Trade form. You can adjust the exact fill price!`, 'info');
     }
@@ -158,24 +171,21 @@ export default function RebalanceStudio({
   const handleQuickLogOrder = async (ord) => {
     if (onAddTransaction) {
       try {
-        await onAddTransaction(activePortfolio.id, {
+        const ordCurr = detectTickerCurrency(ord.ticker);
+        await onAddTransaction(activePortfolio?.id, {
           ticker: ord.ticker,
           type: ord.type,
           shares: ord.shares,
           price: ord.price,
           fees: 0,
-          account: activePortfolio.name,
+          account: activePortfolio?.name || 'Primary Portfolio',
           timestamp: Date.now()
         });
-        showNotification(`Logged ${ord.type} ${parseFloat(ord.shares.toFixed(4))} ${ord.ticker} at $${ord.price.toFixed(2)}`, 'success');
+        showNotification(`Logged ${ord.type} ${parseFloat(Number(ord.shares || 0).toFixed(4))} ${ord.ticker} at ${formatMoney(ord.price, ordCurr)}`, 'success');
       } catch (err) {
         showNotification(`Failed to log trade: ${err.message}`, 'error');
       }
     }
-  };
-
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
   };
 
   return (
@@ -257,10 +267,12 @@ export default function RebalanceStudio({
         ) : (
           <div className="target-matrix-list">
             {activeTickers.map(ticker => {
-              const price = resolveAssetPrice(ticker, holdings, stocks);
+              const nativePrice = resolveAssetPrice(ticker, holdings, stocks);
               const shares = holdings[ticker]?.shares || 0;
-              const val = shares * price;
-              const actualWeight = totalAssetValue > 0 ? (val / totalAssetValue) * 100 : 0;
+              const nativeVal = shares * nativePrice;
+              const tickerCurr = detectTickerCurrency(ticker);
+              const baseVal = convertCurrency(nativeVal, tickerCurr, baseCurrency, fxRate);
+              const actualWeight = totalAssetValue > 0 ? (baseVal / totalAssetValue) * 100 : 0;
               const targetWeight = parseFloat(targetAllocations[ticker]) || 0;
               const { driftPct, status } = calculateDrift(actualWeight, targetWeight);
 
@@ -272,7 +284,7 @@ export default function RebalanceStudio({
                       <span className="matrix-name">{stocks[ticker]?.name || `${ticker} Stock`}</span>
                     </div>
                     <div className="matrix-val-sub tabular-nums">
-                      {formatCurrency(val)} ({parseFloat(shares.toFixed(4))} sh @ {formatCurrency(price)})
+                      {formatMoney(baseVal, baseCurrency)} ({parseFloat(Number(shares || 0).toFixed(4))} sh @ {formatMoney(nativePrice, tickerCurr)})
                     </div>
                   </div>
 
@@ -354,7 +366,7 @@ export default function RebalanceStudio({
             <div className="deposit-input-row">
               <span className="deposit-label">Deposit Cash Amount:</span>
               <div className="deposit-field-wrapper">
-                <span className="field-prefix">$</span>
+                <span className="field-prefix">{getCurrencySymbol(baseCurrency)}</span>
                 <input
                   type="number"
                   min="1"
@@ -376,7 +388,7 @@ export default function RebalanceStudio({
                   onClick={() => setDepositAmount(amt)}
                   className={`deposit-preset-chip ${depositAmount === amt ? 'active' : ''}`}
                 >
-                  +${amt >= 1000 ? `${amt / 1000}k` : amt}
+                  +{getCurrencySymbol(baseCurrency)}{amt >= 1000 ? `${amt / 1000}k` : amt}
                 </button>
               ))}
             </div>
@@ -391,11 +403,11 @@ export default function RebalanceStudio({
               </span>
               {rebalanceMode === 'full' ? (
                 <span className="orders-stat-sub tabular-nums">
-                  Sells: <strong className="text-red">{formatCurrency(rebalanceResult.totalSells)}</strong> | Buys: <strong className="text-green">{formatCurrency(rebalanceResult.totalBuys)}</strong>
+                  Sells: <strong className="text-red">{formatMoney(rebalanceResult.totalSells, baseCurrency)}</strong> | Buys: <strong className="text-green">{formatMoney(rebalanceResult.totalBuys, baseCurrency)}</strong>
                 </span>
               ) : (
                 <span className="orders-stat-sub tabular-nums">
-                  Allocated: <strong className="text-green">{formatCurrency(rebalanceResult.totalBuys)}</strong> / {formatCurrency(depositAmount)} (Left: {formatCurrency(rebalanceResult.cashRemaining)})
+                  Allocated: <strong className="text-green">{formatMoney(rebalanceResult.totalBuys, baseCurrency)}</strong> / {formatMoney(depositAmount, baseCurrency)} (Left: {formatMoney(rebalanceResult.cashRemaining, baseCurrency)})
                 </span>
               )}
             </div>
@@ -443,6 +455,7 @@ export default function RebalanceStudio({
             <div className="rebalance-orders-list">
               {rebalanceResult.orders.map((ord, idx) => {
                 const isBuy = ord.type === 'BUY';
+                const ordCurr = detectTickerCurrency(ord.ticker);
                 return (
                   <div key={`${ord.ticker}-${ord.type}-${idx}`} className="rebalance-order-item">
                     <div className="order-left">
@@ -452,14 +465,14 @@ export default function RebalanceStudio({
                       <div className="order-ticker-group">
                         <span className="order-ticker">{ord.ticker}</span>
                         <span className="order-shares-desc tabular-nums">
-                          {parseFloat(ord.shares.toFixed(4))} sh @ {formatCurrency(ord.price)}
+                          {parseFloat(Number(ord.shares || 0).toFixed(4))} sh @ {formatMoney(ord.price, ordCurr)}
                         </span>
                       </div>
                     </div>
 
                     <div className="order-center-metric">
                       <span className={`order-total tabular-nums ${isBuy ? 'text-green' : 'text-red'}`}>
-                        {isBuy ? '+' : '-'}{formatCurrency(ord.total)}
+                        {isBuy ? '+' : '-'}{formatMoney(ord.total, ordCurr)}
                       </span>
                       <span className="order-weight-transition tabular-nums">
                         {ord.currentWeight.toFixed(1)}% ➜ {ord.targetWeight.toFixed(1)}%
@@ -480,7 +493,7 @@ export default function RebalanceStudio({
                         type="button"
                         onClick={() => handleQuickLogOrder(ord)}
                         className="btn-order-action quick"
-                        title={`Quick-log ${ord.type} ${ord.ticker} immediately at market estimate ($${ord.price.toFixed(2)})`}
+                        title={`Quick-log ${ord.type} ${ord.ticker} immediately at market estimate (${formatMoney(ord.price, ordCurr)})`}
                       >
                         <i className="fa-solid fa-bolt"></i>
                         <span>Log</span>

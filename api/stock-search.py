@@ -115,7 +115,7 @@ class handler(BaseHTTPRequestHandler):
                     
                     # Compute relevance ranking score
                     score = 0
-                    if sym == q.upper():
+                    if sym == q.upper() or sym == f"{q.upper()}.BK":
                         score += 100
                     elif sym.startswith(q.upper()):
                         score += 40
@@ -126,6 +126,8 @@ class handler(BaseHTTPRequestHandler):
                         score += 15
 
                     if exchange.upper() in PRIMARY_EXCHANGES:
+                        score += 25
+                    elif exchange.upper() in ('SET', 'MAI', 'BKK', 'THAILAND') or sym.endswith('.BK'):
                         score += 25
 
                     if name.lower().startswith(q.lower()):

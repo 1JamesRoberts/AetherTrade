@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { detectTickerCurrency } from '../utils/currencyUtils';
 
 function loadLocalTargetAllocations() {
   try {
@@ -15,19 +16,44 @@ function saveLocalTargetAllocations(targetMap) {
   } catch (e) { console.error('Error saving target allocations:', e); }
 }
 
+function loadLocalBaseCurrencies() {
+  try {
+    const saved = localStorage.getItem('aethertrade_base_currencies');
+    if (saved) return JSON.parse(saved);
+  } catch (e) { console.error('Error loading base currencies:', e); }
+  return {};
+}
+
+function saveLocalBaseCurrencies(currMap) {
+  try {
+    localStorage.setItem('aethertrade_base_currencies', JSON.stringify(currMap));
+  } catch (e) { console.error('Error saving base currencies:', e); }
+}
+
 function loadLocalPortfolios() {
   const targetMap = loadLocalTargetAllocations();
+  const currMap = loadLocalBaseCurrencies();
   try {
     const saved = localStorage.getItem('aethertrade_portfolios_list');
     if (saved) {
       const parsed = JSON.parse(saved);
       return parsed.map(p => ({
         ...p,
+        baseCurrency: p.baseCurrency || currMap[p.id] || 'USD',
         targetAllocations: p.targetAllocations || targetMap[p.id] || {}
       }));
     }
   } catch (e) { console.error(e); }
-  return [{ id: 'default', name: 'Primary Portfolio', holdings: {}, transactions: [], realizedPL: 0, targetAllocations: targetMap['default'] || {} }];
+  return [{
+    id: 'default',
+    name: 'Primary Portfolio',
+    holdings: {},
+    transactions: [],
+    realizedPL: 0,
+    realizedPLByCurrency: { USD: 0, THB: 0 },
+    baseCurrency: currMap['default'] || 'USD',
+    targetAllocations: targetMap['default'] || {}
+  }];
 }
 
 function loadLocalActiveId() {
@@ -42,15 +68,17 @@ export function rebuildPortfolioHoldings(txs) {
   txs.sort((a, b) => a.timestamp - b.timestamp);
   const holdings = {};
   let realizedPL = 0;
+  const realizedPLByCurrency = { USD: 0, THB: 0 };
 
   txs.forEach(tx => {
     const txFees = parseFloat(tx.fees) || 0;
     const txShares = parseFloat(tx.shares) || 0;
     const txPrice = parseFloat(tx.price) || 0;
+    const curr = detectTickerCurrency(tx.ticker);
 
     if (tx.type === 'BUY') {
       if (!holdings[tx.ticker]) {
-        holdings[tx.ticker] = { shares: 0, avgCost: 0, totalFees: 0 };
+        holdings[tx.ticker] = { shares: 0, avgCost: 0, totalFees: 0, currency: curr };
       }
       const h = holdings[tx.ticker];
       const newCost = (h.shares * h.avgCost) + (txShares * txPrice);
@@ -64,7 +92,10 @@ export function rebuildPortfolioHoldings(txs) {
         const soldShares = Math.min(originalShares, txShares);
         const proportionalBuyFee = originalShares > 0 ? (soldShares / originalShares) * (h.totalFees || 0) : 0;
         
-        realizedPL += soldShares * (txPrice - h.avgCost) - txFees - proportionalBuyFee;
+        const gain = soldShares * (txPrice - h.avgCost) - txFees - proportionalBuyFee;
+        realizedPL += gain;
+        realizedPLByCurrency[curr] = (realizedPLByCurrency[curr] || 0) + gain;
+
         h.shares = Math.max(0, h.shares - soldShares);
         h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
         if (h.shares < 1e-9) delete holdings[tx.ticker];
@@ -72,7 +103,7 @@ export function rebuildPortfolioHoldings(txs) {
     }
   });
 
-  return { holdings, realizedPL };
+  return { holdings, realizedPL, realizedPLByCurrency };
 }
 
 export function usePortfolio(addToast, user) {
@@ -112,16 +143,19 @@ export function usePortfolio(addToast, user) {
       });
 
       const targetMap = loadLocalTargetAllocations();
+      const currMap = loadLocalBaseCurrencies();
       const merged = dbPortfolios.map(dbPort => {
         const dbTxs = txMap[dbPort.id] || [];
-        const { holdings, realizedPL } = rebuildPortfolioHoldings(dbTxs);
+        const { holdings, realizedPL, realizedPLByCurrency } = rebuildPortfolioHoldings(dbTxs);
         return {
           id: dbPort.id,
           name: dbPort.name,
           transactions: dbTxs,
           holdings,
           realizedPL,
-          targetAllocations: targetMap[dbPort.id] || {}
+          realizedPLByCurrency,
+          baseCurrency: currMap[dbPort.id] || dbPort.base_currency || 'USD',
+          targetAllocations: targetMap[dbPort.id] || dbPort.target_allocations || {}
         };
       });
 
@@ -557,6 +591,29 @@ export function usePortfolio(addToast, user) {
     saveLocalTargetAllocations(targetMap);
   }, [portfolios, activePortfolioId]);
 
+  const updateBaseCurrency = useCallback((portfolioId, currency) => {
+    const safeCurr = currency === 'THB' ? 'THB' : 'USD';
+    let targetPortId = portfolioId;
+    if (!portfolios.some(p => p.id === targetPortId)) {
+      targetPortId = activePortfolioId;
+    }
+
+    // 1. Update state
+    setPortfolios(prev => prev.map(p => {
+      if (p.id === targetPortId) {
+        return { ...p, baseCurrency: safeCurr };
+      }
+      return p;
+    }));
+
+    // 2. Persist to localStorage
+    const currMap = loadLocalBaseCurrencies();
+    currMap[targetPortId] = safeCurr;
+    saveLocalBaseCurrencies(currMap);
+
+    addToast(`Portfolio base currency set to ${safeCurr}`, 'info');
+  }, [portfolios, activePortfolioId, addToast]);
+
   const executeRebalance = useCallback(async (portfolioId, trades) => {
     if (!trades || trades.length === 0) return;
 
@@ -582,8 +639,8 @@ export function usePortfolio(addToast, user) {
     setPortfolios(prev => prev.map(p => {
       if (p.id === targetPortId) {
         const combined = [...p.transactions, ...newTxs];
-        const { holdings, realizedPL } = rebuildPortfolioHoldings(combined);
-        return { ...p, transactions: combined, holdings, realizedPL };
+        const { holdings, realizedPL, realizedPLByCurrency } = rebuildPortfolioHoldings(combined);
+        return { ...p, transactions: combined, holdings, realizedPL, realizedPLByCurrency };
       }
       return p;
     }));
@@ -622,6 +679,7 @@ export function usePortfolio(addToast, user) {
     renamePortfolio,
     deletePortfolio,
     updateTargetAllocations,
+    updateBaseCurrency,
     executeRebalance,
     dbLoaded
   };

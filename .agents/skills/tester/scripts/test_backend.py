@@ -129,9 +129,21 @@ def main():
     # Test 5: Querying Live Fundamentals (AAPL)
     print("-" * 60)
     pass_5 = test_fundamentals("AAPL")
+
+    # Test 6: Querying Thai SET Stock (PTT.BK)
+    print("-" * 60)
+    pass_6 = test_endpoint("PTT.BK", 200, is_valid_symbol=True)
+
+    # Test 7: Querying USD/THB Forex Rate (USDTHB=X)
+    print("-" * 60)
+    pass_7 = test_endpoint("USDTHB=X", 200, is_valid_symbol=True)
+
+    # Test 8: Querying Thai Fundamentals (PTT.BK) with Baht formatting
+    print("-" * 60)
+    pass_8 = test_fundamentals("PTT.BK")
     
     print("=" * 60)
-    if pass_1 and pass_2 and pass_3 and pass_4 and pass_5:
+    if pass_1 and pass_2 and pass_3 and pass_4 and pass_5 and pass_6 and pass_7 and pass_8:
         print("SUMMARY: \u001b[32mALL TESTS PASSED SUCCESSFULLY!\u001b[0m")
         sys.exit(0)
     else:

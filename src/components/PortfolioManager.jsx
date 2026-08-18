@@ -1,17 +1,25 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
+import {
+  detectTickerCurrency,
+  getCurrencySymbol,
+  formatMoney,
+  convertCurrency
+} from '../utils/currencyUtils';
 
 Chart.register(...registerables);
 
 const ALLOCATION_COLORS = [
   '#06B6D4', // Cyan
-  '#8B5CF6', // Purple/Indigo
   '#10B981', // Emerald
-  '#F43F5E', // Coral
+  '#3B82F6', // Blue
+  '#8B5CF6', // Purple
   '#F59E0B', // Amber
   '#EC4899', // Pink
-  '#3B82F6', // Blue
   '#14B8A6', // Teal
+  '#6366F1', // Indigo
+  '#F97316', // Orange
+  '#84CC16', // Lime
 ];
 
 export default function PortfolioManager({
@@ -25,6 +33,7 @@ export default function PortfolioManager({
   onCreatePortfolio,
   onRenamePortfolio,
   onDeletePortfolio,
+  onUpdateBaseCurrency,
   prefilledTrade,
   showNotification,
   onFetchPrice
@@ -92,8 +101,8 @@ export default function PortfolioManager({
         setSearchQuery(prefilledTrade.ticker);
       }
       if (prefilledTrade.type) setTxType(prefilledTrade.type);
-      if (prefilledTrade.shares) setShares(parseFloat(prefilledTrade.shares.toFixed(4)));
-      if (prefilledTrade.price) setPrice(parseFloat(prefilledTrade.price.toFixed(2)));
+      if (prefilledTrade.shares) setShares(parseFloat(Number(prefilledTrade.shares).toFixed(4)));
+      if (prefilledTrade.price) setPrice(parseFloat(Number(prefilledTrade.price).toFixed(2)));
       if (prefilledTrade.account) setAccountName(prefilledTrade.account);
     });
     return () => { active = false; };
@@ -335,8 +344,8 @@ export default function PortfolioManager({
     setSelectedTicker(tx.ticker);
     setSearchQuery(tx.ticker);
     setTxType(tx.type || 'BUY');
-    setShares(parseFloat(tx.shares.toFixed(6)));
-    setPrice(parseFloat(tx.price.toFixed(2)));
+    setShares(parseFloat(Number(tx.shares || 0).toFixed(6)));
+    setPrice(parseFloat(Number(tx.price || 0).toFixed(2)));
     setFees(tx.fees !== undefined ? parseFloat(tx.fees) || 0 : 0);
     if (tx.account) setAccountName(tx.account);
     if (tx.timestamp) {
@@ -433,11 +442,15 @@ export default function PortfolioManager({
   };
 
   // Estimated total calculation
+  const selectedCurr = detectTickerCurrency(selectedTicker);
   const qtyVal = cleanFloat(shares) || 0;
   const priceVal = cleanFloat(price) || 0;
   const feeVal = cleanFloat(fees) || 0;
   const gross = qtyVal * priceVal;
   const net = txType === 'BUY' ? (gross + feeVal) : Math.max(0, gross - feeVal);
+
+  const baseCurrency = activePortfolio.baseCurrency || 'USD';
+  const fxRate = parseFloat(stocks['USDTHB=X']?.price) || 35.5;
 
   const { holdingsList, totalAssetValue } = useMemo(() => {
     let total = 0;
@@ -448,19 +461,23 @@ export default function PortfolioManager({
         const holding = activePortfolio.holdings[ticker];
         const stockMeta = stocks[ticker] || { price: holding.avgCost, name: `${ticker} Stock` };
         const stockPrice = stockMeta.price || holding.avgCost;
-        const marketValue = holding.shares * stockPrice;
-        total += marketValue;
+        const nativeMarketValue = holding.shares * stockPrice;
+        const assetCurrency = detectTickerCurrency(ticker);
+        const baseMarketValue = convertCurrency(nativeMarketValue, assetCurrency, baseCurrency, fxRate);
+        total += baseMarketValue;
         return {
           ticker,
           name: stockMeta.name || `${ticker} Stock`,
           shares: holding.shares,
           price: stockPrice,
-          marketValue
+          currency: assetCurrency,
+          marketValue: nativeMarketValue,
+          baseMarketValue
         };
       })
-      .sort((a, b) => b.marketValue - a.marketValue);
+      .sort((a, b) => (b.baseMarketValue || 0) - (a.baseMarketValue || 0));
     return { holdingsList: list, totalAssetValue: total };
-  }, [activePortfolio.holdings, stocks]);
+  }, [activePortfolio.holdings, stocks, baseCurrency, fxRate]);
 
   // Render Allocation Doughnut Chart using Chart.js on holdings changes
   useEffect(() => {
@@ -481,7 +498,7 @@ export default function PortfolioManager({
       data: {
         labels: holdingsList.map(h => h.ticker),
         datasets: [{
-          data: holdingsList.map(h => parseFloat(h.marketValue.toFixed(2))),
+          data: holdingsList.map(h => parseFloat(Number(h.baseMarketValue || 0).toFixed(2))),
           backgroundColor: ALLOCATION_COLORS.slice(0, holdingsList.length),
           borderColor: 'rgba(13, 19, 33, 0.95)',
           borderWidth: 3,
@@ -507,8 +524,8 @@ export default function PortfolioManager({
             callbacks: {
               label: function (context) {
                 const val = context.parsed;
-                const pct = (val / totalAssetValue) * 100;
-                return ` ${context.label}: $${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pct.toFixed(1)}%)`;
+                const pct = totalAssetValue > 0 ? (val / totalAssetValue) * 100 : 0;
+                return ` ${context.label}: ${formatMoney(val, baseCurrency)} (${pct.toFixed(1)}%)`;
               }
             }
           }
@@ -523,7 +540,7 @@ export default function PortfolioManager({
         allocationChartRef.current = null;
       }
     };
-  }, [holdingsList, totalAssetValue]);
+  }, [holdingsList, totalAssetValue, baseCurrency]);
 
   // Click outside listener for autocomplete closing
   useEffect(() => {
@@ -538,12 +555,28 @@ export default function PortfolioManager({
 
   return (
     <section className="panel panel-portfolio-left" aria-label="Portfolio Allocations">
-      {/* Portfolio Header with Account Switcher */}
+      {/* Portfolio Header with Account Switcher & Base Currency Toggle */}
       <div className="panel-header portfolio-header-bar">
         <h2 className="panel-title">
           <i className="fa-solid fa-briefcase"></i> Portfolio Manager
         </h2>
         <div className="portfolio-actions-cluster">
+          <div className="portfolio-currency-toggle" title="Portfolio Base Currency">
+            <button
+              type="button"
+              onClick={() => onUpdateBaseCurrency && onUpdateBaseCurrency(activePortfolio.id, 'USD')}
+              className={`currency-toggle-btn ${baseCurrency !== 'THB' ? 'active' : ''}`}
+            >
+              $ USD
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdateBaseCurrency && onUpdateBaseCurrency(activePortfolio.id, 'THB')}
+              className={`currency-toggle-btn ${baseCurrency === 'THB' ? 'active' : ''}`}
+            >
+              ฿ THB
+            </button>
+          </div>
           <div className="portfolio-select-wrap">
             <select
               id="portfolioSelector"
@@ -607,7 +640,7 @@ export default function PortfolioManager({
               <div className="donut-center-info">
                 <span className="donut-center-label">Total Value</span>
                 <span className="donut-center-value tabular-nums">
-                  ${totalAssetValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {formatMoney(totalAssetValue, baseCurrency)}
                 </span>
                 <span className="donut-center-sub">{holdingsList.length} Active Holdings</span>
               </div>
@@ -616,7 +649,7 @@ export default function PortfolioManager({
             {/* Allocation Legend List */}
             <div className="allocation-legend-list">
               {holdingsList.map((item, idx) => {
-                const weight = totalAssetValue > 0 ? (item.marketValue / totalAssetValue) * 100 : 0;
+                const weight = totalAssetValue > 0 ? (item.baseMarketValue / totalAssetValue) * 100 : 0;
                 const color = ALLOCATION_COLORS[idx % ALLOCATION_COLORS.length];
                 return (
                   <div key={item.ticker} className="allocation-legend-item">
@@ -627,7 +660,7 @@ export default function PortfolioManager({
                     </div>
                     <div className="legend-right">
                       <span className="legend-value tabular-nums">
-                        ${item.marketValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatMoney(item.baseMarketValue, baseCurrency)}
                       </span>
                       <span className="legend-weight-pill tabular-nums">
                         {weight.toFixed(1)}%
@@ -769,7 +802,7 @@ export default function PortfolioManager({
                         <span className="name">{stock.name || `${sym} Stock`}</span>
                       </div>
                       {stock.price > 0 && (
-                        <span className="price tabular-nums">${stock.price.toFixed(2)}</span>
+                        <span className="price tabular-nums">{formatMoney(stock.price, detectTickerCurrency(sym))}</span>
                       )}
                     </div>
                   );
@@ -800,7 +833,7 @@ export default function PortfolioManager({
               </div>
               <div className="preview-right">
                 <span className="preview-price tabular-nums">
-                  ${(stocks[selectedTicker]?.price || price || 0).toFixed(2)}
+                  {formatMoney(stocks[selectedTicker]?.price || price || 0, selectedCurr)}
                 </span>
                 {activePortfolio.holdings[selectedTicker]?.shares > 0 && (
                   <span className="preview-owned tabular-nums">
@@ -833,7 +866,7 @@ export default function PortfolioManager({
             <div className="tx-field">
               <label htmlFor="txPrice">Execution Price</label>
               <div className="field-input-wrapper">
-                <span className="field-prefix">$</span>
+                <span className="field-prefix">{getCurrencySymbol(selectedCurr)}</span>
                 <input
                   id="txPrice"
                   type="number"
@@ -861,7 +894,7 @@ export default function PortfolioManager({
             <div className="tx-field">
               <label htmlFor="txFees">Brokerage Fees</label>
               <div className="field-input-wrapper">
-                <span className="field-prefix">$</span>
+                <span className="field-prefix">{getCurrencySymbol(selectedCurr)}</span>
                 <input
                   id="txFees"
                   type="number"
@@ -892,12 +925,12 @@ export default function PortfolioManager({
           <div className="tx-estimate-banner">
             <div className="estimate-row">
               <span className="estimate-label">Gross Value:</span>
-              <span className="estimate-val tabular-nums">${gross.toFixed(2)}</span>
+              <span className="estimate-val tabular-nums">{formatMoney(gross, selectedCurr)}</span>
             </div>
             <div className="estimate-row total-row">
               <span className="estimate-label">Net Settlement Total:</span>
               <span className={`estimate-val total-val tabular-nums ${txType === 'BUY' ? 'buy' : 'sell'}`}>
-                ${net.toFixed(2)}
+                {formatMoney(net, selectedCurr)}
               </span>
             </div>
           </div>
@@ -918,41 +951,44 @@ export default function PortfolioManager({
         <div className="analysis-section sidebar-ledger-section">
           <div className="section-subtitle">
             <span>Transaction Audit History</span>
-            <span className="ledger-count-tag tabular-nums">{activePortfolio.transactions.length} Records</span>
+            <span className="ledger-count-tag tabular-nums">{(activePortfolio?.transactions || []).length} Records</span>
           </div>
 
           <div className="sidebar-ledger-viewport">
             <ul className="ledger-list" id="portfolioSidebarLogList">
-              {activePortfolio.transactions.length === 0 ? (
+              {(activePortfolio?.transactions || []).length === 0 ? (
                 <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '20px' }}>
                   No transaction audit records found.
                 </li>
               ) : (
-                [...activePortfolio.transactions].reverse().map((tx, idx) => {
-                  const actualIndex = activePortfolio.transactions.length - 1 - idx;
-                  const grossVal = tx.shares * tx.price;
+                [...(activePortfolio?.transactions || [])].reverse().map((tx, idx) => {
+                  const actualIndex = (activePortfolio?.transactions || []).length - 1 - idx;
+                  const txCurr = detectTickerCurrency(tx.ticker);
+                  const sharesNum = parseFloat(tx.shares) || 0;
+                  const priceNum = parseFloat(tx.price) || 0;
+                  const grossVal = sharesNum * priceNum;
                   const txFees = parseFloat(tx.fees) || 0;
                   const netVal = tx.type === 'BUY' ? (grossVal + txFees) : Math.max(0, grossVal - txFees);
                   const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
                   const rowKey = tx.id || `tx-side-log-${actualIndex}`;
-                  const txDateStr = new Date(tx.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-                  const formatUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v);
+                  const txTime = typeof tx.timestamp === 'number' ? tx.timestamp : new Date(tx.date || tx.timestamp || 0).getTime();
+                  const txDateStr = !isNaN(txTime) ? new Date(txTime).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent';
 
                   return (
-                    <li key={rowKey} className={`tx-ledger-item ${tx.type.toLowerCase()}`}>
+                    <li key={rowKey} className={`tx-ledger-item ${String(tx.type || 'BUY').toLowerCase()}`}>
                       <div className="ledger-left">
                         <div className="ledger-top-row">
-                          <span className={`type-badge ${tx.type.toLowerCase()}`}>
-                            {tx.type}
+                          <span className={`type-badge ${String(tx.type || 'BUY').toLowerCase()}`}>
+                            {tx.type || 'BUY'}
                           </span>
                           <span className="ledger-shares-ticker tabular-nums">
-                            <strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatUSD(tx.price)}
+                            <strong>{parseFloat(sharesNum.toFixed(6))} {tx.ticker}</strong> @ {formatMoney(priceNum, txCurr)}
                           </span>
                         </div>
                         <div className="ledger-meta-row tabular-nums">
-                          <span>Gross: {formatUSD(grossVal)}</span>
-                          <span>Fee: {formatUSD(txFees)}</span>
-                          <span>Net: <strong className={tx.type === 'BUY' ? 'text-green' : 'text-red'}>{formatUSD(netVal)}</strong></span>
+                          <span>Gross: {formatMoney(grossVal, txCurr)}</span>
+                          <span>Fee: {formatMoney(txFees, txCurr)}</span>
+                          <span>Net: <strong className={tx.type === 'BUY' ? 'text-green' : 'text-red'}>{formatMoney(netVal, txCurr)}</strong></span>
                           {accountStr && <span className="account-tag">{accountStr}</span>}
                         </div>
                       </div>

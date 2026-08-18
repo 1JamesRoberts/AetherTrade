@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { detectTickerCurrency, formatMoney } from '../utils/currencyUtils';
 
 // Mini SVG Sparkline — renders real 1D intraday close prices when available,
 // falling back to a generated bezier shape while data is loading.
@@ -356,7 +357,7 @@ export default function Watchlist({
                       </div>
                       <div className="rail-card-name">{stock.name}</div>
                       <div className="rail-card-price tabular-nums">
-                        {stock.price ? `$${stock.price.toFixed(2)}` : 'Loading...'}
+                        {stock.price ? formatMoney(stock.price, detectTickerCurrency(ticker)) : 'Loading...'}
                       </div>
                       <div className="rail-card-footer">Click to view chart</div>
                     </div>
@@ -526,7 +527,7 @@ export default function Watchlist({
           {filteredTickers.map((ticker) => {
             const stock = { ticker, name: `${ticker} Stock`, price: 0, change: 0, isLive: false, ...stocks[ticker] };
             const isUp = (stock.change ?? 0) >= 0;
-            const priceText = stock.price ? `$${stock.price.toFixed(2)}` : '...';
+            const priceText = stock.price ? formatMoney(stock.price, detectTickerCurrency(ticker)) : '...';
             const isActive = ticker === activeTicker;
 
             return (

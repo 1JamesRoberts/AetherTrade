@@ -45,6 +45,7 @@ export default async function handler(req, res) {
 
   if (ticker === 'BTC-USD') ticker = 'BTC/USD';
   else if (ticker === 'EURUSD=X') ticker = 'EUR/USD';
+  else if (ticker === 'USDTHB=X') ticker = 'USD/THB';
 
   const mappingKey = `${rangeVal},${intervalVal}`;
   const { interval, outputsize } = MAPPING[mappingKey] || { interval: '1day', outputsize: '30' };

@@ -1,6 +1,11 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { createChart, CrosshairMode, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 import StockInsights from './StockInsights';
+import {
+  detectTickerCurrency,
+  getCurrencySymbol,
+  formatMoney
+} from '../utils/currencyUtils';
 
 const RANGE_INTERVALS = {
   '1D': {
@@ -328,8 +333,13 @@ export default function ChartContainer({
     if (!container) return;
 
     const isUp = (activeStock.change ?? 0) >= 0;
+    const tickerCurr = detectTickerCurrency(activeTicker);
+    const currSym = getCurrencySymbol(tickerCurr);
 
     const chart = createChart(container, {
+      localization: {
+        priceFormatter: (price) => `${currSym}${price.toFixed(2)}`
+      },
       layout: {
         background: { color: 'rgba(5, 8, 16, 0.95)' },
         textColor: '#94A3B8',
@@ -442,6 +452,10 @@ export default function ChartContainer({
         priceLineVisible: true,
         priceLineColor: 'rgba(255, 255, 255, 0.2)',
         priceLineStyle: 2,
+        priceFormat: {
+          type: 'custom',
+          formatter: (p) => `${currSym}${p.toFixed(2)}`
+        }
       });
     } else {
       series = chart.addSeries(AreaSeries, {
@@ -452,6 +466,10 @@ export default function ChartContainer({
         priceLineVisible: true,
         priceLineColor: 'rgba(255, 255, 255, 0.2)',
         priceLineStyle: 2,
+        priceFormat: {
+          type: 'custom',
+          formatter: (p) => `${currSym}${p.toFixed(2)}`
+        }
       });
     }
 
@@ -629,10 +647,11 @@ export default function ChartContainer({
     if (!showLevels) return;
 
     const lines = linesMap[activeTicker] || [];
+    const tickerCurr = detectTickerCurrency(activeTicker);
     lines.forEach((linePrice) => {
       const isResistance = linePrice > activeStock.price;
       const lineColor = isResistance ? '#F43F5E' : '#10B981';
-      const labelTitle = isResistance ? `RES $${linePrice.toFixed(2)}` : `SUP $${linePrice.toFixed(2)}`;
+      const labelTitle = isResistance ? `RES ${formatMoney(linePrice, tickerCurr)}` : `SUP ${formatMoney(linePrice, tickerCurr)}`;
 
       try {
         const pl = seriesRef.current.createPriceLine({
@@ -668,6 +687,8 @@ export default function ChartContainer({
   const rangePercent = sessionStats.high > sessionStats.low
     ? Math.max(0, Math.min(100, ((activeStock.price - sessionStats.low) / (sessionStats.high - sessionStats.low)) * 100))
     : 50;
+
+  const tickerCurrency = detectTickerCurrency(activeTicker);
 
   return (
     <section
@@ -710,7 +731,7 @@ export default function ChartContainer({
             </h1>
             <div className="stock-metrics">
               <span className="stock-price tabular-nums" id="activePrice" style={activeHoverValue !== null ? { color: 'var(--cyan)' } : {}}>
-                ${activeHoverValue !== null ? activeHoverValue.toFixed(2) : activeStock.price.toFixed(2)}
+                {formatMoney(activeHoverValue !== null ? activeHoverValue : activeStock.price, tickerCurrency)}
               </span>
               <span className={`stock-trend tabular-nums ${isUp ? 'positive' : 'negative'}`} id="activeChange" title={range === '1D' ? 'Day change relative to Yesterday Close' : `${range} change`}>
                 {isUp ? '+' : ''}
@@ -720,14 +741,14 @@ export default function ChartContainer({
           </div>
 
           {sessionStats.high > 0 && sessionStats.low > 0 && (
-            <div className="session-range-meter" title={`Session Range: Low $${sessionStats.low.toFixed(2)} — High $${sessionStats.high.toFixed(2)} (Current position: ${rangePercent.toFixed(0)}%)`}>
+            <div className="session-range-meter" title={`Session Range: Low ${formatMoney(sessionStats.low, tickerCurrency)} — High ${formatMoney(sessionStats.high, tickerCurrency)} (Current position: ${rangePercent.toFixed(0)}%)`}>
               <div className="session-range-labels">
                 <span className="range-low tabular-nums">
-                  <span className="range-tag">LOW</span> ${sessionStats.low.toFixed(2)}
+                  <span className="range-tag">LOW</span> {formatMoney(sessionStats.low, tickerCurrency)}
                 </span>
                 <span className="range-mid-badge tabular-nums">{rangePercent.toFixed(0)}%</span>
                 <span className="range-high tabular-nums">
-                  <span className="range-tag">HIGH</span> ${sessionStats.high.toFixed(2)}
+                  <span className="range-tag">HIGH</span> {formatMoney(sessionStats.high, tickerCurrency)}
                 </span>
               </div>
               <div className="session-range-track">
@@ -848,16 +869,16 @@ export default function ChartContainer({
               <i className="fa-solid fa-crosshairs hover-icon"></i>
               <span className="hover-label">Price:</span>
               <span className="hover-val tabular-nums" style={{ color: activeHoverValue !== null ? 'var(--cyan)' : '#ffffff' }}>
-                {activeHoverValue !== null ? `$${activeHoverValue.toFixed(2)}` : `$${activeStock.price.toFixed(2)}`}
+                {formatMoney(activeHoverValue !== null ? activeHoverValue : activeStock.price, tickerCurrency)}
               </span>
             </div>
 
             {hoverData && hoverData.open !== undefined && (
               <div className="hover-ohlc-group tabular-nums">
-                <span>O: <strong>${hoverData.open.toFixed(2)}</strong></span>
-                <span>H: <strong style={{ color: 'var(--bullish)' }}>${hoverData.high.toFixed(2)}</strong></span>
-                <span>L: <strong style={{ color: 'var(--bearish)' }}>${hoverData.low.toFixed(2)}</strong></span>
-                <span>C: <strong>${hoverData.close.toFixed(2)}</strong></span>
+                <span>O: <strong>{formatMoney(hoverData.open, tickerCurrency)}</strong></span>
+                <span>H: <strong style={{ color: 'var(--bullish)' }}>{formatMoney(hoverData.high, tickerCurrency)}</strong></span>
+                <span>L: <strong style={{ color: 'var(--bearish)' }}>{formatMoney(hoverData.low, tickerCurrency)}</strong></span>
+                <span>C: <strong>{formatMoney(hoverData.close, tickerCurrency)}</strong></span>
               </div>
             )}
           </div>
@@ -885,7 +906,7 @@ export default function ChartContainer({
             <i className="fa-solid fa-circle-info"></i>{' '}
             {hoverPrice !== null ? (
               <span style={{ color: hoverPrice > activeStock.price ? 'var(--bearish)' : 'var(--bullish)', fontWeight: 700 }}>
-                Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at ${hoverPrice.toFixed(2)}
+                Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at {formatMoney(hoverPrice, tickerCurrency)}
               </span>
             ) : (
               "Click anywhere on the chart canvas to add a Support or Resistance level"

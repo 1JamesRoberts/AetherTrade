@@ -10,7 +10,7 @@
     },
     {
       "source": "/api/stock",
-      "destination": "/api/stock.js"
+      "destination": "/api/stock.py"
     },
     {
       "source": "/((?!api/).*)",

@@ -6,6 +6,7 @@ import PortfolioManager from './components/PortfolioManager';
 import PerformanceHoldings from './components/PerformanceHoldings';
 import ToastContainer from './components/ToastContainer';
 import AuthPage from './components/AuthPage';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
 import { usePortfolio } from './hooks/usePortfolio';
@@ -186,6 +187,7 @@ export default function App() {
     renamePortfolio,
     deletePortfolio,
     updateTargetAllocations,
+    updateBaseCurrency,
     executeRebalance
   } = usePortfolio(addToast, user);
 
@@ -202,14 +204,19 @@ export default function App() {
     localStorage.setItem('aethertrade_support_resistance', JSON.stringify(linesMap));
   }, [linesMap]);
 
-  // Fetch portfolio histories for held tickers
+  // Fetch portfolio histories for held tickers + USD/THB forex history
   useEffect(() => {
     const active = portfolios.find(p => p.id === activePortfolioId);
     if (!active) return;
-    [...new Set(active.transactions.map(t => t.ticker))].forEach(ticker => {
+    const tickersToFetch = [...new Set((active.transactions || []).map(t => t.ticker).filter(Boolean))];
+    const hasThai = tickersToFetch.some(t => t.endsWith('.BK')) || activeTicker?.endsWith('.BK') || active.baseCurrency === 'THB';
+    if (hasThai && !tickersToFetch.includes('USDTHB=X')) {
+      tickersToFetch.push('USDTHB=X');
+    }
+    tickersToFetch.forEach(ticker => {
       if (!stocks[ticker]?.portfolioHistory) fetchPortfolioHistory(ticker);
     });
-  }, [activePortfolioId, portfolios, stocks, fetchPortfolioHistory]);
+  }, [activePortfolioId, portfolios, stocks, activeTicker, fetchPortfolioHistory]);
 
   // Load active ticker + stagger sidebar fetches
   useEffect(() => {
@@ -436,22 +443,25 @@ export default function App() {
               '--portfolio-sidebar-width': `${portfolioSidebarWidth}px`
             }}
           >
-            <PortfolioManager
-              portfolios={portfolios}
-              setPortfolios={setPortfolios}
-              activePortfolioId={activePortfolioId}
-              setActivePortfolioId={setActivePortfolioId}
-              stocks={stocks}
-              onAddTransaction={addTransaction}
-              onEditTransaction={editTransaction}
-              onDeleteTransaction={deleteTransaction}
-              onCreatePortfolio={createPortfolio}
-              onRenamePortfolio={renamePortfolio}
-              onDeletePortfolio={deletePortfolio}
-              prefilledTrade={prefilledTrade}
-              showNotification={addToast}
-              onFetchPrice={fetchBackgroundPrice}
-            />
+            <ErrorBoundary name="Portfolio Manager">
+              <PortfolioManager
+                portfolios={portfolios}
+                setPortfolios={setPortfolios}
+                activePortfolioId={activePortfolioId}
+                setActivePortfolioId={setActivePortfolioId}
+                stocks={stocks}
+                onAddTransaction={addTransaction}
+                onEditTransaction={editTransaction}
+                onDeleteTransaction={deleteTransaction}
+                onCreatePortfolio={createPortfolio}
+                onRenamePortfolio={renamePortfolio}
+                onDeletePortfolio={deletePortfolio}
+                onUpdateBaseCurrency={updateBaseCurrency}
+                prefilledTrade={prefilledTrade}
+                showNotification={addToast}
+                onFetchPrice={fetchBackgroundPrice}
+              />
+            </ErrorBoundary>
 
             {/* Desktop Horizontal Split Drag Handle */}
             <div
@@ -464,21 +474,23 @@ export default function App() {
               <div className="resizer-handle-pill"></div>
             </div>
 
-            <PerformanceHoldings
-              portfolios={portfolios}
-              activePortfolioId={activePortfolioId}
-              stocks={stocks}
-              onAddTransaction={addTransaction}
-              onResetPortfolio={resetPortfolio}
-              onImportCSV={handleImportCSV}
-              onExportCSV={handleExportCSV}
-              onRefreshPrices={fetchBackgroundPrice}
-              onFetchPortfolioHistory={fetchPortfolioHistory}
-              onUpdateTargetAllocations={updateTargetAllocations}
-              onExecuteRebalance={executeRebalance}
-              onPrefillTrade={setPrefilledTrade}
-              showNotification={addToast}
-            />
+            <ErrorBoundary name="Performance & Holdings">
+              <PerformanceHoldings
+                portfolios={portfolios}
+                activePortfolioId={activePortfolioId}
+                stocks={stocks}
+                onAddTransaction={addTransaction}
+                onResetPortfolio={resetPortfolio}
+                onImportCSV={handleImportCSV}
+                onExportCSV={handleExportCSV}
+                onRefreshPrices={fetchBackgroundPrice}
+                onFetchPortfolioHistory={fetchPortfolioHistory}
+                onUpdateTargetAllocations={updateTargetAllocations}
+                onExecuteRebalance={executeRebalance}
+                onPrefillTrade={setPrefilledTrade}
+                showNotification={addToast}
+              />
+            </ErrorBoundary>
           </div>
         )}
       </main>

@@ -1,3 +1,5 @@
+import { detectTickerCurrency, convertCurrency } from './currencyUtils.js';
+
 /**
  * Pure calculation utilities for Portfolio Target Allocation & Rebalancing.
  */
@@ -95,88 +97,129 @@ export function resolveAssetPrice(ticker, holdings = {}, stocks = {}) {
 }
 
 /**
- * Generates Full Rebalance trade orders (SELL overweight, BUY underweight).
+ * Generates Full Rebalance trade orders (BUY underweight, SELL overweight)
+ * Supports multi-currency portfolios (e.g. USD and THB) normalized to baseCurrency.
  * @param {Record<string, { shares: number, avgCost: number }>} holdings
  * @param {Record<string, number>} targets
  * @param {Record<string, any>} stocks
- * @returns {{ orders: Array<any>, totalSells: number, totalBuys: number, netCashDelta: number }}
+ * @param {Record<string, 'USD' | 'THB'>} [currencies={}]
+ * @param {'USD' | 'THB'} [baseCurrency='USD']
+ * @param {number} [fxRate=35.5]
+ * @returns {{ orders: Array<any>, totalSells: number, totalBuys: number, netCashDelta: number, baseCurrency: string }}
  */
-export function computeFullRebalance(holdings = {}, targets = {}, stocks = {}) {
+export function computeFullRebalance(
+  holdings = {},
+  targets = {},
+  stocks = {},
+  currencies = {},
+  baseCurrency = 'USD',
+  fxRate = 35.5
+) {
+  // Overload guard: if currencies is a string (e.g. 'USD' or 'THB'), shift arguments
+  let actualCurrencies = currencies;
+  let actualBaseCurrency = baseCurrency;
+  let actualFxRate = fxRate;
+
+  if (typeof currencies === 'string') {
+    actualCurrencies = {};
+    actualBaseCurrency = currencies;
+    actualFxRate = typeof baseCurrency === 'number' ? baseCurrency : (parseFloat(baseCurrency) || 35.5);
+  }
+  if (!actualCurrencies || typeof actualCurrencies !== 'object') {
+    actualCurrencies = {};
+  }
+  if (typeof actualFxRate !== 'number' || isNaN(actualFxRate) || actualFxRate <= 0) {
+    actualFxRate = 35.5;
+  }
+
   const allTickers = Array.from(
-    new Set([...Object.keys(holdings), ...Object.keys(targets)])
+    new Set([...Object.keys(holdings || {}), ...Object.keys(targets || {})])
   ).filter(t => (holdings[t]?.shares || 0) > 0 || (targets[t] || 0) > 0);
 
-  let totalAssetValue = 0;
-  const assetValues = {};
-  const assetPrices = {};
+  let totalAssetValueBase = 0;
+  const assetValuesBase = {};
+  const assetPricesNative = {};
+  const assetCurrencies = {};
 
   allTickers.forEach(ticker => {
-    const price = resolveAssetPrice(ticker, holdings, stocks);
+    const priceNative = resolveAssetPrice(ticker, holdings, stocks);
     const shares = holdings[ticker]?.shares || 0;
-    const val = shares * price;
-    assetPrices[ticker] = price;
-    assetValues[ticker] = val;
-    totalAssetValue += val;
+    const valNative = shares * priceNative;
+    const currency = actualCurrencies[ticker] || detectTickerCurrency(ticker);
+    const valBase = convertCurrency(valNative, currency, actualBaseCurrency, actualFxRate);
+
+    assetPricesNative[ticker] = priceNative;
+    assetCurrencies[ticker] = currency;
+    assetValuesBase[ticker] = valBase;
+    totalAssetValueBase += valBase;
   });
 
-  if (totalAssetValue <= 0) {
-    return { orders: [], totalSells: 0, totalBuys: 0, netCashDelta: 0 };
+  if (totalAssetValueBase <= 0) {
+    return { orders: [], totalSells: 0, totalBuys: 0, netCashDelta: 0, baseCurrency: actualBaseCurrency };
   }
 
   const sellOrders = [];
   const buyOrders = [];
-  let totalSells = 0;
-  let totalBuys = 0;
+  let totalSellsBase = 0;
+  let totalBuysBase = 0;
 
   allTickers.forEach(ticker => {
-    const price = assetPrices[ticker];
-    if (price <= 0) return;
+    const priceNative = assetPricesNative[ticker];
+    if (priceNative <= 0) return;
 
-    const currentVal = assetValues[ticker];
+    const currency = assetCurrencies[ticker];
+    const currentValBase = assetValuesBase[ticker];
     const currentShares = holdings[ticker]?.shares || 0;
-    const currentWeight = (currentVal / totalAssetValue) * 100;
+    const currentWeight = (currentValBase / totalAssetValueBase) * 100;
     const targetPct = Math.max(0, parseFloat(targets[ticker]) || 0);
-    const targetVal = (totalAssetValue * targetPct) / 100;
-    const deltaVal = targetVal - currentVal;
+    const targetValBase = (totalAssetValueBase * targetPct) / 100;
+    const deltaValBase = targetValBase - currentValBase;
+    const deltaValNative = convertCurrency(deltaValBase, actualBaseCurrency, currency, actualFxRate);
 
     // SELL Overweight (Delta < -0.01)
-    if (deltaVal < -0.01 && currentShares > 1e-6) {
-      const rawSellShares = Math.abs(deltaVal) / price;
+    if (deltaValBase < -0.01 && currentShares > 1e-6) {
+      const rawSellShares = Math.abs(deltaValNative) / priceNative;
       // Clamp to owned shares and floor to 4 decimal places
       let sellShares = Math.min(rawSellShares, currentShares);
       sellShares = Math.floor(sellShares * 10000) / 10000;
 
-      const orderTotal = sellShares * price;
-      if (sellShares >= 1e-6 && orderTotal >= 0.01) {
-        totalSells += orderTotal;
+      const orderTotalNative = sellShares * priceNative;
+      const orderTotalBase = convertCurrency(orderTotalNative, currency, actualBaseCurrency, actualFxRate);
+      if (sellShares >= 1e-6 && orderTotalNative >= 0.01) {
+        totalSellsBase += orderTotalBase;
         sellOrders.push({
           ticker,
           type: 'SELL',
           shares: sellShares,
-          price,
-          total: orderTotal,
+          price: priceNative,
+          total: orderTotalNative,
+          totalBase: orderTotalBase,
+          currency,
           currentWeight,
           targetWeight: targetPct,
-          deltaVal
+          deltaVal: deltaValBase
         });
       }
     }
     // BUY Underweight (Delta > +0.01)
-    else if (deltaVal > 0.01) {
-      const rawBuyShares = deltaVal / price;
+    else if (deltaValBase > 0.01) {
+      const rawBuyShares = deltaValNative / priceNative;
       const buyShares = Math.floor(rawBuyShares * 10000) / 10000;
-      const orderTotal = buyShares * price;
-      if (buyShares >= 1e-6 && orderTotal >= 0.01) {
-        totalBuys += orderTotal;
+      const orderTotalNative = buyShares * priceNative;
+      const orderTotalBase = convertCurrency(orderTotalNative, currency, actualBaseCurrency, actualFxRate);
+      if (buyShares >= 1e-6 && orderTotalNative >= 0.01) {
+        totalBuysBase += orderTotalBase;
         buyOrders.push({
           ticker,
           type: 'BUY',
           shares: buyShares,
-          price,
-          total: orderTotal,
+          price: priceNative,
+          total: orderTotalNative,
+          totalBase: orderTotalBase,
+          currency,
           currentWeight,
           targetWeight: targetPct,
-          deltaVal
+          deltaVal: deltaValBase
         });
       }
     }
@@ -184,114 +227,157 @@ export function computeFullRebalance(holdings = {}, targets = {}, stocks = {}) {
 
   return {
     orders: [...sellOrders, ...buyOrders],
-    totalSells: Math.round(totalSells * 100) / 100,
-    totalBuys: Math.round(totalBuys * 100) / 100,
-    netCashDelta: Math.round((totalSells - totalBuys) * 100) / 100
+    totalSells: Math.round(totalSellsBase * 100) / 100,
+    totalBuys: Math.round(totalBuysBase * 100) / 100,
+    netCashDelta: Math.round((totalSellsBase - totalBuysBase) * 100) / 100,
+    baseCurrency: actualBaseCurrency
   };
 }
 
 /**
  * Generates Deposit / Cash Flow Rebalance trade orders (BUY underweight only).
+ * Supports multi-currency portfolios normalized to baseCurrency.
  * @param {Record<string, { shares: number, avgCost: number }>} holdings
  * @param {Record<string, number>} targets
  * @param {Record<string, any>} stocks
  * @param {number} depositAmount
- * @returns {{ orders: Array<any>, totalBuys: number, cashRemaining: number }}
+ * @param {Record<string, 'USD' | 'THB'>} [currencies={}]
+ * @param {'USD' | 'THB'} [baseCurrency='USD']
+ * @param {number} [fxRate=35.5]
+ * @returns {{ orders: Array<any>, totalBuys: number, cashRemaining: number, baseCurrency: string }}
  */
-export function computeDepositRebalance(holdings = {}, targets = {}, stocks = {}, depositAmount = 0) {
-  const deposit = Math.max(0, parseFloat(depositAmount) || 0);
-  if (deposit <= 0) {
-    return { orders: [], totalBuys: 0, cashRemaining: 0 };
+export function computeDepositRebalance(
+  holdings = {},
+  targets = {},
+  stocks = {},
+  depositAmount = 0,
+  currencies = {},
+  baseCurrency = 'USD',
+  fxRate = 35.5
+) {
+  // Overload guard: if 5th argument is a string (e.g. 'USD' or 'THB'), shift arguments
+  let actualCurrencies = currencies;
+  let actualBaseCurrency = baseCurrency;
+  let actualFxRate = fxRate;
+
+  if (typeof currencies === 'string') {
+    actualCurrencies = {};
+    actualBaseCurrency = currencies;
+    actualFxRate = typeof baseCurrency === 'number' ? baseCurrency : (parseFloat(baseCurrency) || 35.5);
+  }
+  if (!actualCurrencies || typeof actualCurrencies !== 'object') {
+    actualCurrencies = {};
+  }
+  if (typeof actualFxRate !== 'number' || isNaN(actualFxRate) || actualFxRate <= 0) {
+    actualFxRate = 35.5;
+  }
+
+  const depositBase = Math.max(0, parseFloat(depositAmount) || 0);
+  if (depositBase <= 0) {
+    return { orders: [], totalBuys: 0, cashRemaining: 0, baseCurrency: actualBaseCurrency };
   }
 
   const allTickers = Array.from(
-    new Set([...Object.keys(holdings), ...Object.keys(targets)])
+    new Set([...Object.keys(holdings || {}), ...Object.keys(targets || {})])
   ).filter(t => (holdings[t]?.shares || 0) > 0 || (targets[t] || 0) > 0);
 
-  let currentTotalValue = 0;
-  const assetValues = {};
-  const assetPrices = {};
+  let currentTotalValueBase = 0;
+  const assetValuesBase = {};
+  const assetPricesNative = {};
+  const assetCurrencies = {};
 
   allTickers.forEach(ticker => {
-    const price = resolveAssetPrice(ticker, holdings, stocks);
+    const priceNative = resolveAssetPrice(ticker, holdings, stocks);
     const shares = holdings[ticker]?.shares || 0;
-    const val = shares * price;
-    assetPrices[ticker] = price;
-    assetValues[ticker] = val;
-    currentTotalValue += val;
+    const valNative = shares * priceNative;
+    const currency = actualCurrencies[ticker] || detectTickerCurrency(ticker);
+    const valBase = convertCurrency(valNative, currency, actualBaseCurrency, actualFxRate);
+
+    assetPricesNative[ticker] = priceNative;
+    assetCurrencies[ticker] = currency;
+    assetValuesBase[ticker] = valBase;
+    currentTotalValueBase += valBase;
   });
 
-  const projectedTotalValue = currentTotalValue + deposit;
-  const shortfalls = {};
-  let totalShortfall = 0;
+  const projectedTotalValueBase = currentTotalValueBase + depositBase;
+  const shortfallsBase = {};
+  let totalShortfallBase = 0;
 
   allTickers.forEach(ticker => {
     const targetPct = Math.max(0, parseFloat(targets[ticker]) || 0);
-    const projectedTargetVal = (projectedTotalValue * targetPct) / 100;
-    const currentVal = assetValues[ticker] || 0;
-    const shortfall = Math.max(0, projectedTargetVal - currentVal);
-    shortfalls[ticker] = shortfall;
-    totalShortfall += shortfall;
+    const projectedTargetValBase = (projectedTotalValueBase * targetPct) / 100;
+    const currentValBase = assetValuesBase[ticker] || 0;
+    const shortfallBase = Math.max(0, projectedTargetValBase - currentValBase);
+    shortfallsBase[ticker] = shortfallBase;
+    totalShortfallBase += shortfallBase;
   });
 
-  const allocatedCash = {};
+  const allocatedCashBase = {};
   const targetSum = allTickers.reduce((acc, t) => acc + (Math.max(0, parseFloat(targets[t]) || 0)), 0) || 100;
 
-  if (totalShortfall > 0) {
-    if (deposit <= totalShortfall) {
+  if (totalShortfallBase > 0) {
+    if (depositBase <= totalShortfallBase) {
       allTickers.forEach(ticker => {
-        allocatedCash[ticker] = deposit * (shortfalls[ticker] / totalShortfall);
+        allocatedCashBase[ticker] = depositBase * (shortfallsBase[ticker] / totalShortfallBase);
       });
     } else {
-      // Eliminate all shortfalls first
-      const surplus = deposit - totalShortfall;
+      // Eliminate all shortfalls first, then distribute surplus by target weights
+      const surplusBase = depositBase - totalShortfallBase;
       allTickers.forEach(ticker => {
         const targetPct = Math.max(0, parseFloat(targets[ticker]) || 0);
-        allocatedCash[ticker] = shortfalls[ticker] + surplus * (targetPct / targetSum);
+        allocatedCashBase[ticker] = shortfallsBase[ticker] + surplusBase * (targetPct / targetSum);
       });
     }
   } else {
     // All positions already at or above projected target: distribute by target weights
     allTickers.forEach(ticker => {
       const targetPct = Math.max(0, parseFloat(targets[ticker]) || 0);
-      allocatedCash[ticker] = deposit * (targetPct / targetSum);
+      allocatedCashBase[ticker] = depositBase * (targetPct / targetSum);
     });
   }
 
   const buyOrders = [];
-  let totalBuys = 0;
+  let totalBuysBase = 0;
 
   allTickers.forEach(ticker => {
-    const price = assetPrices[ticker];
-    const cash = allocatedCash[ticker] || 0;
-    if (price <= 0 || cash <= 0) return;
+    const priceNative = assetPricesNative[ticker];
+    const cashBase = allocatedCashBase[ticker] || 0;
+    const currency = assetCurrencies[ticker];
+    if (priceNative <= 0 || cashBase <= 0) return;
+
+    // Convert cash allocation from base currency to asset's native currency
+    const cashNative = convertCurrency(cashBase, baseCurrency, currency, fxRate);
 
     // Floor rounding ensures total spend does not exceed deposit
-    const buyShares = Math.floor((cash / price) * 10000) / 10000;
-    const orderTotal = buyShares * price;
+    const buyShares = Math.floor((cashNative / priceNative) * 10000) / 10000;
+    const orderTotalNative = buyShares * priceNative;
+    const orderTotalBase = convertCurrency(orderTotalNative, currency, baseCurrency, fxRate);
 
-    if (buyShares >= 1e-6 && orderTotal >= 0.01) {
-      totalBuys += orderTotal;
-      const currentVal = assetValues[ticker] || 0;
-      const currentWeight = currentTotalValue > 0 ? (currentVal / currentTotalValue) * 100 : 0;
+    if (buyShares >= 1e-6 && orderTotalNative >= 0.01) {
+      totalBuysBase += orderTotalBase;
+      const currentValBase = assetValuesBase[ticker] || 0;
+      const currentWeight = currentTotalValueBase > 0 ? (currentValBase / currentTotalValueBase) * 100 : 0;
       const targetPct = Math.max(0, parseFloat(targets[ticker]) || 0);
 
       buyOrders.push({
         ticker,
         type: 'BUY',
         shares: buyShares,
-        price,
-        total: orderTotal,
+        price: priceNative,
+        total: orderTotalNative,
+        totalBase: orderTotalBase,
+        currency,
         currentWeight,
         targetWeight: targetPct,
-        allocatedCash: cash
+        allocatedCash: cashNative
       });
     }
   });
 
   return {
     orders: buyOrders,
-    totalBuys: Math.round(totalBuys * 100) / 100,
-    cashRemaining: Math.round(Math.max(0, deposit - totalBuys) * 100) / 100
+    totalBuys: Math.round(totalBuysBase * 100) / 100,
+    cashRemaining: Math.round(Math.max(0, depositBase - totalBuysBase) * 100) / 100,
+    baseCurrency
   };
 }

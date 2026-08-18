@@ -141,4 +141,103 @@ describe('Rebalance Utilities Pure Math Tests', () => {
     const result = computeFullRebalance(holdings, targets, stocks);
     assert.equal(result.orders.length, 0, 'Dust positions should be ignored');
   });
+
+  test('computeFullRebalance accurately rebalances mixed USD and THB assets', () => {
+    // AAPL: 10 shares @ $100 USD = $1,000 USD (50%)
+    // PTT.BK: 100 shares @ 350 THB = 35,000 THB = $1,000 USD (50% at 35 THB/USD)
+    // Target: 75% AAPL ($1,500), 25% PTT.BK ($500)
+    const holdings = {
+      AAPL: { shares: 10, avgCost: 100 },
+      'PTT.BK': { shares: 100, avgCost: 350 }
+    };
+    const targets = { AAPL: 75, 'PTT.BK': 25 };
+    const stocks = {
+      AAPL: { price: 100 },
+      'PTT.BK': { price: 350 }
+    };
+    const currencies = { AAPL: 'USD', 'PTT.BK': 'THB' };
+    const fxRate = 35.0; // 1 USD = 35 THB
+
+    const result = computeFullRebalance(holdings, targets, stocks, currencies, 'USD', fxRate);
+    assert.equal(result.orders.length, 2);
+
+    const sellOrder = result.orders.find(o => o.type === 'SELL');
+    const buyOrder = result.orders.find(o => o.type === 'BUY');
+
+    assert.ok(sellOrder);
+    assert.equal(sellOrder.ticker, 'PTT.BK');
+    assert.equal(sellOrder.shares, 50); // 50 sh @ 350 THB = 17,500 THB = $500 USD
+    assert.equal(sellOrder.total, 17500);
+    assert.equal(sellOrder.totalBase, 500);
+
+    assert.ok(buyOrder);
+    assert.equal(buyOrder.ticker, 'AAPL');
+    assert.equal(buyOrder.shares, 5); // 5 sh @ $100 USD = $500 USD
+    assert.equal(buyOrder.total, 500);
+    assert.equal(buyOrder.totalBase, 500);
+  });
+
+  test('computeDepositRebalance respects deposit ceiling and currency conversion', () => {
+    // AAPL: 10 shares @ $100 USD = $1,000 USD (100%)
+    // Target: 50% AAPL, 50% PTT.BK
+    // Deposit: $1,000 USD. Projected Total: $2,000 USD. Target PTT.BK = $1,000 USD (= 35,000 THB).
+    const holdings = {
+      AAPL: { shares: 10, avgCost: 100 }
+    };
+    const targets = { AAPL: 50, 'PTT.BK': 50 };
+    const stocks = {
+      AAPL: { price: 100 },
+      'PTT.BK': { price: 35 } // 35 THB per share
+    };
+    const currencies = { AAPL: 'USD', 'PTT.BK': 'THB' };
+    const fxRate = 35.0;
+    const deposit = 1000; // $1,000 USD
+
+    const result = computeDepositRebalance(holdings, targets, stocks, deposit, currencies, 'USD', fxRate);
+    assert.equal(result.orders.length, 1);
+
+    const pttOrder = result.orders[0];
+    assert.equal(pttOrder.ticker, 'PTT.BK');
+    assert.equal(pttOrder.shares, 1000); // 1000 sh @ 35 THB = 35,000 THB = $1,000 USD
+    assert.equal(pttOrder.total, 35000);
+    assert.equal(pttOrder.totalBase, 1000);
+    assert.ok(result.totalBuys <= deposit);
+  });
+
+  test('computeFullRebalance is invariant to currencies argument passing shape (regression test)', () => {
+    // AAPL: 10 shares @ $100 USD = $1,000 USD
+    // PTT.BK: 100 shares @ 350 THB = 35,000 THB = $1,000 USD
+    // Target: 75% AAPL, 25% PTT.BK
+    const holdings = {
+      AAPL: { shares: 10, avgCost: 100 },
+      'PTT.BK': { shares: 100, avgCost: 350 }
+    };
+    const targets = { AAPL: 75, 'PTT.BK': 25 };
+    const stocks = {
+      AAPL: { price: 100 },
+      'PTT.BK': { price: 350 }
+    };
+    const currencies = { AAPL: 'USD', 'PTT.BK': 'THB' };
+    const fxRate = 35.0;
+
+    // Explicit currencies object
+    const resExplicit = computeFullRebalance(holdings, targets, stocks, currencies, 'USD', fxRate);
+    // Undefined currencies (relies on auto-detect fallback)
+    const resUndefined = computeFullRebalance(holdings, targets, stocks, undefined, 'USD', fxRate);
+    // 5-arg overload call (string in baseCurrency position)
+    const resOverload = computeFullRebalance(holdings, targets, stocks, 'USD', fxRate);
+
+    assert.deepEqual(resExplicit.orders, resUndefined.orders, 'Explicit currencies and undefined currencies should yield identical orders');
+    assert.deepEqual(resExplicit.orders, resOverload.orders, 'Explicit currencies and 5-arg overload should yield identical orders');
+    assert.equal(resUndefined.baseCurrency, 'USD');
+    assert.equal(resOverload.baseCurrency, 'USD');
+
+    // Verify correct trade direction: Sell PTT.BK, Buy AAPL
+    const sellPTT = resUndefined.orders.find(o => o.ticker === 'PTT.BK');
+    const buyAAPL = resUndefined.orders.find(o => o.ticker === 'AAPL');
+    assert.equal(sellPTT.type, 'SELL');
+    assert.equal(sellPTT.shares, 50);
+    assert.equal(buyAAPL.type, 'BUY');
+    assert.equal(buyAAPL.shares, 5);
+  });
 });
