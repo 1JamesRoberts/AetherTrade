@@ -380,11 +380,10 @@ export default function App() {
               setActivePortfolioId={setActivePortfolioId}
               stocks={stocks}
               onAddTransaction={addTransaction}
+              onDeleteTransaction={deleteTransaction}
               onCreatePortfolio={createPortfolio}
               onRenamePortfolio={renamePortfolio}
               onDeletePortfolio={deletePortfolio}
-              onUpdateTargetAllocations={updateTargetAllocations}
-              onExecuteRebalance={executeRebalance}
               showNotification={addToast}
               onFetchPrice={fetchBackgroundPrice}
             />
@@ -393,12 +392,13 @@ export default function App() {
               activePortfolioId={activePortfolioId}
               stocks={stocks}
               onAddTransaction={addTransaction}
-              onDeleteTransaction={deleteTransaction}
               onResetPortfolio={resetPortfolio}
               onImportCSV={handleImportCSV}
               onExportCSV={handleExportCSV}
               onRefreshPrices={fetchBackgroundPrice}
               onFetchPortfolioHistory={fetchPortfolioHistory}
+              onUpdateTargetAllocations={updateTargetAllocations}
+              onExecuteRebalance={executeRebalance}
               showNotification={addToast}
             />
           </div>

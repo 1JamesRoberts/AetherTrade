@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
+import RebalanceStudio from './RebalanceStudio';
 
 Chart.register(...registerables);
 
@@ -8,12 +9,13 @@ export default function PerformanceHoldings({
   activePortfolioId,
   stocks,
   onAddTransaction,
-  onDeleteTransaction,
   onResetPortfolio,
   onImportCSV,
   onExportCSV,
   onRefreshPrices,
   onFetchPortfolioHistory,
+  onUpdateTargetAllocations,
+  onExecuteRebalance,
   showNotification
 }) {
   const performanceCanvasRef = useRef(null);
@@ -27,7 +29,6 @@ export default function PerformanceHoldings({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [chartMode, setChartMode] = useState('total'); // 'total' | 'unrealized'
   const [timeRange, setTimeRange] = useState('ALL'); // '1W' | '1M' | '1Y' | 'ALL'
-  const [isLedgerCollapsed, setIsLedgerCollapsed] = useState(false);
 
   const activePortfolio = useMemo(() => {
     return portfolios.find(p => p.id === activePortfolioId) || {
@@ -407,11 +408,6 @@ export default function PerformanceHoldings({
     e.target.value = '';
   };
 
-  const formattedDate = (timestamp) => {
-    const txDate = new Date(timestamp);
-    return txDate.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
   return (
     <section className="panel panel-portfolio-right" aria-label="Portfolio Performance">
       <div className="panel-header portfolio-right-header">
@@ -606,63 +602,14 @@ export default function PerformanceHoldings({
         </div>
       </div>
 
-      <div className={`analysis-section transaction-ledger-section ${isLedgerCollapsed ? 'collapsed' : ''}`}>
-        <div
-          className="section-subtitle ledger-header-subtitle"
-          onClick={() => setIsLedgerCollapsed(!isLedgerCollapsed)}
-          title="Click to toggle Transaction Ledger"
-        >
-          <div className="ledger-header-left">
-            <i className={`fa-solid ${isLedgerCollapsed ? 'fa-chevron-right' : 'fa-chevron-down'} ledger-toggle-icon`}></i>
-            <span>Transaction Audit History</span>
-            <span className="ledger-count-tag tabular-nums">{activePortfolio.transactions.length} Records</span>
-          </div>
-          <button
-            type="button"
-            className="btn-ledger-collapse"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsLedgerCollapsed(!isLedgerCollapsed);
-            }}
-          >
-            {isLedgerCollapsed ? 'Expand' : 'Collapse'}
-          </button>
-        </div>
-        {!isLedgerCollapsed && (
-          <div className="ledger-scroll-viewport">
-            <ul className="ledger-list" id="portfolioLogList">
-              {activePortfolio.transactions.length === 0 ? (
-                <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '15px' }}>No transaction audit records found.</li>
-              ) : (
-                [...activePortfolio.transactions].reverse().map((tx, idx) => {
-                  const actualIndex = activePortfolio.transactions.length - 1 - idx;
-                  const gross = tx.shares * tx.price;
-                  const txFees = parseFloat(tx.fees) || 0;
-                  const net = tx.type === 'BUY' ? (gross + txFees) : Math.max(0, gross - txFees);
-                  const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
-                  const rowKey = tx.id || `tx-log-${actualIndex}`;
-                  return (
-                    <li key={rowKey} className="tx-ledger-item">
-                      <div className="ledger-left">
-                        <div className="ledger-top-row">
-                          <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
-                          <span className="ledger-shares-ticker tabular-nums"><strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatCurrency(tx.price)}</span>
-                        </div>
-                        <div className="ledger-meta-row tabular-nums">
-                          <span>Gross: {formatCurrency(gross)}</span><span>Fee: {formatCurrency(txFees)}</span><span>Net: <strong>{formatCurrency(net)}</strong></span>{accountStr && <span className="account-tag">{accountStr}</span>}
-                        </div>
-                      </div>
-                      <div className="ledger-right">
-                        <span className="tx-time tabular-nums">{formattedDate(tx.timestamp)}</span>
-                        <button type="button" onClick={() => { const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings."); if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex); }} className="btn-tx-delete" title="Delete transaction entry" aria-label="Delete transaction entry"><i className="fa-solid fa-trash-can"></i></button>
-                      </div>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-          </div>
-        )}
+      <div className="analysis-section rebalance-main-section">
+        <RebalanceStudio
+          activePortfolio={activePortfolio}
+          stocks={stocks}
+          onUpdateTargetAllocations={onUpdateTargetAllocations}
+          onExecuteRebalance={onExecuteRebalance}
+          showNotification={showNotification}
+        />
       </div>
     </section>
   );

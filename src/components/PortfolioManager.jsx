@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
-import RebalanceStudio from './RebalanceStudio';
 
 Chart.register(...registerables);
 
@@ -21,18 +20,17 @@ export default function PortfolioManager({
   setActivePortfolioId,
   stocks,
   onAddTransaction,
+  onDeleteTransaction,
   onCreatePortfolio,
   onRenamePortfolio,
   onDeletePortfolio,
-  onUpdateTargetAllocations,
-  onExecuteRebalance,
   showNotification,
   onFetchPrice
 }) {
   const allocationCanvasRef = useRef(null);
   const allocationChartRef = useRef(null);
 
-  // Sub-tab selection ('trade' | 'rebalance')
+  // Sub-tab selection ('trade' | 'history')
   const [activeSubTab, setActiveSubTab] = useState('trade');
 
   // Form states
@@ -589,7 +587,7 @@ export default function PortfolioManager({
         )}
       </div>
 
-      {/* Sub-Tab Navigation Bar: Record Trade vs Target Strategy & Rebalance */}
+      {/* Sub-Tab Navigation Bar: Record Trade vs Transaction History */}
       <div className="portfolio-subtab-bar">
         <button
           type="button"
@@ -601,11 +599,11 @@ export default function PortfolioManager({
         </button>
         <button
           type="button"
-          onClick={() => setActiveSubTab('rebalance')}
-          className={`portfolio-subtab-btn ${activeSubTab === 'rebalance' ? 'active' : ''}`}
+          onClick={() => setActiveSubTab('history')}
+          className={`portfolio-subtab-btn ${activeSubTab === 'history' ? 'active' : ''}`}
         >
-          <i className="fa-solid fa-bullseye"></i>
-          <span>Strategy & Rebalance</span>
+          <i className="fa-solid fa-clock-rotate-left"></i>
+          <span>Trade History ({activePortfolio.transactions.length})</span>
         </button>
       </div>
 
@@ -843,13 +841,70 @@ export default function PortfolioManager({
           </button>
         </div>
       ) : (
-        <RebalanceStudio
-          activePortfolio={activePortfolio}
-          stocks={stocks}
-          onUpdateTargetAllocations={onUpdateTargetAllocations}
-          onExecuteRebalance={onExecuteRebalance}
-          showNotification={showNotification}
-        />
+        /* Section 2 (Tab 2): Transaction Audit History List in Sidebar */
+        <div className="analysis-section sidebar-ledger-section">
+          <div className="section-subtitle">
+            <span>Transaction Audit History</span>
+            <span className="ledger-count-tag tabular-nums">{activePortfolio.transactions.length} Records</span>
+          </div>
+
+          <div className="sidebar-ledger-viewport">
+            <ul className="ledger-list" id="portfolioSidebarLogList">
+              {activePortfolio.transactions.length === 0 ? (
+                <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '20px' }}>
+                  No transaction audit records found.
+                </li>
+              ) : (
+                [...activePortfolio.transactions].reverse().map((tx, idx) => {
+                  const actualIndex = activePortfolio.transactions.length - 1 - idx;
+                  const grossVal = tx.shares * tx.price;
+                  const txFees = parseFloat(tx.fees) || 0;
+                  const netVal = tx.type === 'BUY' ? (grossVal + txFees) : Math.max(0, grossVal - txFees);
+                  const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
+                  const rowKey = tx.id || `tx-side-log-${actualIndex}`;
+                  const txDateStr = new Date(tx.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+                  const formatUSD = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v);
+
+                  return (
+                    <li key={rowKey} className="tx-ledger-item">
+                      <div className="ledger-left">
+                        <div className="ledger-top-row">
+                          <span className={`type-badge ${tx.type.toLowerCase()}`}>{tx.type}</span>
+                          <span className="ledger-shares-ticker tabular-nums">
+                            <strong>{parseFloat(tx.shares.toFixed(6))} {tx.ticker}</strong> @ {formatUSD(tx.price)}
+                          </span>
+                        </div>
+                        <div className="ledger-meta-row tabular-nums">
+                          <span>Gross: {formatUSD(grossVal)}</span>
+                          <span>Fee: {formatUSD(txFees)}</span>
+                          <span>Net: <strong>{formatUSD(netVal)}</strong></span>
+                          {accountStr && <span className="account-tag">{accountStr}</span>}
+                        </div>
+                      </div>
+                      <div className="ledger-right">
+                        <span className="tx-time tabular-nums">{txDateStr}</span>
+                        {onDeleteTransaction && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings.");
+                              if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex);
+                            }}
+                            className="btn-tx-delete"
+                            title="Delete transaction entry"
+                            aria-label="Delete transaction entry"
+                          >
+                            <i className="fa-solid fa-trash-can"></i>
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        </div>
       )}
     </section>
   );
