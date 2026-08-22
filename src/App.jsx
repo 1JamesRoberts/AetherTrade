@@ -71,19 +71,86 @@ function getMarketStatus() {
 
 export default function App() {
   const { user, loading: authLoading, signUp, signIn, signInWithGitHub, signInWithGoogle, signOut } = useAuth();
-  const [view, setView] = useState('terminal');
+  const [view, setView] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aethertrade_active_view');
+      if (saved === 'terminal' || saved === 'portfolio') return saved;
+    } catch (e) { console.error(e); }
+    return 'terminal';
+  });
   const [toasts, setToasts] = useState([]);
   const [currentCapital, setCurrentCapital] = useState(10000);
-  const [selectedRange, setSelectedRange] = useState('1M');
-  const [selectedInterval, setSelectedInterval] = useState('1d');
-  const [chartType, setChartType] = useState('line');
-  const [showLevels, setShowLevels] = useState(false);
+  const [selectedRange, setSelectedRange] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aethertrade_selected_range');
+      if (saved && ['1D', '1W', '1M', '1Y', '5Y'].includes(saved)) return saved;
+    } catch (e) { console.error(e); }
+    return '1M';
+  });
+  const [selectedInterval, setSelectedInterval] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aethertrade_selected_interval');
+      if (saved) return saved;
+    } catch (e) { console.error(e); }
+    return '1d';
+  });
+  const [chartType, setChartType] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aethertrade_chart_type');
+      if (saved === 'line' || saved === 'candle') return saved;
+    } catch (e) { console.error(e); }
+    return 'line';
+  });
+  const [showLevels, setShowLevels] = useState(() => {
+    try {
+      return localStorage.getItem('aethertrade_show_levels') === 'true';
+    } catch (e) { console.error(e); return false; }
+  });
   const [zoomLevel, setZoomLevel] = useState(100);
   const [linesMap, setLinesMap] = useState(loadLinesMap);
-  const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
-  const [terminalMobileTab, setTerminalMobileTab] = useState('chart'); // 'chart' | 'watchlist' | 'analysis'
+  const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('aethertrade_watchlist_collapsed') === 'true';
+    } catch (e) { console.error(e); return false; }
+  });
+  const [terminalMobileTab, setTerminalMobileTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aethertrade_terminal_mobile_tab');
+      if (saved && ['chart', 'watchlist', 'analysis'].includes(saved)) return saved;
+    } catch (e) { console.error(e); }
+    return 'chart';
+  }); // 'chart' | 'watchlist' | 'analysis'
   const [marketStatus, setMarketStatus] = useState(getMarketStatus);
   const [prefilledTrade, setPrefilledTrade] = useState(null);
+
+  // Sync workspace UI preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('aethertrade_active_view', view);
+  }, [view]);
+
+  useEffect(() => {
+    localStorage.setItem('aethertrade_selected_range', selectedRange);
+  }, [selectedRange]);
+
+  useEffect(() => {
+    localStorage.setItem('aethertrade_selected_interval', selectedInterval);
+  }, [selectedInterval]);
+
+  useEffect(() => {
+    localStorage.setItem('aethertrade_chart_type', chartType);
+  }, [chartType]);
+
+  useEffect(() => {
+    localStorage.setItem('aethertrade_show_levels', String(showLevels));
+  }, [showLevels]);
+
+  useEffect(() => {
+    localStorage.setItem('aethertrade_watchlist_collapsed', String(isWatchlistCollapsed));
+  }, [isWatchlistCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem('aethertrade_terminal_mobile_tab', terminalMobileTab);
+  }, [terminalMobileTab]);
 
   // Desktop Horizontal Split Resizer State between Portfolio Manager & Performance Holdings
   const [portfolioSidebarWidth, setPortfolioSidebarWidth] = useState(() => {

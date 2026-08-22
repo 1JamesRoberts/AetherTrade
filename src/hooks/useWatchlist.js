@@ -12,19 +12,39 @@ function loadWatchlist() {
   return DEFAULT_WATCHLIST;
 }
 
+function loadActiveTicker(watchlist) {
+  try {
+    const saved = localStorage.getItem('aethertrade_active_ticker');
+    if (saved && (watchlist.length === 0 || watchlist.includes(saved))) {
+      return saved;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return watchlist[0] || 'AAPL';
+}
+
 export function useWatchlist() {
   const [watchlist, setWatchlist] = useState(loadWatchlist);
-  const [activeTicker, setActiveTicker] = useState(() => watchlist[0] || 'AAPL');
+  const [activeTicker, setActiveTicker] = useState(() => loadActiveTicker(watchlist));
 
   useEffect(() => {
     localStorage.setItem('aethertrade_watchlist', JSON.stringify(watchlist));
   }, [watchlist]);
 
+  useEffect(() => {
+    if (activeTicker) {
+      localStorage.setItem('aethertrade_active_ticker', activeTicker);
+    }
+  }, [activeTicker]);
+
   const removeTicker = (ticker, addToast) => {
     const next = watchlist.filter(t => t !== ticker);
     setWatchlist(next);
     if (activeTicker === ticker) {
-      setActiveTicker(next.length > 0 ? next[0] : 'AAPL');
+      const fallback = next.length > 0 ? next[0] : 'AAPL';
+      setActiveTicker(fallback);
+      localStorage.setItem('aethertrade_active_ticker', fallback);
     }
     addToast(`Removed ${ticker} from watchlist.`, 'info');
   };

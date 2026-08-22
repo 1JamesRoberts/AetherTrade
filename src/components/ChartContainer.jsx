@@ -102,11 +102,23 @@ export default function ChartContainer({
   const [hoverPrice, setHoverPrice] = useState(null);
   const [hoverData, setHoverData] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [indicators, setIndicators] = useState({
-    volume: true,
-    ema20: false,
-    sma50: false,
+  const [indicators, setIndicators] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aethertrade_chart_indicators');
+      if (saved) return JSON.parse(saved);
+    } catch (e) { console.error(e); }
+    return {
+      volume: true,
+      ema20: false,
+      sma50: false,
+    };
   });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aethertrade_chart_indicators', JSON.stringify(indicators));
+    } catch (e) { console.error(e); }
+  }, [indicators]);
 
   const toggleIndicator = (key) => {
     setIndicators(prev => ({ ...prev, [key]: !prev[key] }));
