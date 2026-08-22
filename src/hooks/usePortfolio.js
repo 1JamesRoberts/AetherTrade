@@ -147,6 +147,10 @@ export function usePortfolio(addToast, user) {
       const merged = dbPortfolios.map(dbPort => {
         const dbTxs = txMap[dbPort.id] || [];
         const { holdings, realizedPL, realizedPLByCurrency } = rebuildPortfolioHoldings(dbTxs);
+        const baseCurr = dbPort.base_currency || currMap[dbPort.id] || 'USD';
+        const targets = dbPort.target_allocations || targetMap[dbPort.id] || {};
+        currMap[dbPort.id] = baseCurr;
+        targetMap[dbPort.id] = targets;
         return {
           id: dbPort.id,
           name: dbPort.name,
@@ -154,11 +158,13 @@ export function usePortfolio(addToast, user) {
           holdings,
           realizedPL,
           realizedPLByCurrency,
-          baseCurrency: currMap[dbPort.id] || dbPort.base_currency || 'USD',
-          targetAllocations: targetMap[dbPort.id] || dbPort.target_allocations || {}
+          baseCurrency: baseCurr,
+          targetAllocations: targets
         };
       });
 
+      saveLocalBaseCurrencies(currMap);
+      saveLocalTargetAllocations(targetMap);
       setPortfolios(merged);
       try {
         localStorage.setItem('aethertrade_portfolios_list', JSON.stringify(merged));
@@ -167,12 +173,22 @@ export function usePortfolio(addToast, user) {
     } else {
       // First login — create default portfolio in DB
       const local = loadLocalPortfolios();
+      const targetMap = loadLocalTargetAllocations();
+      const currMap = loadLocalBaseCurrencies();
       const uploaded = [];
       for (const port of local) {
         const dbPortId = port.id === 'default' ? `default_${user.id}` : port.id;
+        const baseCurr = port.baseCurrency || currMap[port.id] || 'USD';
+        const targets = port.targetAllocations || targetMap[port.id] || {};
         const { data: newPort } = await supabase
           .from('portfolios')
-          .insert({ id: dbPortId, user_id: user.id, name: port.name })
+          .insert({
+            id: dbPortId,
+            user_id: user.id,
+            name: port.name,
+            base_currency: baseCurr,
+            target_allocations: targets
+          })
           .select()
           .single();
 
@@ -194,7 +210,7 @@ export function usePortfolio(addToast, user) {
           }));
           await supabase.from('transactions').insert(txs);
         }
-        uploaded.push({ ...port, id: dbPortId, transactions: transactionsWithIds });
+        uploaded.push({ ...port, id: dbPortId, baseCurrency: baseCurr, targetAllocations: targets, transactions: transactionsWithIds });
       }
       setPortfolios(uploaded);
       setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
@@ -511,7 +527,9 @@ export function usePortfolio(addToast, user) {
       const { error } = await supabase.from('portfolios').insert({
         id: newId,
         user_id: user.id,
-        name: cleanName
+        name: cleanName,
+        base_currency: 'USD',
+        target_allocations: {}
       });
       if (error) console.error('Supabase create portfolio error:', error);
     }
@@ -589,7 +607,14 @@ export function usePortfolio(addToast, user) {
     const targetMap = loadLocalTargetAllocations();
     targetMap[targetPortId] = newTargets;
     saveLocalTargetAllocations(targetMap);
-  }, [portfolios, activePortfolioId]);
+
+    // 3. Persist to Supabase if logged in
+    if (user) {
+      supabase.from('portfolios').update({ target_allocations: newTargets }).eq('id', targetPortId).then(({ error }) => {
+        if (error) console.error('Supabase target allocations update error:', error);
+      });
+    }
+  }, [portfolios, activePortfolioId, user]);
 
   const updateBaseCurrency = useCallback((portfolioId, currency) => {
     const safeCurr = currency === 'THB' ? 'THB' : 'USD';
@@ -611,8 +636,15 @@ export function usePortfolio(addToast, user) {
     currMap[targetPortId] = safeCurr;
     saveLocalBaseCurrencies(currMap);
 
+    // 3. Persist to Supabase if logged in
+    if (user) {
+      supabase.from('portfolios').update({ base_currency: safeCurr }).eq('id', targetPortId).then(({ error }) => {
+        if (error) console.error('Supabase base currency update error:', error);
+      });
+    }
+
     addToast(`Portfolio base currency set to ${safeCurr}`, 'info');
-  }, [portfolios, activePortfolioId, addToast]);
+  }, [portfolios, activePortfolioId, user, addToast]);
 
   const executeRebalance = useCallback(async (portfolioId, trades) => {
     if (!trades || trades.length === 0) return;

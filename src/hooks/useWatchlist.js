@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 
 const DEFAULT_WATCHLIST = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOG', 'AMZN'];
 
@@ -24,10 +25,46 @@ function loadActiveTicker(watchlist) {
   return watchlist[0] || 'AAPL';
 }
 
-export function useWatchlist() {
+export function useWatchlist(user) {
   const [watchlist, setWatchlist] = useState(loadWatchlist);
   const [activeTicker, setActiveTicker] = useState(() => loadActiveTicker(watchlist));
+  const watchlistRef = useRef(watchlist);
+  useEffect(() => { watchlistRef.current = watchlist; }, [watchlist]);
 
+  // Load watchlist from Supabase when user logs in
+  const loadCloudWatchlist = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('watchlists')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!error && data && Array.isArray(data.tickers) && data.tickers.length > 0) {
+        setWatchlist(data.tickers);
+        localStorage.setItem('aethertrade_watchlist', JSON.stringify(data.tickers));
+        if (!data.tickers.includes(activeTicker)) {
+          setActiveTicker(data.tickers[0]);
+        }
+      } else if (!data) {
+        // Initial sync to cloud for new user
+        await supabase.from('watchlists').upsert({
+          user_id: user.id,
+          tickers: watchlistRef.current,
+          updated_at: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.warn('Watchlist cloud sync skipped/failed:', err);
+    }
+  }, [user, activeTicker]);
+
+  useEffect(() => {
+    loadCloudWatchlist();
+  }, [user, loadCloudWatchlist]);
+
+  // LocalStorage persistence
   useEffect(() => {
     localStorage.setItem('aethertrade_watchlist', JSON.stringify(watchlist));
   }, [watchlist]);
@@ -38,9 +75,23 @@ export function useWatchlist() {
     }
   }, [activeTicker]);
 
+  const syncToCloud = async (newList) => {
+    if (!user) return;
+    try {
+      await supabase.from('watchlists').upsert({
+        user_id: user.id,
+        tickers: newList,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Supabase watchlist update error:', err);
+    }
+  };
+
   const removeTicker = (ticker, addToast) => {
     const next = watchlist.filter(t => t !== ticker);
     setWatchlist(next);
+    syncToCloud(next);
     if (activeTicker === ticker) {
       const fallback = next.length > 0 ? next[0] : 'AAPL';
       setActiveTicker(fallback);
@@ -50,8 +101,11 @@ export function useWatchlist() {
   };
 
   const addTicker = (ticker, addToast) => {
+    let next = watchlist;
     if (!watchlist.includes(ticker)) {
-      setWatchlist([...watchlist, ticker]);
+      next = [...watchlist, ticker];
+      setWatchlist(next);
+      syncToCloud(next);
     }
     setActiveTicker(ticker);
     addToast(`Added ${ticker} to watchlist!`, 'success');

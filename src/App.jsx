@@ -11,6 +11,7 @@ import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
 import { usePortfolio } from './hooks/usePortfolio';
 import { useAuth } from './hooks/useAuth';
+import { supabase } from './lib/supabase';
 import { importTransactionsFromCSV, validateCSVImport, exportTransactionsAsCSV } from './utils/csvUtils';
 
 function loadLinesMap() {
@@ -238,7 +239,7 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const { watchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist();
+  const { watchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist(user);
   const { stocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory } = useStockData(activeTicker, selectedRange, selectedInterval, addToast);
   const {
     portfolios,
@@ -266,10 +267,48 @@ export default function App() {
   useEffect(() => { fetchBackgroundPriceRef.current = fetchBackgroundPrice; }, [fetchBackgroundPrice]);
   useEffect(() => { watchlistRef.current = watchlist; }, [watchlist]);
 
-  // Persist S&R lines
+  // Load S&R lines from Supabase on login
+  useEffect(() => {
+    if (!user) return;
+    async function loadCloudAnnotations() {
+      try {
+        const { data, error } = await supabase
+          .from('chart_annotations')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!error && data && data.lines_map && typeof data.lines_map === 'object') {
+          setLinesMap(data.lines_map);
+          localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
+        } else if (!data) {
+          // Initial sync for new user
+          await supabase.from('chart_annotations').upsert({
+            user_id: user.id,
+            lines_map: linesMap,
+            updated_at: new Date().toISOString()
+          });
+        }
+      } catch (err) {
+        console.warn('Chart annotations cloud sync skipped:', err);
+      }
+    }
+    loadCloudAnnotations();
+  }, [user]);
+
+  // Persist S&R lines to localStorage & Supabase
   useEffect(() => {
     localStorage.setItem('aethertrade_support_resistance', JSON.stringify(linesMap));
-  }, [linesMap]);
+    if (user) {
+      supabase.from('chart_annotations').upsert({
+        user_id: user.id,
+        lines_map: linesMap,
+        updated_at: new Date().toISOString()
+      }).then(({ error }) => {
+        if (error) console.error('Supabase S&R sync error:', error);
+      });
+    }
+  }, [linesMap, user]);
 
   // Fetch portfolio histories for held tickers + USD/THB forex history
   useEffect(() => {

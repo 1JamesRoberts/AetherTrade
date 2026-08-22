@@ -42,6 +42,14 @@ class MockQueryBuilder {
         }
       });
       this.dataToReturn = txs;
+    } else if (this.table === 'watchlists') {
+      const local = localStorage.getItem('aethertrade_watchlist');
+      const tickers = local ? JSON.parse(local) : ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOG', 'AMZN'];
+      this.dataToReturn = [{ user_id: 'mock-user-id', tickers }];
+    } else if (this.table === 'chart_annotations') {
+      const local = localStorage.getItem('aethertrade_support_resistance');
+      const lines_map = local ? JSON.parse(local) : {};
+      this.dataToReturn = [{ user_id: 'mock-user-id', lines_map }];
     }
     return this;
   }
@@ -53,6 +61,21 @@ class MockQueryBuilder {
   }
 
   insert(data) {
+    this.dataToReturn = data;
+    return this;
+  }
+
+  upsert(data) {
+    this.dataToReturn = data;
+    if (this.table === 'watchlists' && data?.tickers) {
+      try { localStorage.setItem('aethertrade_watchlist', JSON.stringify(data.tickers)); } catch (e) { console.error(e); }
+    } else if (this.table === 'chart_annotations' && data?.lines_map) {
+      try { localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map)); } catch (e) { console.error(e); }
+    }
+    return this;
+  }
+
+  update(data) {
     this.dataToReturn = data;
     return this;
   }
