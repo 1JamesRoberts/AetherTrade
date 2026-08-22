@@ -282,11 +282,12 @@ export default function ChartContainer({
   }, [formattedData, activeStock.change]);
 
   const activeHoverValue = useMemo(() => {
-    if (!hoverData) return hoverPrice;
-    if (hoverData.close !== undefined) return hoverData.close;
-    if (hoverData.value !== undefined) return hoverData.value;
-    return hoverPrice;
-  }, [hoverData, hoverPrice]);
+    if (hoverData) {
+      if (hoverData.close !== undefined) return hoverData.close;
+      if (hoverData.value !== undefined) return hoverData.value;
+    }
+    return null;
+  }, [hoverData]);
 
   const displayChange = range === '1D' ? computedChange : (activeStock.timeframeChange || computedChange || activeStock.change || 0);
   const isUp = displayChange >= 0;
@@ -361,6 +362,11 @@ export default function ChartContainer({
         borderColor: 'rgba(255, 255, 255, 0.1)',
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 5,
+        barSpacing: 12,
+        minBarSpacing: 3,
+        fixLeftEdge: false,
+        fixRightEdge: false,
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -475,7 +481,7 @@ export default function ChartContainer({
 
     seriesRef.current = series;
 
-    // Populate initial data
+    // Populate initial data and fit content across the container
     if (formattedDataRef.current && formattedDataRef.current.length > 0) {
       try {
         series.setData(formattedDataRef.current);
@@ -491,6 +497,7 @@ export default function ChartContainer({
           const smaData = calculateSMA(formattedDataRef.current, 50);
           smaSeriesRef.current.setData(smaData);
         }
+        chart.timeScale().fitContent();
       } catch (err) {
         console.warn('Initial chart data populate error:', err);
       }
@@ -517,13 +524,21 @@ export default function ChartContainer({
     };
     chart.subscribeClick(handleChartClick);
 
-    // Crosshair Move
+    // Crosshair Move & Hover Tracking
     const handleCrosshairMove = (param) => {
       if (!param || !param.point || !seriesRef.current) {
         setHoverPrice(null);
         setHoverData(null);
         return;
       }
+
+      // If cursor is outside the visible chart boundaries, clear hover state
+      if (param.point.x < 0 || param.point.y < 0 || param.point.x > container.clientWidth || param.point.y > container.clientHeight) {
+        setHoverPrice(null);
+        setHoverData(null);
+        return;
+      }
+
       const price = seriesRef.current.coordinateToPrice(param.point.y);
       setHoverPrice(price !== null ? parseFloat(price.toFixed(2)) : null);
 
@@ -535,6 +550,14 @@ export default function ChartContainer({
       }
     };
     chart.subscribeCrosshairMove(handleCrosshairMove);
+
+    // Explicit Mouse Leave / Pointer Leave on Chart Container
+    const handleMouseLeave = () => {
+      setHoverPrice(null);
+      setHoverData(null);
+    };
+    container.addEventListener('mouseleave', handleMouseLeave);
+    container.addEventListener('pointerleave', handleMouseLeave);
 
     // Visible Logical Range Change for Zoom Tracking
     const handleVisibleLogicalRangeChange = (logicalRange) => {
@@ -579,11 +602,16 @@ export default function ChartContainer({
             visible: width >= 600,
           },
         });
+        if (chartInstanceRef.current && !isScaleUpdatingRef.current) {
+          chartInstanceRef.current.timeScale().fitContent();
+        }
       }
     });
     resizeObserver.observe(container);
 
     return () => {
+      container.removeEventListener('mouseleave', handleMouseLeave);
+      container.removeEventListener('pointerleave', handleMouseLeave);
       resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       chart.unsubscribeClick(handleChartClick);
@@ -625,10 +653,13 @@ export default function ChartContainer({
         const smaData = calculateSMA(formattedData, 50);
         smaSeriesRef.current.setData(smaData);
       }
+      if (chartInstanceRef.current && zoomLevel === 100) {
+        chartInstanceRef.current.timeScale().fitContent();
+      }
     } catch (err) {
       console.warn('Series setData update error:', err);
     }
-  }, [formattedData, activeStock.liveRawValues]);
+  }, [formattedData, activeStock.liveRawValues, zoomLevel]);
 
   // 3. S/R Lines Sync Effect (Updates Lightweight Charts price lines independently)
   useEffect(() => {
@@ -672,6 +703,14 @@ export default function ChartContainer({
   // 4. Zoom / Logical Range Effect
   useEffect(() => {
     if (!chartInstanceRef.current || formattedData.length === 0 || isScaleUpdatingRef.current) return;
+    if (zoomLevel === 100) {
+      try {
+        chartInstanceRef.current.timeScale().fitContent();
+      } catch {
+        // Safe ignore
+      }
+      return;
+    }
     const totalLength = formattedData.length;
     const visibleCount = Math.max(5, Math.round((totalLength * zoomLevel) / 100));
     try {
@@ -864,24 +903,26 @@ export default function ChartContainer({
         <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative', height: isFullscreen ? '100%' : undefined }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
 
-          <div className="chart-hover-overlay">
-            <div className="hover-primary-metric">
-              <i className="fa-solid fa-crosshairs hover-icon"></i>
-              <span className="hover-label">Price:</span>
-              <span className="hover-val tabular-nums" style={{ color: activeHoverValue !== null ? 'var(--cyan)' : '#ffffff' }}>
-                {formatMoney(activeHoverValue !== null ? activeHoverValue : activeStock.price, tickerCurrency)}
-              </span>
-            </div>
-
-            {hoverData && hoverData.open !== undefined && (
-              <div className="hover-ohlc-group tabular-nums">
-                <span>O: <strong>{formatMoney(hoverData.open, tickerCurrency)}</strong></span>
-                <span>H: <strong style={{ color: 'var(--bullish)' }}>{formatMoney(hoverData.high, tickerCurrency)}</strong></span>
-                <span>L: <strong style={{ color: 'var(--bearish)' }}>{formatMoney(hoverData.low, tickerCurrency)}</strong></span>
-                <span>C: <strong>{formatMoney(hoverData.close, tickerCurrency)}</strong></span>
+          {hoverData && (
+            <div className="chart-hover-overlay">
+              <div className="hover-primary-metric">
+                <i className="fa-solid fa-crosshairs hover-icon"></i>
+                <span className="hover-label">Price:</span>
+                <span className="hover-val tabular-nums" style={{ color: 'var(--cyan)' }}>
+                  {formatMoney(activeHoverValue, tickerCurrency)}
+                </span>
               </div>
-            )}
-          </div>
+
+              {hoverData.open !== undefined && (
+                <div className="hover-ohlc-group tabular-nums">
+                  <span>O: <strong>{formatMoney(hoverData.open, tickerCurrency)}</strong></span>
+                  <span>H: <strong style={{ color: 'var(--bullish)' }}>{formatMoney(hoverData.high, tickerCurrency)}</strong></span>
+                  <span>L: <strong style={{ color: 'var(--bearish)' }}>{formatMoney(hoverData.low, tickerCurrency)}</strong></span>
+                  <span>C: <strong>{formatMoney(hoverData.close, tickerCurrency)}</strong></span>
+                </div>
+              )}
+            </div>
+          )}
 
           <button
             type="button"
