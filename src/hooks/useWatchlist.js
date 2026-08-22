@@ -39,7 +39,7 @@ export function useWatchlist(user) {
         .from('watchlists')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!error && data && Array.isArray(data.tickers) && data.tickers.length > 0) {
         setWatchlist(data.tickers);
@@ -48,10 +48,11 @@ export function useWatchlist(user) {
           setActiveTicker(data.tickers[0]);
         }
       } else if (!data) {
-        // Initial sync to cloud for new user
+        // Initial sync to cloud for new user: upload current watchlist
+        const currentList = watchlistRef.current && watchlistRef.current.length > 0 ? watchlistRef.current : DEFAULT_WATCHLIST;
         await supabase.from('watchlists').upsert({
           user_id: user.id,
-          tickers: watchlistRef.current,
+          tickers: currentList,
           updated_at: new Date().toISOString()
         });
       }

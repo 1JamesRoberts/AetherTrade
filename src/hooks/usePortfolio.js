@@ -123,6 +123,7 @@ export function usePortfolio(addToast, user) {
     const { data: dbPortfolios } = await supabase
       .from('portfolios')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: true });
 
     const { data: dbTransactions } = await supabase

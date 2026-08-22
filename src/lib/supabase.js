@@ -90,7 +90,20 @@ class MockQueryBuilder {
     return this;
   }
 
+  in(_column, _values) {
+    void _column;
+    void _values;
+    return this;
+  }
+
   single() {
+    if (Array.isArray(this.dataToReturn)) {
+      this.dataToReturn = this.dataToReturn[0] || null;
+    }
+    return this;
+  }
+
+  maybeSingle() {
     if (Array.isArray(this.dataToReturn)) {
       this.dataToReturn = this.dataToReturn[0] || null;
     }

@@ -276,16 +276,17 @@ export default function App() {
           .from('chart_annotations')
           .select('*')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (!error && data && data.lines_map && typeof data.lines_map === 'object') {
           setLinesMap(data.lines_map);
           localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
         } else if (!data) {
           // Initial sync for new user
+          const local = loadLinesMap();
           await supabase.from('chart_annotations').upsert({
             user_id: user.id,
-            lines_map: linesMap,
+            lines_map: local,
             updated_at: new Date().toISOString()
           });
         }
