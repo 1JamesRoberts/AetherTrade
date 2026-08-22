@@ -288,7 +288,7 @@ export default function App() {
             user_id: user.id,
             lines_map: local,
             updated_at: new Date().toISOString()
-          });
+          }, { onConflict: 'user_id' });
         }
       } catch (err) {
         console.warn('Chart annotations cloud sync skipped:', err);
@@ -305,7 +305,7 @@ export default function App() {
         user_id: user.id,
         lines_map: linesMap,
         updated_at: new Date().toISOString()
-      }).then(({ error }) => {
+      }, { onConflict: 'user_id' }).then(({ error }) => {
         if (error) console.error('Supabase S&R sync error:', error);
       });
     }

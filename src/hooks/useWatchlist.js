@@ -41,25 +41,27 @@ export function useWatchlist(user) {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (!error && data && Array.isArray(data.tickers) && data.tickers.length > 0) {
+      if (error) {
+        console.error('Supabase load watchlist error:', error);
+      }
+
+      if (data && Array.isArray(data.tickers) && data.tickers.length > 0) {
         setWatchlist(data.tickers);
         localStorage.setItem('aethertrade_watchlist', JSON.stringify(data.tickers));
-        if (!data.tickers.includes(activeTicker)) {
-          setActiveTicker(data.tickers[0]);
-        }
       } else if (!data) {
         // Initial sync to cloud for new user: upload current watchlist
         const currentList = watchlistRef.current && watchlistRef.current.length > 0 ? watchlistRef.current : DEFAULT_WATCHLIST;
-        await supabase.from('watchlists').upsert({
+        const { error: upsertErr } = await supabase.from('watchlists').upsert({
           user_id: user.id,
           tickers: currentList,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id' });
+        if (upsertErr) console.error('Supabase initial watchlist upsert error:', upsertErr);
       }
     } catch (err) {
       console.warn('Watchlist cloud sync skipped/failed:', err);
     }
-  }, [user, activeTicker]);
+  }, [user]);
 
   useEffect(() => {
     loadCloudWatchlist();
@@ -107,11 +109,12 @@ export function useWatchlist(user) {
   const syncToCloud = async (newList) => {
     if (!user) return;
     try {
-      await supabase.from('watchlists').upsert({
+      const { error } = await supabase.from('watchlists').upsert({
         user_id: user.id,
         tickers: newList,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'user_id' });
+      if (error) console.error('Supabase watchlist update error:', error);
     } catch (err) {
       console.error('Supabase watchlist update error:', err);
     }
