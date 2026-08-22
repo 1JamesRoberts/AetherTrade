@@ -37,26 +37,29 @@ export function useWatchlist(user) {
     try {
       const { data, error } = await supabase
         .from('watchlists')
-        .select('*')
+        .select('tickers')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (error) {
         console.error('Supabase load watchlist error:', error);
+        return;
       }
 
       if (data && Array.isArray(data.tickers) && data.tickers.length > 0) {
         setWatchlist(data.tickers);
         localStorage.setItem('aethertrade_watchlist', JSON.stringify(data.tickers));
       } else if (!data) {
-        // Initial sync to cloud for new user: upload current watchlist
-        const currentList = watchlistRef.current && watchlistRef.current.length > 0 ? watchlistRef.current : DEFAULT_WATCHLIST;
-        const { error: upsertErr } = await supabase.from('watchlists').upsert({
-          user_id: user.id,
-          tickers: currentList,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
-        if (upsertErr) console.error('Supabase initial watchlist upsert error:', upsertErr);
+        // Initial insert if user has no cloud watchlist record yet
+        const currentList = loadWatchlist();
+        const { error: insertErr } = await supabase
+          .from('watchlists')
+          .insert({
+            user_id: user.id,
+            tickers: currentList,
+            updated_at: new Date().toISOString()
+          });
+        if (insertErr) console.error('Supabase initial watchlist insert error:', insertErr);
       }
     } catch (err) {
       console.warn('Watchlist cloud sync skipped/failed:', err);
@@ -72,28 +75,51 @@ export function useWatchlist(user) {
     if (!user) return;
 
     const channel = supabase
-      .channel(`realtime_watchlist_${user.id}`)
+      .channel(`realtime_watchlists_${user.id}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'watchlists',
-          filter: `user_id=eq.${user.id}`
+          table: 'watchlists'
         },
-        (payload) => {
-          if (payload?.new && Array.isArray(payload.new.tickers) && payload.new.tickers.length > 0) {
+        async (payload) => {
+          if (payload?.new && payload.new.user_id === user.id && Array.isArray(payload.new.tickers)) {
             setWatchlist(payload.new.tickers);
             localStorage.setItem('aethertrade_watchlist', JSON.stringify(payload.new.tickers));
+          } else {
+            loadCloudWatchlist();
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          loadCloudWatchlist();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user, loadCloudWatchlist]);
+
+  // Cross-tab window storage synchronization
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'aethertrade_watchlist' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) {
+            setWatchlist(parsed);
+          }
+        } catch (err) {
+          console.error('Cross-tab watchlist sync error:', err);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // LocalStorage persistence
   useEffect(() => {
@@ -106,19 +132,38 @@ export function useWatchlist(user) {
     }
   }, [activeTicker]);
 
-  const syncToCloud = async (newList) => {
+  const syncToCloud = useCallback(async (newList) => {
     if (!user) return;
     try {
-      const { error } = await supabase.from('watchlists').upsert({
-        user_id: user.id,
-        tickers: newList,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
-      if (error) console.error('Supabase watchlist update error:', error);
+      const { data: existing } = await supabase
+        .from('watchlists')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('watchlists')
+          .update({
+            tickers: newList,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+        if (error) console.error('Supabase watchlist update error:', error);
+      } else {
+        const { error } = await supabase
+          .from('watchlists')
+          .insert({
+            user_id: user.id,
+            tickers: newList,
+            updated_at: new Date().toISOString()
+          });
+        if (error) console.error('Supabase watchlist insert error:', error);
+      }
     } catch (err) {
       console.error('Supabase watchlist update error:', err);
     }
-  };
+  }, [user]);
 
   const removeTicker = (ticker, addToast) => {
     const next = watchlist.filter(t => t !== ticker);

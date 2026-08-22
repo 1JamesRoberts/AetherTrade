@@ -97,6 +97,19 @@ create policy "Users can manage their own chart annotations"
   with check (auth.uid() = user_id);
 
 -- ==============================================================================
+-- API ACCESS GRANTS (Required for PostgREST / Supabase REST API)
+-- ==============================================================================
+-- Tables created via the Supabase dashboard get these automatically,
+-- but tables created via raw SQL need explicit grants.
+
+grant usage on schema public to anon, authenticated;
+
+grant select, insert, update, delete on public.portfolios to anon, authenticated;
+grant select, insert, update, delete on public.transactions to anon, authenticated;
+grant select, insert, update, delete on public.watchlists to anon, authenticated;
+grant select, insert, update, delete on public.chart_annotations to anon, authenticated;
+
+-- ==============================================================================
 -- REALTIME REPLICATION (Safe idempotent publication setup)
 -- ==============================================================================
 

@@ -274,21 +274,29 @@ export default function App() {
       try {
         const { data, error } = await supabase
           .from('chart_annotations')
-          .select('*')
+          .select('lines_map')
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (!error && data && data.lines_map && typeof data.lines_map === 'object') {
+        if (error) {
+          console.error('Supabase load annotations error:', error);
+          return;
+        }
+
+        if (data && data.lines_map && typeof data.lines_map === 'object') {
           setLinesMap(data.lines_map);
           localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
         } else if (!data) {
-          // Initial sync for new user
+          // Initial insert for user without existing cloud annotations
           const local = loadLinesMap();
-          await supabase.from('chart_annotations').upsert({
-            user_id: user.id,
-            lines_map: local,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'user_id' });
+          const { error: insertErr } = await supabase
+            .from('chart_annotations')
+            .insert({
+              user_id: user.id,
+              lines_map: local,
+              updated_at: new Date().toISOString()
+            });
+          if (insertErr) console.error('Supabase initial annotations insert error:', insertErr);
         }
       } catch (err) {
         console.warn('Chart annotations cloud sync skipped:', err);
@@ -301,13 +309,37 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('aethertrade_support_resistance', JSON.stringify(linesMap));
     if (user) {
-      supabase.from('chart_annotations').upsert({
-        user_id: user.id,
-        lines_map: linesMap,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' }).then(({ error }) => {
-        if (error) console.error('Supabase S&R sync error:', error);
-      });
+      (async () => {
+        try {
+          const { data: existing } = await supabase
+            .from('chart_annotations')
+            .select('user_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (existing) {
+            const { error } = await supabase
+              .from('chart_annotations')
+              .update({
+                lines_map: linesMap,
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', user.id);
+            if (error) console.error('Supabase S&R update error:', error);
+          } else {
+            const { error } = await supabase
+              .from('chart_annotations')
+              .insert({
+                user_id: user.id,
+                lines_map: linesMap,
+                updated_at: new Date().toISOString()
+              });
+            if (error) console.error('Supabase S&R insert error:', error);
+          }
+        } catch (err) {
+          console.error('Supabase S&R sync error:', err);
+        }
+      })();
     }
   }, [linesMap, user]);
 
@@ -322,17 +354,41 @@ export default function App() {
         {
           event: '*',
           schema: 'public',
-          table: 'chart_annotations',
-          filter: `user_id=eq.${user.id}`
+          table: 'chart_annotations'
         },
-        (payload) => {
-          if (payload?.new && payload.new.lines_map && typeof payload.new.lines_map === 'object') {
+        async (payload) => {
+          if (payload?.new && payload.new.user_id === user.id && payload.new.lines_map && typeof payload.new.lines_map === 'object') {
             setLinesMap(payload.new.lines_map);
             localStorage.setItem('aethertrade_support_resistance', JSON.stringify(payload.new.lines_map));
+          } else {
+            // Re-fetch cloud annotations
+            const { data } = await supabase
+              .from('chart_annotations')
+              .select('lines_map')
+              .eq('user_id', user.id)
+              .maybeSingle();
+            if (data?.lines_map) {
+              setLinesMap(data.lines_map);
+              localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
+            }
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          supabase
+            .from('chart_annotations')
+            .select('lines_map')
+            .eq('user_id', user.id)
+            .maybeSingle()
+            .then(({ data }) => {
+              if (data?.lines_map) {
+                setLinesMap(data.lines_map);
+                localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
+              }
+            });
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
