@@ -64,6 +64,34 @@ export function useWatchlist(user) {
     loadCloudWatchlist();
   }, [user, loadCloudWatchlist]);
 
+  // Real-time live sync for watchlist changes across devices/tabs
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`realtime_watchlist_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'watchlists',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          if (payload?.new && Array.isArray(payload.new.tickers) && payload.new.tickers.length > 0) {
+            setWatchlist(payload.new.tickers);
+            localStorage.setItem('aethertrade_watchlist', JSON.stringify(payload.new.tickers));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   // LocalStorage persistence
   useEffect(() => {
     localStorage.setItem('aethertrade_watchlist', JSON.stringify(watchlist));

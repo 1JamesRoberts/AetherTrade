@@ -310,6 +310,34 @@ export default function App() {
     }
   }, [linesMap, user]);
 
+  // Real-time live sync for S&R annotations across devices/tabs
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`realtime_annotations_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chart_annotations',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          if (payload?.new && payload.new.lines_map && typeof payload.new.lines_map === 'object') {
+            setLinesMap(payload.new.lines_map);
+            localStorage.setItem('aethertrade_support_resistance', JSON.stringify(payload.new.lines_map));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   // Fetch portfolio histories for held tickers + USD/THB forex history
   useEffect(() => {
     const active = portfolios.find(p => p.id === activePortfolioId);
