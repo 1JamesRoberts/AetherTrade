@@ -80,14 +80,43 @@ export default function PortfolioManager({
 
   const [accountName, setAccountName] = useState(activePortfolio.name);
 
-  // Sync accountName input when active portfolio changes
+  // Transaction Ledger Filter States
+  const [ledgerTypeFilter, setLedgerTypeFilter] = useState('ALL'); // 'ALL' | 'BUY' | 'SELL' | 'DIVIDEND'
+  const [ledgerSearchQuery, setLedgerSearchQuery] = useState('');
+
+  // Reset filters and sync accountName input when active portfolio changes
   useEffect(() => {
     let active = true;
     Promise.resolve().then(() => {
-      if (active) setAccountName(activePortfolio.name);
+      if (active) {
+        setAccountName(activePortfolio.name);
+        setLedgerTypeFilter('ALL');
+        setLedgerSearchQuery('');
+      }
     });
     return () => { active = false; };
   }, [activePortfolioId, activePortfolio.name]);
+
+  // Memoized filtered transactions retaining original 0-indexed positions
+  const filteredTransactions = useMemo(() => {
+    const allTxs = (activePortfolio?.transactions || []).map((tx, originalIndex) => ({ tx, originalIndex }));
+    return allTxs.filter(({ tx }) => {
+      if (ledgerTypeFilter !== 'ALL' && tx.type !== ledgerTypeFilter) {
+        return false;
+      }
+      if (ledgerSearchQuery.trim()) {
+        const q = ledgerSearchQuery.trim();
+        const qUpper = q.toUpperCase();
+        const qLower = q.toLowerCase();
+        const ticker = (tx.ticker || '').toUpperCase();
+        // Match ticker prefix (e.g. 'PL' matches 'PLTR', 'PLUG', but NOT 'AAPL')
+        const tickerMatch = ticker.startsWith(qUpper);
+        const accountMatch = (tx.account || '').toLowerCase().includes(qLower);
+        if (!tickerMatch && !accountMatch) return false;
+      }
+      return true;
+    });
+  }, [activePortfolio?.transactions, ledgerTypeFilter, ledgerSearchQuery]);
 
   // Pre-fill form when user clicks "Fill in Form" from Rebalance Studio
   useEffect(() => {
@@ -189,10 +218,30 @@ export default function PortfolioManager({
     }
 
     const currentStocks = stocksRef.current || {};
-    const localMatches = Object.values(currentStocks).filter(stock =>
-      (stock.ticker && stock.ticker.toLowerCase().includes(trimmed.toLowerCase())) ||
-      (stock.name && stock.name.toLowerCase().includes(trimmed.toLowerCase()))
-    ).map(s => ({
+    const qUpper = trimmed.toUpperCase();
+    const qLower = trimmed.toLowerCase();
+
+    const localMatches = Object.values(currentStocks).filter(stock => {
+      const ticker = (stock.ticker || '').toUpperCase();
+      const name = (stock.name || '').toLowerCase();
+      // Match ticker prefix/exact or company name contains query
+      const tickerMatch = ticker.startsWith(qUpper);
+      const nameMatch = name.includes(qLower);
+      return tickerMatch || nameMatch;
+    }).sort((a, b) => {
+      const aTicker = (a.ticker || '').toUpperCase();
+      const bTicker = (b.ticker || '').toUpperCase();
+      // 1. Exact ticker matches first
+      if (aTicker === qUpper && bTicker !== qUpper) return -1;
+      if (bTicker === qUpper && aTicker !== qUpper) return 1;
+      // 2. Ticker prefix matches second
+      const aStarts = aTicker.startsWith(qUpper);
+      const bStarts = bTicker.startsWith(qUpper);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      // 3. Alphabetical fallback
+      return aTicker.localeCompare(bTicker);
+    }).map(s => ({
       ticker: s.ticker,
       name: s.name || `${s.ticker} Stock`,
       price: s.price || 0,
@@ -1007,7 +1056,51 @@ export default function PortfolioManager({
         <div className="analysis-section sidebar-ledger-section">
           <div className="section-subtitle">
             <span>Transaction Audit History</span>
-            <span className="ledger-count-tag tabular-nums">{(activePortfolio?.transactions || []).length} Records</span>
+            <span className="ledger-count-tag tabular-nums">
+              {(activePortfolio?.transactions || []).length === 0
+                ? '0 Records'
+                : filteredTransactions.length === (activePortfolio?.transactions || []).length
+                ? `${(activePortfolio?.transactions || []).length} Records`
+                : `Showing ${filteredTransactions.length} of ${(activePortfolio?.transactions || []).length}`}
+            </span>
+          </div>
+
+          {/* Filter Toolbar (Type Pills + Search Box) */}
+          <div className="ledger-filter-toolbar">
+            <div className="ledger-filter-pill-group">
+              {['ALL', 'BUY', 'SELL', 'DIVIDEND'].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setLedgerTypeFilter(type)}
+                  className={`ledger-filter-pill ${type.toLowerCase()} ${ledgerTypeFilter === type ? 'active' : ''}`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+
+            <div className="ledger-search-box">
+              <i className="fa-solid fa-magnifying-glass search-icon"></i>
+              <input
+                type="text"
+                placeholder="Filter symbol/account..."
+                value={ledgerSearchQuery}
+                onChange={(e) => setLedgerSearchQuery(e.target.value)}
+                className="ledger-search-input"
+              />
+              {ledgerSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setLedgerSearchQuery('')}
+                  className="ledger-search-clear-btn"
+                  title="Clear filter"
+                  aria-label="Clear filter"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="sidebar-ledger-viewport">
@@ -1016,9 +1109,22 @@ export default function PortfolioManager({
                 <li className="empty-pill-msg" style={{ textAlign: 'center', paddingTop: '20px' }}>
                   No transaction audit records found.
                 </li>
+              ) : filteredTransactions.length === 0 ? (
+                <li className="empty-pill-msg filter-empty" style={{ textAlign: 'center', paddingTop: '20px' }}>
+                  <p>No transactions match your filter criteria.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLedgerTypeFilter('ALL');
+                      setLedgerSearchQuery('');
+                    }}
+                    className="btn-clear-filter"
+                  >
+                    <i className="fa-solid fa-rotate-left"></i> Reset Filters
+                  </button>
+                </li>
               ) : (
-                [...(activePortfolio?.transactions || [])].reverse().map((tx, idx) => {
-                  const actualIndex = (activePortfolio?.transactions || []).length - 1 - idx;
+                [...filteredTransactions].reverse().map(({ tx, originalIndex }) => {
                   const txCurr = detectTickerCurrency(tx.ticker);
                   const sharesNum = parseFloat(tx.shares) || 0;
                   const priceNum = parseFloat(tx.price) || 0;
@@ -1026,7 +1132,7 @@ export default function PortfolioManager({
                   const txFees = parseFloat(tx.fees) || 0;
                   const netVal = tx.type === 'BUY' ? (grossVal + txFees) : Math.max(0, grossVal - txFees);
                   const accountStr = tx.account && tx.account !== 'Default' ? ` • ${tx.account}` : '';
-                  const rowKey = tx.id || `tx-side-log-${actualIndex}`;
+                  const rowKey = tx.id || `tx-side-log-${originalIndex}`;
                   const txTime = typeof tx.timestamp === 'number' ? tx.timestamp : new Date(tx.date || tx.timestamp || 0).getTime();
                   const txDateStr = !isNaN(txTime) ? new Date(txTime).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent';
 
@@ -1054,7 +1160,7 @@ export default function PortfolioManager({
                           {onEditTransaction && (
                             <button
                               type="button"
-                              onClick={() => handleStartEdit(actualIndex, tx)}
+                              onClick={() => handleStartEdit(originalIndex, tx)}
                               className="btn-tx-edit"
                               title="Edit transaction entry"
                               aria-label="Edit transaction entry"
@@ -1067,7 +1173,7 @@ export default function PortfolioManager({
                               type="button"
                               onClick={() => {
                                 const confirmDelete = confirm("Do you want to delete this transaction entry? This will revert its effect on your holdings.");
-                                if (confirmDelete) onDeleteTransaction(activePortfolio.id, actualIndex);
+                                if (confirmDelete) onDeleteTransaction(activePortfolio.id, originalIndex);
                               }}
                               className="btn-tx-delete"
                               title="Delete transaction entry"
