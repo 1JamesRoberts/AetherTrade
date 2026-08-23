@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabase';
-import { detectTickerCurrency } from '../utils/currencyUtils';
+import { supabase } from '../lib/supabase.js';
+import { detectTickerCurrency } from '../utils/currencyUtils.js';
 
 function loadLocalTargetAllocations() {
   try {
@@ -37,11 +37,20 @@ function loadLocalPortfolios() {
     const saved = localStorage.getItem('aethertrade_portfolios_list');
     if (saved) {
       const parsed = JSON.parse(saved);
-      return parsed.map(p => ({
-        ...p,
-        baseCurrency: p.baseCurrency || currMap[p.id] || 'USD',
-        targetAllocations: p.targetAllocations || targetMap[p.id] || {}
-      }));
+      return parsed.map(p => {
+        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(p.transactions || []);
+        return {
+          ...p,
+          holdings,
+          realizedPL,
+          realizedPLByCurrency,
+          totalDividends,
+          dividendsByCurrency,
+          dividendsByTicker,
+          baseCurrency: p.baseCurrency || currMap[p.id] || 'USD',
+          targetAllocations: p.targetAllocations || targetMap[p.id] || {}
+        };
+      });
     }
   } catch (e) { console.error(e); }
   return [{
@@ -51,6 +60,9 @@ function loadLocalPortfolios() {
     transactions: [],
     realizedPL: 0,
     realizedPLByCurrency: { USD: 0, THB: 0 },
+    totalDividends: 0,
+    dividendsByCurrency: { USD: 0, THB: 0 },
+    dividendsByTicker: {},
     baseCurrency: currMap['default'] || 'USD',
     targetAllocations: targetMap['default'] || {}
   }];
@@ -69,6 +81,9 @@ export function rebuildPortfolioHoldings(txs) {
   const holdings = {};
   let realizedPL = 0;
   const realizedPLByCurrency = { USD: 0, THB: 0 };
+  let totalDividends = 0;
+  const dividendsByCurrency = { USD: 0, THB: 0 };
+  const dividendsByTicker = {};
 
   txs.forEach(tx => {
     const txFees = parseFloat(tx.fees) || 0;
@@ -78,14 +93,20 @@ export function rebuildPortfolioHoldings(txs) {
 
     if (tx.type === 'BUY') {
       if (!holdings[tx.ticker]) {
-        holdings[tx.ticker] = { shares: 0, avgCost: 0, totalFees: 0, currency: curr };
+        holdings[tx.ticker] = {
+          shares: 0,
+          avgCost: 0,
+          totalFees: 0,
+          totalDividends: dividendsByTicker[tx.ticker] || 0,
+          currency: curr
+        };
       }
       const h = holdings[tx.ticker];
       const newCost = (h.shares * h.avgCost) + (txShares * txPrice);
       h.shares += txShares;
       h.avgCost = h.shares > 0 ? (newCost / h.shares) : 0;
       h.totalFees += txFees;
-    } else {
+    } else if (tx.type === 'SELL') {
       if (holdings[tx.ticker]) {
         const h = holdings[tx.ticker];
         const originalShares = h.shares;
@@ -100,10 +121,29 @@ export function rebuildPortfolioHoldings(txs) {
         h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
         if (h.shares < 1e-9) delete holdings[tx.ticker];
       }
+    } else if (tx.type === 'DIVIDEND') {
+      const grossDividend = txShares * txPrice;
+      const netDividend = Math.max(0, grossDividend - txFees);
+      totalDividends += netDividend;
+      dividendsByCurrency[curr] = (dividendsByCurrency[curr] || 0) + netDividend;
+      dividendsByTicker[tx.ticker] = (dividendsByTicker[tx.ticker] || 0) + netDividend;
+
+      if (holdings[tx.ticker]) {
+        holdings[tx.ticker].totalDividends = (holdings[tx.ticker].totalDividends || 0) + netDividend;
+      }
+    } else {
+      console.warn(`Unknown transaction type "${tx.type}" for ticker: ${tx.ticker}`);
     }
   });
 
-  return { holdings, realizedPL, realizedPLByCurrency };
+  return {
+    holdings,
+    realizedPL,
+    realizedPLByCurrency,
+    totalDividends,
+    dividendsByCurrency,
+    dividendsByTicker
+  };
 }
 
 export function usePortfolio(addToast, user) {
@@ -147,7 +187,7 @@ export function usePortfolio(addToast, user) {
       const currMap = loadLocalBaseCurrencies();
       const merged = dbPortfolios.map(dbPort => {
         const dbTxs = txMap[dbPort.id] || [];
-        const { holdings, realizedPL, realizedPLByCurrency } = rebuildPortfolioHoldings(dbTxs);
+        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(dbTxs);
         const baseCurr = dbPort.base_currency || currMap[dbPort.id] || 'USD';
         const targets = dbPort.target_allocations || targetMap[dbPort.id] || {};
         currMap[dbPort.id] = baseCurr;
@@ -159,6 +199,9 @@ export function usePortfolio(addToast, user) {
           holdings,
           realizedPL,
           realizedPLByCurrency,
+          totalDividends,
+          dividendsByCurrency,
+          dividendsByTicker,
           baseCurrency: baseCurr,
           targetAllocations: targets
         };
@@ -320,13 +363,17 @@ export function usePortfolio(addToast, user) {
 
     if (portfolios.length === 0) {
       targetPortId = 'default';
-      const { holdings, realizedPL } = rebuildPortfolioHoldings([txWithId]);
+      const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings([txWithId]);
       const newPort = {
         id: targetPortId,
         name: 'Primary Portfolio',
         transactions: [txWithId],
         holdings,
-        realizedPL
+        realizedPL,
+        realizedPLByCurrency,
+        totalDividends,
+        dividendsByCurrency,
+        dividendsByTicker
       };
       setPortfolios([newPort]);
       setActivePortfolioId(targetPortId);
@@ -334,8 +381,8 @@ export function usePortfolio(addToast, user) {
       const updated = portfolios.map(p => {
         if (p.id === targetPortId) {
           const transactions = [...p.transactions, txWithId];
-          const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
-          return { ...p, transactions, holdings, realizedPL };
+          const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(transactions);
+          return { ...p, transactions, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
         }
         return p;
       });
@@ -372,8 +419,8 @@ export function usePortfolio(addToast, user) {
         const transactions = [...p.transactions];
         deletedTxId = transactions[index]?.id;
         transactions.splice(index, 1);
-        const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
-        return { ...p, transactions, holdings, realizedPL };
+        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(transactions);
+        return { ...p, transactions, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
       }
       return p;
     });
@@ -407,8 +454,8 @@ export function usePortfolio(addToast, user) {
         transactions[index] = finalTx;
         // Re-sort chronologically by timestamp
         transactions.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        const { holdings, realizedPL } = rebuildPortfolioHoldings(transactions);
-        return { ...p, transactions, holdings, realizedPL };
+        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(transactions);
+        return { ...p, transactions, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
       }
       return p;
     }));
@@ -438,7 +485,16 @@ export function usePortfolio(addToast, user) {
 
     const updated = portfolios.map(p => {
       if (p.id === targetPortId) {
-        return { ...p, transactions: [], holdings: {}, realizedPL: 0 };
+        return {
+          ...p,
+          transactions: [],
+          holdings: {},
+          realizedPL: 0,
+          realizedPLByCurrency: { USD: 0, THB: 0 },
+          totalDividends: 0,
+          dividendsByCurrency: { USD: 0, THB: 0 },
+          dividendsByTicker: {}
+        };
       }
       return p;
     });
@@ -467,8 +523,8 @@ export function usePortfolio(addToast, user) {
 
       const existing = isAppend ? port.transactions : [];
       const combined = [...existing, ...importedWithIds].sort((a, b) => a.timestamp - b.timestamp);
-      const { holdings, realizedPL } = rebuildPortfolioHoldings(combined);
-      return { ...port, transactions: combined, holdings, realizedPL };
+      const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(combined);
+      return { ...port, transactions: combined, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
     });
 
     setPortfolios(updated);
@@ -516,7 +572,11 @@ export function usePortfolio(addToast, user) {
       name: cleanName,
       holdings: {},
       transactions: [],
-      realizedPL: 0
+      realizedPL: 0,
+      realizedPLByCurrency: { USD: 0, THB: 0 },
+      totalDividends: 0,
+      dividendsByCurrency: { USD: 0, THB: 0 },
+      dividendsByTicker: {}
     };
 
     const updated = [...portfolios, newPort];
@@ -672,8 +732,8 @@ export function usePortfolio(addToast, user) {
     setPortfolios(prev => prev.map(p => {
       if (p.id === targetPortId) {
         const combined = [...p.transactions, ...newTxs];
-        const { holdings, realizedPL, realizedPLByCurrency } = rebuildPortfolioHoldings(combined);
-        return { ...p, transactions: combined, holdings, realizedPL, realizedPLByCurrency };
+        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(combined);
+        return { ...p, transactions: combined, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
       }
       return p;
     }));

@@ -1790,6 +1790,17 @@ body {
   box-shadow: 0 8px 24px rgba(255, 23, 68, 0.08), inset 0 0 10px rgba(255, 23, 68, 0.03);
 }
 
+.metric-card.card-purple:hover {
+  border-color: rgba(168, 85, 247, 0.35);
+  background: rgba(168, 85, 247, 0.01);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.08), inset 0 0 10px rgba(168, 85, 247, 0.03);
+}
+
+.text-purple {
+  color: #a855f7;
+}
+
 /* ==========================================================================
    RIGHT PANEL - ANALYSIS ENGINE & MATRIX
    ========================================================================== */
@@ -3159,6 +3170,13 @@ input:checked+.slider.round:before {
   box-shadow: 0 0 10px rgba(244, 63, 94, 0.2);
 }
 
+.tx-type-btn.dividend.active {
+  background: rgba(168, 85, 247, 0.18);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.2);
+}
+
 .portfolio-search-box {
   position: relative;
 }
@@ -3432,6 +3450,18 @@ input:checked+.slider.round:before {
 .btn-record-tx.sell:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(244, 63, 94, 0.45);
+}
+
+.btn-record-tx.dividend {
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.35);
+}
+
+.btn-record-tx.dividend:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
+  filter: brightness(1.1);
 }
 
 .btn-record-tx.editing {
@@ -3899,6 +3929,10 @@ input:checked+.slider.round:before {
   border-left-color: var(--bearish);
 }
 
+.tx-ledger-item.dividend {
+  border-left-color: #a855f7;
+}
+
 .tx-ledger-item:hover {
   background: rgba(255, 255, 255, 0.04);
   border-color: var(--border-hover);
@@ -3910,6 +3944,10 @@ input:checked+.slider.round:before {
 
 .tx-ledger-item.sell:hover {
   border-left-color: var(--bearish);
+}
+
+.tx-ledger-item.dividend:hover {
+  border-left-color: #c084fc;
 }
 
 .type-badge {
@@ -3935,6 +3973,30 @@ input:checked+.slider.round:before {
   background: rgba(244, 63, 94, 0.15);
   color: var(--bearish);
   border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.type-badge.dividend {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.estimate-val.dividend {
+  color: #a855f7;
+}
+
+.holding-dividend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-top: 2px;
 }
 
 .type-badge i {

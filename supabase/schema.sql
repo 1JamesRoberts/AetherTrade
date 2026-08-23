@@ -25,13 +25,22 @@ create table if not exists public.transactions (
   id text primary key,
   portfolio_id text references public.portfolios(id) on delete cascade not null,
   ticker text not null,
-  type text not null check (type in ('BUY', 'SELL')),
+  type text not null check (type in ('BUY', 'SELL', 'DIVIDEND')),
   shares numeric not null check (shares > 0),
   price numeric not null check (price >= 0),
   fees numeric default 0,
   date timestamp with time zone not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Ensure type check constraint allows DIVIDEND on existing installations
+do $$
+begin
+  alter table public.transactions drop constraint if exists transactions_type_check;
+  alter table public.transactions add constraint transactions_type_check check (type in ('BUY', 'SELL', 'DIVIDEND'));
+exception
+  when others then null;
+end $$;
 
 -- 3. WATCHLISTS TABLE
 create table if not exists public.watchlists (

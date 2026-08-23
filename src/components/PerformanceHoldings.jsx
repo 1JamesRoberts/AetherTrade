@@ -99,6 +99,16 @@ export default function PerformanceHoldings({
        convertCurrency(activePortfolio.realizedPLByCurrency.THB || 0, 'THB', baseCurrency, fxRate))
     : convertCurrency(activePortfolio.realizedPL || 0, 'USD', baseCurrency, fxRate);
 
+  // Total Dividend Income in base currency
+  const totalDividends = activePortfolio.dividendsByCurrency
+    ? (convertCurrency(activePortfolio.dividendsByCurrency.USD || 0, 'USD', baseCurrency, fxRate) +
+       convertCurrency(activePortfolio.dividendsByCurrency.THB || 0, 'THB', baseCurrency, fxRate))
+    : convertCurrency(activePortfolio.totalDividends || 0, 'USD', baseCurrency, fxRate);
+
+  // Total Net Return = Open Gains (netProfit) + Closed Gains (realizedPL) + Total Dividend Income
+  const totalReturnVal = netProfit + realizedPL + totalDividends;
+  const totalReturnPct = totalCostBasis > 0 ? (totalReturnVal / totalCostBasis) * 100 : 0;
+
   const sortedHoldings = [...rawHoldings].sort((a, b) => {
     let valA = a[sortColumn];
     let valB = b[sortColumn];
@@ -269,7 +279,7 @@ export default function PerformanceHoldings({
           h.avgCost = h.shares > 0 ? (newPureTotalCost / h.shares) : 0;
           h.totalFees = (h.totalFees || 0) + txFees;
           h.lastPrice = txPrice;
-        } else {
+        } else if (tx.type === 'SELL') {
           if (holdingsOnDate[ticker]) {
             const h = holdingsOnDate[ticker];
             const originalShares = h.shares;
@@ -286,6 +296,12 @@ export default function PerformanceHoldings({
             h.lastPrice = txPrice;
             if (h.shares < 1e-9) delete holdingsOnDate[ticker];
           }
+        } else if (tx.type === 'DIVIDEND') {
+          const grossDivNative = txShares * txPrice;
+          const netDivNative = Math.max(0, grossDivNative - txFees);
+          const txFxRate = getPriceOnDate('USDTHB=X', new Date(txTime), fxRate);
+          const divBase = convertCurrency(netDivNative, txCurr, baseCurrency, txFxRate);
+          cumulativeRealizedPL += (isNaN(divBase) ? 0 : divBase);
         }
         txIdx++;
       }
@@ -495,10 +511,15 @@ export default function PerformanceHoldings({
           <div className={`metric-val tabular-nums ${realizedPL >= 0 ? 'text-green' : 'text-red'}`}>{realizedPL >= 0 ? '+' : ''}{formatMoney(realizedPL, baseCurrency)}</div>
           <div className="metric-subtext">Profit/loss closed from asset sales</div>
         </div>
-        <div className="metric-card card-cyan">
+        <div className="metric-card card-purple">
+          <div className="metric-card-header"><span className="title">Dividend Income</span><i className="fa-solid fa-hand-holding-dollar text-purple"></i></div>
+          <div className="metric-val tabular-nums text-purple">+{formatMoney(totalDividends, baseCurrency)}</div>
+          <div className="metric-subtext">Cumulative cash payouts received</div>
+        </div>
+        <div className={`metric-card ${totalReturnVal >= 0 ? 'card-green' : 'card-red'}`}>
           <div className="metric-card-header"><span className="title">Total Return (ROI)</span><i className="fa-solid fa-percent text-cyan"></i></div>
-          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>{netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%</div>
-          <div className="metric-subtext">{rawHoldings.length} Active Positions Held</div>
+          <div className={`metric-val tabular-nums ${totalReturnVal >= 0 ? 'text-green' : 'text-red'}`}>{totalReturnVal >= 0 ? '+' : ''}{formatMoney(totalReturnVal, baseCurrency)} ({totalReturnVal >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)</div>
+          <div className="metric-subtext">Capital gains + dividend payouts</div>
         </div>
       </div>
 
@@ -594,10 +615,19 @@ export default function PerformanceHoldings({
               <tbody>
                 {sortedHoldings.map((h) => {
                   const weight = totalAssetValue > 0 ? (h.baseMarketValue / totalAssetValue) * 100 : 0;
+                  const tickerDividends = (activePortfolio.dividendsByTicker?.[h.ticker] || activePortfolio.holdings?.[h.ticker]?.totalDividends || 0);
                   return (
                     <tr key={h.ticker}>
                       <td className="cell-asset">
-                        <div className="asset-cell-flex"><span className="asset-ticker">{h.ticker}</span><span className="asset-name">{h.name}</span></div>
+                        <div className="asset-cell-flex">
+                          <span className="asset-ticker">{h.ticker}</span>
+                          <span className="asset-name">{h.name}</span>
+                          {tickerDividends > 0 && (
+                            <span className="holding-dividend-badge" title={`Cumulative dividend payouts received for ${h.ticker}`}>
+                              <i className="fa-solid fa-hand-holding-dollar"></i> +{formatMoney(tickerDividends, h.currency)} div
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="tabular-nums font-bold">{parseFloat(Number(h.shares || 0).toFixed(6))}</td>
                       <td className="tabular-nums">{formatMoney(h.avgCost, h.currency)}</td>

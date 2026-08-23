@@ -40,7 +40,7 @@ export function importTransactionsFromCSV(csvText) {
 
   const headers = rows[0].map(h => h.toLowerCase().trim());
   const dateIdx = headers.findIndex(h => h.includes("date"));
-  const typeIdx = headers.findIndex(h => h.includes("type") || h.includes("transaction") || h.includes("action") || h.includes("side"));
+  const typeIdx = headers.findIndex(h => h.includes("type") || h.includes("transaction") || h.includes("action") || h.includes("side") || h.includes("dividend") || h.includes("income"));
   const symbolIdx = headers.findIndex(h => h.includes("symbol") || h.includes("ticker") || h.includes("stock") || h.includes("etf") || h.includes("asset"));
   const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("unit") || h.includes("shares"));
   const priceIdx = headers.findIndex(h => 
@@ -51,13 +51,13 @@ export function importTransactionsFromCSV(csvText) {
     (h.includes("amount") && !h.includes("total") && !h.includes("before"))
   );
   const feesIdx = headers.findIndex(h => 
-    (h.includes("fee") || h.includes("fees") || h.includes("commission") || h.includes("brokerage") || h.includes("charge")) && 
+    (h.includes("fee") || h.includes("fees") || h.includes("commission") || h.includes("brokerage") || h.includes("tax") || h.includes("charge")) && 
     !h.includes("before")
   );
   const accountIdx = headers.findIndex(h => h.includes("account") || h.includes("portfolio"));
 
   if (dateIdx === -1 || typeIdx === -1 || symbolIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
-    throw new Error("CSV Import Failed: Missing required columns.\n\nRequired:\n- Date\n- Type (BUY/SELL)\n- Symbol\n- Quantity\n- Price / Amount per unit");
+    throw new Error("CSV Import Failed: Missing required columns.\n\nRequired:\n- Date\n- Type (BUY/SELL/DIVIDEND)\n- Symbol\n- Quantity\n- Price / Amount per unit");
   }
 
   const parseNumber = (val) => {
@@ -88,9 +88,15 @@ export function importTransactionsFromCSV(csvText) {
 
     const ticker = symbolVal.toUpperCase().trim();
     const rawType = typeVal.toUpperCase().trim();
-    const type = rawType.includes('BUY') ? 'BUY' : (rawType.includes('SELL') ? 'SELL' : rawType);
-    if (type !== 'BUY' && type !== 'SELL') {
-      throw new Error(`Row ${rowNum}: Type must be BUY or SELL. Found: "${typeVal}"`);
+    let type = '';
+    if (rawType.includes('BUY') || rawType === 'B' || rawType.includes('PURCHASE') || rawType.includes('LONG')) {
+      type = 'BUY';
+    } else if (rawType.includes('SELL') || rawType === 'S' || rawType.includes('SALE') || rawType.includes('SHORT')) {
+      type = 'SELL';
+    } else if (rawType.includes('DIV') || rawType.includes('INCOME') || rawType.includes('PAYOUT') || rawType.includes('DISTRIBUTION')) {
+      type = 'DIVIDEND';
+    } else {
+      throw new Error(`Row ${rowNum}: Type must be BUY, SELL, or DIVIDEND. Found: "${typeVal}"`);
     }
 
     const shares = parseNumber(qtyVal);
@@ -99,8 +105,11 @@ export function importTransactionsFromCSV(csvText) {
     }
 
     const price = parseNumber(priceVal);
-    if (price <= 0) {
+    if (type !== 'DIVIDEND' && price <= 0) {
       throw new Error(`Row ${rowNum}: Price must be positive. Found: "${priceVal}"`);
+    }
+    if (type === 'DIVIDEND' && price < 0) {
+      throw new Error(`Row ${rowNum}: Dividend payout must be non-negative. Found: "${priceVal}"`);
     }
 
     const dateParts = dateVal.split(/[-/.]/);
@@ -138,7 +147,7 @@ export function importTransactionsFromCSV(csvText) {
 }
 
 export function exportTransactionsAsCSV(transactions, portfolioName) {
-  let csvContent = "Date,Type,Symbol,Quantity,Price,Fee,Account\r\n";
+  let csvContent = "Date,Type,Symbol,Quantity,Price,Fee/Withholding Tax,Account\r\n";
   transactions.forEach(tx => {
     const d = new Date(tx.timestamp);
     const dd = String(d.getDate()).padStart(2, '0');
@@ -183,7 +192,7 @@ export function validateCSVImport(importedTxs, portfolios, activePortfolioId) {
     for (const tx of combined) {
       if (tx.type === 'BUY') {
         simHoldings[tx.ticker] = (simHoldings[tx.ticker] || 0) + tx.shares;
-      } else {
+      } else if (tx.type === 'SELL') {
         const owned = simHoldings[tx.ticker] || 0;
         if (owned + 1e-9 < tx.shares) {
           const dateStr = new Date(tx.timestamp).toLocaleDateString();
@@ -191,6 +200,8 @@ export function validateCSVImport(importedTxs, portfolios, activePortfolioId) {
         }
         simHoldings[tx.ticker] = owned - tx.shares;
         if (simHoldings[tx.ticker] < 1e-9) delete simHoldings[tx.ticker];
+      } else if (tx.type === 'DIVIDEND') {
+        // Dividend transactions do not reduce share balances
       }
     }
   }

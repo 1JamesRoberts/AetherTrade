@@ -269,8 +269,14 @@ export default function PortfolioManager({
     setSearchQuery(sym);
     setShowDropdown(false);
     const livePrice = stock.price || stocks[sym]?.price;
-    if (livePrice) {
+    if (livePrice && txType !== 'DIVIDEND') {
       setPrice(livePrice);
+    }
+    if (txType === 'DIVIDEND') {
+      const owned = activePortfolio.holdings[sym]?.shares;
+      if (owned && owned > 0) {
+        setShares(parseFloat(Number(owned).toFixed(4)));
+      }
     }
     if (onFetchPrice) {
       const fetched = await onFetchPrice(sym);
@@ -288,8 +294,14 @@ export default function PortfolioManager({
       setShowDropdown(false);
       const existing = stocks[customTicker];
       const livePrice = existing?.price;
-      if (livePrice) {
+      if (livePrice && txType !== 'DIVIDEND') {
         setPrice(livePrice);
+      }
+      if (txType === 'DIVIDEND') {
+        const owned = activePortfolio.holdings[customTicker]?.shares;
+        if (owned && owned > 0) {
+          setShares(parseFloat(Number(owned).toFixed(4)));
+        }
       }
       if (onFetchPrice) {
         const fetched = await onFetchPrice(customTicker);
@@ -324,13 +336,13 @@ export default function PortfolioManager({
 
   useEffect(() => {
     let active = true;
-    if (selectedTicker && stocks[selectedTicker]?.price) {
+    if (selectedTicker && stocks[selectedTicker]?.price && txType !== 'DIVIDEND') {
       Promise.resolve().then(() => {
         if (active) setPrice(stocks[selectedTicker].price);
       });
     }
     return () => { active = false; };
-  }, [selectedTicker, stocks]);
+  }, [selectedTicker, stocks, txType]);
 
   // Transaction fields inputs conversions
   const cleanFloat = (val) => {
@@ -345,7 +357,7 @@ export default function PortfolioManager({
     setSearchQuery(tx.ticker);
     setTxType(tx.type || 'BUY');
     setShares(parseFloat(Number(tx.shares || 0).toFixed(6)));
-    setPrice(parseFloat(Number(tx.price || 0).toFixed(2)));
+    setPrice(parseFloat(Number(tx.price || 0).toFixed(4)));
     setFees(tx.fees !== undefined ? parseFloat(tx.fees) || 0 : 0);
     if (tx.account) setAccountName(tx.account);
     if (tx.timestamp) {
@@ -376,7 +388,7 @@ export default function PortfolioManager({
     }
 
     const stockData = stocks[selectedTicker];
-    if (!stockData || !stockData.price || stockData.price <= 0) {
+    if (txType !== 'DIVIDEND' && (!stockData || !stockData.price || stockData.price <= 0)) {
       showNotification(`"${selectedTicker}" does not exist or has no valid price data. Please check the symbol.`, 'error');
       return;
     }
@@ -389,12 +401,12 @@ export default function PortfolioManager({
       alert("Please enter a valid quantity of shares.");
       return;
     }
-    if (isNaN(pricePerShare) || pricePerShare <= 0) {
-      alert("Please enter a valid price per share.");
+    if (isNaN(pricePerShare) || (txType !== 'DIVIDEND' && pricePerShare <= 0) || (txType === 'DIVIDEND' && pricePerShare < 0)) {
+      alert(txType === 'DIVIDEND' ? "Please enter a valid non-negative dividend payout per share." : "Please enter a valid price per share.");
       return;
     }
     if (isNaN(txFees) || txFees < 0) {
-      alert("Please enter a valid non-negative trading fee.");
+      alert("Please enter a valid non-negative fee/tax amount.");
       return;
     }
 
@@ -721,21 +733,50 @@ export default function PortfolioManager({
             </div>
           )}
 
-          {/* Order Type Toggle (BUY / SELL) */}
+          {/* Order Type Toggle (BUY / SELL / DIVIDEND) */}
           <div className="tx-type-toggle-group">
             <button
               type="button"
-              onClick={() => setTxType('BUY')}
+              onClick={() => {
+                setTxType('BUY');
+                if (selectedTicker && stocks[selectedTicker]?.price) {
+                  setPrice(stocks[selectedTicker].price);
+                } else if (price < 1) {
+                  setPrice(150.00);
+                }
+              }}
               className={`tx-type-btn buy ${txType === 'BUY' ? 'active' : ''}`}
             >
               <i className="fa-solid fa-arrow-trend-up"></i> BUY
             </button>
             <button
               type="button"
-              onClick={() => setTxType('SELL')}
+              onClick={() => {
+                setTxType('SELL');
+                if (selectedTicker && stocks[selectedTicker]?.price) {
+                  setPrice(stocks[selectedTicker].price);
+                } else if (price < 1) {
+                  setPrice(150.00);
+                }
+              }}
               className={`tx-type-btn sell ${txType === 'SELL' ? 'active' : ''}`}
             >
               <i className="fa-solid fa-arrow-trend-down"></i> SELL
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTxType('DIVIDEND');
+                if (selectedTicker && activePortfolio.holdings[selectedTicker]?.shares > 0) {
+                  setShares(parseFloat(Number(activePortfolio.holdings[selectedTicker].shares).toFixed(4)));
+                }
+                if (price > 20) {
+                  setPrice(0.50);
+                }
+              }}
+              className={`tx-type-btn dividend ${txType === 'DIVIDEND' ? 'active' : ''}`}
+            >
+              <i className="fa-solid fa-hand-holding-dollar"></i> DIVIDEND
             </button>
           </div>
 
@@ -808,6 +849,7 @@ export default function PortfolioManager({
                   );
                 })}
 
+                {/* Custom Add Symbol Row */}
                 <div
                   onClick={handleAddCustomSymbol}
                   onMouseEnter={() => setActiveSuggestionIndex(searchResults.length)}
@@ -847,7 +889,7 @@ export default function PortfolioManager({
           {/* Transaction Inputs Grid */}
           <div className="tx-fields-grid">
             <div className="tx-field">
-              <label htmlFor="txShares">Shares Quantity</label>
+              <label htmlFor="txShares">{txType === 'DIVIDEND' ? 'Holding Shares (at Payout)' : 'Shares Quantity'}</label>
               <div className="field-input-wrapper">
                 <input
                   id="txShares"
@@ -864,7 +906,7 @@ export default function PortfolioManager({
             </div>
 
             <div className="tx-field">
-              <label htmlFor="txPrice">Execution Price</label>
+              <label htmlFor="txPrice">{txType === 'DIVIDEND' ? 'Dividend Payout Per Share' : 'Execution Price'}</label>
               <div className="field-input-wrapper">
                 <span className="field-prefix">{getCurrencySymbol(selectedCurr)}</span>
                 <input
@@ -872,9 +914,9 @@ export default function PortfolioManager({
                   type="number"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  min="0.01"
-                  step="0.01"
-                  placeholder="150.00"
+                  min="0"
+                  step="any"
+                  placeholder={txType === 'DIVIDEND' ? "0.50" : "150.00"}
                   className="tabular-nums"
                 />
               </div>
@@ -892,7 +934,7 @@ export default function PortfolioManager({
             </div>
 
             <div className="tx-field">
-              <label htmlFor="txFees">Brokerage Fees</label>
+              <label htmlFor="txFees">{txType === 'DIVIDEND' ? 'Withholding Tax / Fee' : 'Brokerage Fees'}</label>
               <div className="field-input-wrapper">
                 <span className="field-prefix">{getCurrencySymbol(selectedCurr)}</span>
                 <input
@@ -901,7 +943,7 @@ export default function PortfolioManager({
                   value={fees}
                   onChange={(e) => setFees(e.target.value)}
                   min="0"
-                  step="0.01"
+                  step="any"
                   placeholder="0.00"
                   className="tabular-nums"
                 />
@@ -924,13 +966,13 @@ export default function PortfolioManager({
           {/* Live Calculation Estimation Banner */}
           <div className="tx-estimate-banner">
             <div className="estimate-row">
-              <span className="estimate-label">Gross Value:</span>
+              <span className="estimate-label">{txType === 'DIVIDEND' ? 'Gross Dividend:' : 'Gross Value:'}</span>
               <span className="estimate-val tabular-nums">{formatMoney(gross, selectedCurr)}</span>
             </div>
             <div className="estimate-row total-row">
-              <span className="estimate-label">Net Settlement Total:</span>
-              <span className={`estimate-val total-val tabular-nums ${txType === 'BUY' ? 'buy' : 'sell'}`}>
-                {formatMoney(net, selectedCurr)}
+              <span className="estimate-label">{txType === 'DIVIDEND' ? 'Net Dividend Income:' : 'Net Settlement Total:'}</span>
+              <span className={`estimate-val total-val tabular-nums ${txType.toLowerCase()}`}>
+                {txType === 'DIVIDEND' ? '+' : ''}{formatMoney(net, selectedCurr)}
               </span>
             </div>
           </div>
@@ -940,10 +982,18 @@ export default function PortfolioManager({
             type="button"
             onClick={handleRecordTransaction}
             id="btnRecordTx"
-            className={`btn-record-tx ${txType === 'BUY' ? 'buy' : 'sell'} ${editingTxIndex !== null ? 'editing' : ''}`}
+            className={`btn-record-tx ${txType.toLowerCase()} ${editingTxIndex !== null ? 'editing' : ''}`}
           >
-            <i className={`fa-solid ${editingTxIndex !== null ? 'fa-floppy-disk' : txType === 'BUY' ? 'fa-circle-plus' : 'fa-circle-minus'}`}></i>
-            <span>{editingTxIndex !== null ? 'Save Changes' : txType === 'BUY' ? 'Record Buy Order' : 'Record Sell Order'}</span>
+            <i className={`fa-solid ${editingTxIndex !== null ? 'fa-floppy-disk' : txType === 'BUY' ? 'fa-circle-plus' : txType === 'SELL' ? 'fa-circle-minus' : 'fa-hand-holding-dollar'}`}></i>
+            <span>
+              {editingTxIndex !== null
+                ? 'Save Changes'
+                : txType === 'BUY'
+                ? 'Record Buy Order'
+                : txType === 'SELL'
+                ? 'Record Sell Order'
+                : 'Record Dividend Payout'}
+            </span>
           </button>
         </div>
       ) : (
@@ -987,8 +1037,8 @@ export default function PortfolioManager({
                         </div>
                         <div className="ledger-meta-row tabular-nums">
                           <span>Gross: {formatMoney(grossVal, txCurr)}</span>
-                          <span>Fee: {formatMoney(txFees, txCurr)}</span>
-                          <span>Net: <strong className={tx.type === 'BUY' ? 'text-green' : 'text-red'}>{formatMoney(netVal, txCurr)}</strong></span>
+                          <span>{tx.type === 'DIVIDEND' ? 'Tax/Fee' : 'Fee'}: {formatMoney(txFees, txCurr)}</span>
+                          <span>Net: <strong className={tx.type === 'DIVIDEND' ? 'text-purple' : tx.type === 'BUY' ? 'text-green' : 'text-red'}>{tx.type === 'DIVIDEND' ? '+' : ''}{formatMoney(netVal, txCurr)}</strong></span>
                           {accountStr && <span className="account-tag">{accountStr}</span>}
                         </div>
                       </div>

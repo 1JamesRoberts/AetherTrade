@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || '';
+const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || '';
 
 const isConfigured = 
   supabaseUrl && 
@@ -19,10 +19,10 @@ class MockQueryBuilder {
   select(_columns) {
     void _columns;
     if (this.table === 'portfolios') {
-      const local = localStorage.getItem('aethertrade_portfolios_list');
+      const local = typeof localStorage !== 'undefined' ? localStorage.getItem('aethertrade_portfolios_list') : null;
       this.dataToReturn = local ? JSON.parse(local) : [];
     } else if (this.table === 'transactions') {
-      const localPortfolios = localStorage.getItem('aethertrade_portfolios_list');
+      const localPortfolios = typeof localStorage !== 'undefined' ? localStorage.getItem('aethertrade_portfolios_list') : null;
       const portfolios = localPortfolios ? JSON.parse(localPortfolios) : [];
       const txs = [];
       portfolios.forEach(p => {
@@ -43,11 +43,11 @@ class MockQueryBuilder {
       });
       this.dataToReturn = txs;
     } else if (this.table === 'watchlists') {
-      const local = localStorage.getItem('aethertrade_watchlist');
+      const local = typeof localStorage !== 'undefined' ? localStorage.getItem('aethertrade_watchlist') : null;
       const tickers = local ? JSON.parse(local) : ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOG', 'AMZN'];
       this.dataToReturn = [{ user_id: 'mock-user-id', tickers }];
     } else if (this.table === 'chart_annotations') {
-      const local = localStorage.getItem('aethertrade_support_resistance');
+      const local = typeof localStorage !== 'undefined' ? localStorage.getItem('aethertrade_support_resistance') : null;
       const lines_map = local ? JSON.parse(local) : {};
       this.dataToReturn = [{ user_id: 'mock-user-id', lines_map }];
     }
@@ -118,7 +118,7 @@ class MockQueryBuilder {
 class MockAuth {
   constructor() {
     this.listeners = new Set();
-    const savedSession = localStorage.getItem('aethertrade_mock_session');
+    const savedSession = typeof localStorage !== 'undefined' ? localStorage.getItem('aethertrade_mock_session') : null;
     this.session = savedSession ? JSON.parse(savedSession) : null;
   }
 
