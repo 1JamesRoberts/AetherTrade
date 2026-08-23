@@ -3298,16 +3298,22 @@ input:checked+.slider.round:before {
   color: var(--text-muted);
 }
 
+.portfolio-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .tx-fields-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 14px;
 }
 
 .tx-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .tx-field label {
@@ -3350,7 +3356,7 @@ input:checked+.slider.round:before {
   background: rgba(13, 19, 33, 0.8);
   border: 1px solid var(--border-color);
   color: #ffffff;
-  padding: 7px 10px;
+  padding: 9px 12px;
   border-radius: var(--radius-sm);
   font-size: 12px;
   font-family: var(--font-mono);
@@ -3378,8 +3384,8 @@ input:checked+.slider.round:before {
 .tx-estimate-banner {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 12px 14px;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
@@ -3395,7 +3401,7 @@ input:checked+.slider.round:before {
 
 .estimate-row.total-row {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 4px;
+  padding-top: 6px;
   margin-top: 2px;
   font-weight: 700;
   color: #ffffff;
