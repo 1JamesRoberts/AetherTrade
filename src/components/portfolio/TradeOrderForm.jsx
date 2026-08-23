@@ -31,6 +31,8 @@ export default function TradeOrderForm({
   const [selectedTicker, setSelectedTicker] = useState(null);
   const [txType, setTxType] = useState('BUY'); // 'BUY' | 'SELL' | 'DIVIDEND'
   const [shares, setShares] = useState(10);
+  // For DIVIDEND mode: tracks the "total dividend received" amount the user types
+  const [dividendTotal, setDividendTotal] = useState(0.00);
   const [price, setPrice] = useState(185.50);
   const [txDate, setTxDate] = useState(getTodayLocalDate);
   const [fees, setFees] = useState(0.00);
@@ -62,9 +64,16 @@ export default function TradeOrderForm({
     if (editingTxIndex !== null && editingTx) {
       setSelectedTicker(editingTx.ticker);
       setSearchQuery(editingTx.ticker);
-      setTxType(editingTx.type || 'BUY');
-      setShares(parseFloat(Number(editingTx.shares || 0).toFixed(6)));
-      setPrice(parseFloat(Number(editingTx.price !== undefined ? editingTx.price : 0).toFixed(4)));
+      const editType = editingTx.type || 'BUY';
+      setTxType(editType);
+      if (editType === 'DIVIDEND') {
+        // Stored as shares=1, price=totalAmount — restore the total for the UI
+        const storedTotal = parseFloat(Number(editingTx.price !== undefined ? editingTx.price : 0).toFixed(4));
+        setDividendTotal(storedTotal);
+      } else {
+        setShares(parseFloat(Number(editingTx.shares || 0).toFixed(6)));
+        setPrice(parseFloat(Number(editingTx.price !== undefined ? editingTx.price : 0).toFixed(4)));
+      }
       setFees(editingTx.fees !== undefined ? parseFloat(editingTx.fees) || 0 : 0);
       if (editingTx.account) setAccountName(editingTx.account);
       if (editingTx.timestamp) {
@@ -313,16 +322,61 @@ export default function TradeOrderForm({
       return;
     }
 
+    const txFees = cleanFloat(fees) || 0;
+
+    if (txType === 'DIVIDEND') {
+      // DIVIDEND: user enters the total gross amount directly
+      const totalDividend = cleanFloat(dividendTotal);
+      if (isNaN(totalDividend) || totalDividend < 0) {
+        alert("Please enter a valid non-negative total dividend amount.");
+        return;
+      }
+      if (isNaN(txFees) || txFees < 0) {
+        alert("Please enter a valid non-negative fee/tax amount.");
+        return;
+      }
+      if (txDate) {
+        const selectedDate = new Date(txDate + 'T00:00:00');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (selectedDate > today) {
+          alert("Invalid Transaction Date: Transactions cannot be recorded with a future date.");
+          return;
+        }
+      }
+      const timestamp = txDate ? new Date(txDate + 'T00:00:00').getTime() : Date.now();
+      // Store shares=1, price=totalDividend so gross = 1 * totalDividend in rebuildPortfolioHoldings
+      const finalTxData = {
+        timestamp,
+        ticker: selectedTicker,
+        type: 'DIVIDEND',
+        shares: 1,
+        price: totalDividend,
+        fees: txFees,
+        account: accountName.trim() || 'Default'
+      };
+      if (editingTxIndex !== null && onEditTransaction) {
+        onEditTransaction(activePortfolio.id, editingTxIndex, finalTxData);
+        onCancelEdit?.();
+      } else if (onAddTransaction) {
+        onAddTransaction(activePortfolio.id, finalTxData);
+      }
+      setDividendTotal(0.00);
+      setFees(0.00);
+      setSearchQuery('');
+      setSelectedTicker(null);
+      return;
+    }
+
     const sharesQty = cleanFloat(shares);
     const pricePerShare = cleanFloat(price);
-    const txFees = cleanFloat(fees) || 0;
 
     if (isNaN(sharesQty) || sharesQty <= 0) {
       alert("Please enter a valid quantity of shares.");
       return;
     }
-    if (isNaN(pricePerShare) || (txType !== 'DIVIDEND' && pricePerShare <= 0) || (txType === 'DIVIDEND' && pricePerShare < 0)) {
-      alert(txType === 'DIVIDEND' ? "Please enter a valid non-negative dividend payout per share." : "Please enter a valid price per share.");
+    if (isNaN(pricePerShare) || pricePerShare <= 0) {
+      alert("Please enter a valid price per share.");
       return;
     }
     if (isNaN(txFees) || txFees < 0) {
@@ -378,7 +432,8 @@ export default function TradeOrderForm({
   const qtyVal = cleanFloat(shares) || 0;
   const priceVal = cleanFloat(price) || 0;
   const feeVal = cleanFloat(fees) || 0;
-  const gross = qtyVal * priceVal;
+  const divTotalVal = cleanFloat(dividendTotal) || 0;
+  const gross = txType === 'DIVIDEND' ? divTotalVal : qtyVal * priceVal;
   const net = txType === 'BUY' ? gross + feeVal : Math.max(0, gross - feeVal);
 
   return (
@@ -444,12 +499,7 @@ export default function TradeOrderForm({
           onClick={() => {
             setTxType('DIVIDEND');
             if (editingTxIndex === null) {
-              if (selectedTicker && activePortfolio?.holdings?.[selectedTicker]?.shares > 0) {
-                setShares(parseFloat(Number(activePortfolio.holdings[selectedTicker].shares).toFixed(4)));
-              }
-              if (price > 20) {
-                setPrice(0.50);
-              }
+              setDividendTotal(0.00);
             }
           }}
           className={`tx-type-btn dividend ${txType === 'DIVIDEND' ? 'active' : ''}`}
@@ -566,39 +616,61 @@ export default function TradeOrderForm({
 
       {/* Transaction Inputs Grid */}
       <div className="tx-fields-grid">
-        <div className="tx-field">
-          <label htmlFor="txShares">{txType === 'DIVIDEND' ? 'Holding Shares (at Payout)' : 'Shares Quantity'}</label>
-          <div className="field-input-wrapper">
-            <input
-              id="txShares"
-              type="number"
-              value={shares}
-              onChange={(e) => setShares(e.target.value)}
-              min="0.000001"
-              step="any"
-              placeholder="10"
-              className="tabular-nums"
-            />
-            <span className="field-suffix">SH</span>
+        {txType !== 'DIVIDEND' && (
+          <div className="tx-field">
+            <label htmlFor="txShares">Shares Quantity</label>
+            <div className="field-input-wrapper">
+              <input
+                id="txShares"
+                type="number"
+                value={shares}
+                onChange={(e) => setShares(e.target.value)}
+                min="0.000001"
+                step="any"
+                placeholder="10"
+                className="tabular-nums"
+              />
+              <span className="field-suffix">SH</span>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="tx-field">
-          <label htmlFor="txPrice">{txType === 'DIVIDEND' ? 'Dividend Payout Per Share' : 'Execution Price'}</label>
-          <div className="field-input-wrapper">
-            <span className="field-prefix">{getCurrencySymbol(selectedCurr)}</span>
-            <input
-              id="txPrice"
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              min="0"
-              step="any"
-              placeholder={txType === 'DIVIDEND' ? "0.50" : "150.00"}
-              className="tabular-nums"
-            />
+        {txType === 'DIVIDEND' ? (
+          <div className="tx-field">
+            <label htmlFor="txDividendTotal">Total Dividend Received</label>
+            <div className="field-input-wrapper">
+              <span className="field-prefix">{getCurrencySymbol(selectedCurr)}</span>
+              <input
+                id="txDividendTotal"
+                type="number"
+                value={dividendTotal}
+                onChange={(e) => setDividendTotal(e.target.value)}
+                min="0"
+                step="any"
+                placeholder="0.00"
+                className="tabular-nums"
+                autoFocus
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="tx-field">
+            <label htmlFor="txPrice">Execution Price</label>
+            <div className="field-input-wrapper">
+              <span className="field-prefix">{getCurrencySymbol(selectedCurr)}</span>
+              <input
+                id="txPrice"
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                min="0"
+                step="any"
+                placeholder="150.00"
+                className="tabular-nums"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="tx-field">
           <label htmlFor="txDate">Transaction Date</label>

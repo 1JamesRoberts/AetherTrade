@@ -116,8 +116,9 @@ export default function TransactionLedger({
           ) : (
             [...filteredTransactions].reverse().map(({ tx, originalIndex }) => {
               const txCurr = detectTickerCurrency(tx.ticker);
-              const sharesNum = parseFloat(tx.shares) || 0;
               const priceNum = parseFloat(tx.price) || 0;
+              const sharesNum = parseFloat(tx.shares) || 0;
+              // DIVIDEND rows are stored as shares=1, price=totalAmount (direct entry)
               const grossVal = sharesNum * priceNum;
               const txFees = parseFloat(tx.fees) || 0;
               const netVal = tx.type === 'BUY' ? (grossVal + txFees) : Math.max(0, grossVal - txFees);
@@ -134,7 +135,10 @@ export default function TransactionLedger({
                         {tx.type || 'BUY'}
                       </span>
                       <span className="ledger-shares-ticker tabular-nums">
-                        <strong>{parseFloat(sharesNum.toFixed(6))} {tx.ticker}</strong> @ {formatMoney(priceNum, txCurr)}
+                        {tx.type === 'DIVIDEND'
+                          ? <strong>Dividend from {tx.ticker}</strong>
+                          : <><strong>{parseFloat(sharesNum.toFixed(6))} {tx.ticker}</strong> @ {formatMoney(priceNum, txCurr)}</>
+                        }
                       </span>
                     </div>
                     <div className="ledger-meta-row tabular-nums">
