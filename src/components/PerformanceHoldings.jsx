@@ -503,8 +503,10 @@ export default function PerformanceHoldings({
         </div>
         <div className={`metric-card ${netProfit >= 0 ? 'card-green' : 'card-red'}`}>
           <div className="metric-card-header"><span className="title">Unrealized P&L</span><i className={`fa-solid ${netProfit >= 0 ? 'fa-arrow-trend-up text-green' : 'fa-arrow-trend-down text-red'}`}></i></div>
-          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>{netProfit >= 0 ? '+' : ''}{formatMoney(netProfit, baseCurrency)}</div>
-          <div className="metric-subtext tabular-nums">Open Returns: {netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%</div>
+          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>
+            {netProfit >= 0 ? '+' : ''}{formatMoney(netProfit, baseCurrency)} ({netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%)
+          </div>
+          <div className="metric-subtext">Open positions return on cost</div>
         </div>
         <div className={`metric-card ${realizedPL >= 0 ? 'card-green' : 'card-red'}`}>
           <div className="metric-card-header"><span className="title">Realized P&L</span><i className="fa-solid fa-sack-dollar text-cyan"></i></div>

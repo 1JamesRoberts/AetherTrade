@@ -336,13 +336,13 @@ export default function PortfolioManager({
 
   useEffect(() => {
     let active = true;
-    if (selectedTicker && stocks[selectedTicker]?.price && txType !== 'DIVIDEND') {
+    if (editingTxIndex === null && selectedTicker && stocks[selectedTicker]?.price && txType !== 'DIVIDEND') {
       Promise.resolve().then(() => {
-        if (active) setPrice(stocks[selectedTicker].price);
+        if (active && editingTxIndex === null) setPrice(stocks[selectedTicker].price);
       });
     }
     return () => { active = false; };
-  }, [selectedTicker, stocks, txType]);
+  }, [selectedTicker, stocks, txType, editingTxIndex]);
 
   // Transaction fields inputs conversions
   const cleanFloat = (val) => {
@@ -357,7 +357,7 @@ export default function PortfolioManager({
     setSearchQuery(tx.ticker);
     setTxType(tx.type || 'BUY');
     setShares(parseFloat(Number(tx.shares || 0).toFixed(6)));
-    setPrice(parseFloat(Number(tx.price || 0).toFixed(4)));
+    setPrice(parseFloat(Number(tx.price !== undefined ? tx.price : 0).toFixed(4)));
     setFees(tx.fees !== undefined ? parseFloat(tx.fees) || 0 : 0);
     if (tx.account) setAccountName(tx.account);
     if (tx.timestamp) {
@@ -739,10 +739,12 @@ export default function PortfolioManager({
               type="button"
               onClick={() => {
                 setTxType('BUY');
-                if (selectedTicker && stocks[selectedTicker]?.price) {
-                  setPrice(stocks[selectedTicker].price);
-                } else if (price < 1) {
-                  setPrice(150.00);
+                if (editingTxIndex === null) {
+                  if (selectedTicker && stocks[selectedTicker]?.price) {
+                    setPrice(stocks[selectedTicker].price);
+                  } else if (price < 1) {
+                    setPrice(150.00);
+                  }
                 }
               }}
               className={`tx-type-btn buy ${txType === 'BUY' ? 'active' : ''}`}
@@ -753,10 +755,12 @@ export default function PortfolioManager({
               type="button"
               onClick={() => {
                 setTxType('SELL');
-                if (selectedTicker && stocks[selectedTicker]?.price) {
-                  setPrice(stocks[selectedTicker].price);
-                } else if (price < 1) {
-                  setPrice(150.00);
+                if (editingTxIndex === null) {
+                  if (selectedTicker && stocks[selectedTicker]?.price) {
+                    setPrice(stocks[selectedTicker].price);
+                  } else if (price < 1) {
+                    setPrice(150.00);
+                  }
                 }
               }}
               className={`tx-type-btn sell ${txType === 'SELL' ? 'active' : ''}`}
@@ -767,11 +771,13 @@ export default function PortfolioManager({
               type="button"
               onClick={() => {
                 setTxType('DIVIDEND');
-                if (selectedTicker && activePortfolio.holdings[selectedTicker]?.shares > 0) {
-                  setShares(parseFloat(Number(activePortfolio.holdings[selectedTicker].shares).toFixed(4)));
-                }
-                if (price > 20) {
-                  setPrice(0.50);
+                if (editingTxIndex === null) {
+                  if (selectedTicker && activePortfolio.holdings[selectedTicker]?.shares > 0) {
+                    setShares(parseFloat(Number(activePortfolio.holdings[selectedTicker].shares).toFixed(4)));
+                  }
+                  if (price > 20) {
+                    setPrice(0.50);
+                  }
                 }
               }}
               className={`tx-type-btn dividend ${txType === 'DIVIDEND' ? 'active' : ''}`}

@@ -3413,6 +3413,12 @@ input:checked+.slider.round:before {
   font-size: 13px;
 }
 
+.estimate-val.total-val.dividend {
+  color: #a855f7;
+  font-weight: 800;
+  font-size: 13px;
+}
+
 .btn-record-tx {
   width: 100%;
   padding: 10px 16px;

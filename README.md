@@ -18,8 +18,10 @@ AetherTrade is a state-of-the-art financial terminal featuring interactive Tradi
 - **Wall Street Analyst Targets & Consensus**: Consensus Rating badge (`Strong Buy`, `Buy`, `Hold`, `Sell`), 1Y Average Target Price with Implied Upside/Downside %, visual price target range track, and Buy/Hold/Sell analyst opinion breakdown bar.
 
 ### 💼 Portfolio Management & Tracking
-- **Transaction Engine**: Record Buy/Sell transactions, execution prices, quantities, and broker fees with dynamic real-time average cost basis and realized/unrealized P&L calculations.
-- **CSV Import & Export**: Seamlessly import existing transaction ledgers (append or overwrite mode) and export portfolio holdings.
+- **Transaction Engine**: Record `BUY`, `SELL`, and `DIVIDEND` transactions, execution prices, quantities, and broker/withholding fees with dynamic real-time average cost basis and realized/unrealized P&L calculations.
+- **Dividend Income & Total Return (ROI)**: Track cumulative cash dividend payouts received per holding and portfolio-wide, fully integrated into Total Return ROI calculations ($\text{Total Return} = \text{Unrealized P\&L} + \text{Realized P\&L} + \text{Dividend Income}$).
+- **Multi-Currency Support**: Real-time FX conversion between USD and THB base currencies for holdings, closed gains, and dividend cash flows.
+- **CSV Import & Export**: Seamlessly import existing transaction ledgers (with automatic `DIVIDEND` synonym detection and Fee/Withholding Tax mapping) and export full audit records.
 - **Flexible Auth & Smart Offline Fallback**: Authenticate via Supabase (OAuth Google/GitHub or Email) or run completely offline with instant browser `localStorage` persistence.
 
 ---

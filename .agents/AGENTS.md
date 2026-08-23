@@ -42,6 +42,14 @@ This document outlines the rules, style guidelines, behavioral constraints, and 
    - In lists (e.g., watchlist deletions), prevent event bubbling (e.g., using `e.stopPropagation()`) so that deleting an item does not trigger a selection change or re-charting.
 4. **Active Asset Fallback**:
    - If the currently active/charted stock symbol is deleted from the watchlist, the active charted asset must automatically fall back to the first remaining asset in the watchlist.
+5. **Portfolio & Dividend Transaction Modeling**:
+   - Supported transaction types: `BUY`, `SELL`, and `DIVIDEND`.
+   - In `rebuildPortfolioHoldings`:
+     - Explicitly branch each transaction type (`BUY`, `SELL`, `DIVIDEND`). Never use binary `if/else` that assumes non-BUY transactions are sales.
+     - **Net Dividend Formula**: $\text{Gross} = \text{shares} \times \text{price}$, $\text{Net} = \max(0, \text{Gross} - \text{fees})$.
+     - **Orphan Dividend Retention**: Maintain `dividendsByTicker` and `totalDividends` at the portfolio level so dividend earnings persist even when positions are fully sold (`shares = 0`).
+     - **Multi-Currency Conversion**: When aggregating realized P&L and dividend income across currencies (`USD` and `THB`), always convert to the active portfolio's `baseCurrency` using live FX rate (`USDTHB=X`).
+   - Database check constraint must always include `('BUY', 'SELL', 'DIVIDEND')`.
 
 ---
 
