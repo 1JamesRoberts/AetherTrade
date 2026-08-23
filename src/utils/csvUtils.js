@@ -32,6 +32,57 @@ function parseCSV(text) {
   return lines;
 }
 
+function parseCSVDate(dateVal, rowNum) {
+  if (!dateVal || typeof dateVal !== 'string') {
+    throw new Error(`Row ${rowNum}: Date is missing.`);
+  }
+  const clean = dateVal.trim();
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  // 1. ISO or standard format: YYYY-MM-DD or YYYY/MM/DD
+  const isoMatch = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const m = parseInt(isoMatch[2], 10) - 1;
+    const d = parseInt(isoMatch[3], 10);
+    const dateObj = new Date(y, m, d);
+    if (isNaN(dateObj.getTime())) throw new Error(`Row ${rowNum}: Date "${dateVal}" is invalid.`);
+    if (dateObj > today) throw new Error(`Row ${rowNum}: Date is in the future.`);
+    return dateObj;
+  }
+
+  // 2. D/M/YYYY or DD/MM/YYYY or DD-MM-YYYY (or D/M/YY)
+  const parts = clean.split(/[-/.]/);
+  if (parts.length >= 3) {
+    let d = parseInt(parts[0], 10);
+    let m = parseInt(parts[1], 10) - 1;
+    let y = parseInt(parts[2], 10);
+    if (y < 100) y += 2000; // Handle 2-digit years e.g. 25 -> 2025
+
+    // If month > 11 and day <= 12, check if swapped (MM/DD/YYYY)
+    if (m > 11 && d <= 12) {
+      const temp = d - 1;
+      d = m + 1;
+      m = temp;
+    }
+
+    const dateObj = new Date(y, m, d);
+    if (isNaN(dateObj.getTime())) throw new Error(`Row ${rowNum}: Date "${dateVal}" is invalid.`);
+    if (dateObj > today) throw new Error(`Row ${rowNum}: Date is in the future.`);
+    return dateObj;
+  }
+
+  // 3. General Date.parse fallback
+  const parsed = new Date(clean);
+  if (!isNaN(parsed.getTime())) {
+    if (parsed > today) throw new Error(`Row ${rowNum}: Date is in the future.`);
+    return parsed;
+  }
+
+  throw new Error(`Row ${rowNum}: Date format must be DD/MM/YYYY or YYYY-MM-DD. Found: "${dateVal}"`);
+}
+
 export function importTransactionsFromCSV(csvText) {
   const rows = parseCSV(csvText);
   if (rows.length < 2) {
@@ -39,25 +90,41 @@ export function importTransactionsFromCSV(csvText) {
   }
 
   const headers = rows[0].map(h => h.toLowerCase().trim());
-  const dateIdx = headers.findIndex(h => h.includes("date"));
+  const dateIdx = headers.findIndex(h => h.includes("date") || h.includes("time"));
   const typeIdx = headers.findIndex(h => h.includes("type") || h.includes("transaction") || h.includes("action") || h.includes("side") || h.includes("dividend") || h.includes("income"));
   const symbolIdx = headers.findIndex(h => h.includes("symbol") || h.includes("ticker") || h.includes("stock") || h.includes("etf") || h.includes("asset"));
-  const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("unit") || h.includes("shares"));
+  const qtyIdx = headers.findIndex(h => h.includes("qty") || h.includes("quantity") || h.includes("unit") || h.includes("shares") || h.includes("volume"));
+  
+  // Price per share / unit
   const priceIdx = headers.findIndex(h => 
-    h.includes("price") || 
+    h === "price" ||
+    h === "unit price" ||
+    h === "execution price" ||
     h.includes("amount per") || 
     h.includes("per unit") || 
     h.includes("per share") ||
-    (h.includes("amount") && !h.includes("total") && !h.includes("before"))
+    (h.includes("price") && !h.includes("total"))
   );
+
+  // Total amount / Gross amount (commonly present in broker exports like Dime)
+  const totalIdx = headers.findIndex((h, idx) => 
+    idx !== priceIdx && (
+      h.includes("total") || 
+      h.includes("gross") || 
+      h.includes("net amount") ||
+      h.includes("amount") ||
+      h.includes("value")
+    )
+  );
+
   const feesIdx = headers.findIndex(h => 
     (h.includes("fee") || h.includes("fees") || h.includes("commission") || h.includes("brokerage") || h.includes("tax") || h.includes("charge")) && 
     !h.includes("before")
   );
-  const accountIdx = headers.findIndex(h => h.includes("account") || h.includes("portfolio"));
+  const accountIdx = headers.findIndex(h => h.includes("account") || h.includes("portfolio") || h.includes("broker") || h.includes("platform"));
 
-  if (dateIdx === -1 || typeIdx === -1 || symbolIdx === -1 || qtyIdx === -1 || priceIdx === -1) {
-    throw new Error("CSV Import Failed: Missing required columns.\n\nRequired:\n- Date\n- Type (BUY/SELL/DIVIDEND)\n- Symbol\n- Quantity\n- Price / Amount per unit");
+  if (dateIdx === -1 || typeIdx === -1 || symbolIdx === -1 || (qtyIdx === -1 && totalIdx === -1 && priceIdx === -1)) {
+    throw new Error("CSV Import Failed: Missing required columns.\n\nRequired:\n- Date\n- Type (BUY/SELL/DIVIDEND)\n- Symbol\n- Quantity / Shares (or Total Amount)\n- Price / Total Amount");
   }
 
   const parseNumber = (val) => {
@@ -68,22 +135,21 @@ export function importTransactionsFromCSV(csvText) {
   };
 
   const importedTxs = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (row.length === 0 || (row.length === 1 && row[0] === "")) continue;
 
     const rowNum = i + 1;
-    const dateVal = row[dateIdx];
-    const typeVal = row[typeIdx];
-    const symbolVal = row[symbolIdx];
-    const qtyVal = row[qtyIdx];
-    const priceVal = row[priceIdx];
+    const dateVal = dateIdx !== -1 ? row[dateIdx] : "";
+    const typeVal = typeIdx !== -1 ? row[typeIdx] : "";
+    const symbolVal = symbolIdx !== -1 ? row[symbolIdx] : "";
+    const qtyVal = qtyIdx !== -1 ? row[qtyIdx] : "";
+    const priceVal = priceIdx !== -1 ? row[priceIdx] : "";
+    const totalVal = totalIdx !== -1 ? row[totalIdx] : "";
 
-    if (!dateVal || !typeVal || !symbolVal || !qtyVal || !priceVal) {
-      throw new Error(`Row ${rowNum} contains empty cells.`);
+    if (!dateVal || !typeVal || !symbolVal) {
+      throw new Error(`Row ${rowNum} is missing Date, Type, or Symbol.`);
     }
 
     const ticker = symbolVal.toUpperCase().trim();
@@ -99,30 +165,46 @@ export function importTransactionsFromCSV(csvText) {
       throw new Error(`Row ${rowNum}: Type must be BUY, SELL, or DIVIDEND. Found: "${typeVal}"`);
     }
 
-    const shares = parseNumber(qtyVal);
-    if (shares <= 0) {
-      throw new Error(`Row ${rowNum}: Quantity must be positive. Found: "${qtyVal}"`);
+    let shares = 0;
+    let price = 0;
+
+    if (type === 'DIVIDEND') {
+      // For Dividend: quantity is usually empty in broker sheets, default to 1
+      const parsedQty = parseNumber(qtyVal);
+      shares = parsedQty > 0 ? parsedQty : 1;
+
+      // Check totalVal first (e.g. Total Amount column in Dime), then priceVal
+      const parsedTotal = totalIdx !== -1 && totalVal !== "" ? parseNumber(totalVal) : null;
+      const parsedPrice = priceIdx !== -1 && priceVal !== "" ? parseNumber(priceVal) : null;
+
+      if (parsedTotal !== null && parsedTotal >= 0) {
+        price = parsedTotal;
+        shares = 1; // Direct dividend amount format: shares=1, price=totalAmount
+      } else if (parsedPrice !== null && parsedPrice >= 0) {
+        price = parsedPrice;
+      } else {
+        throw new Error(`Row ${rowNum}: Dividend row is missing dividend amount (Total Amount or Price).`);
+      }
+    } else {
+      // For BUY / SELL
+      shares = parseNumber(qtyVal);
+      if (shares <= 0) {
+        throw new Error(`Row ${rowNum}: Quantity must be positive. Found: "${qtyVal}"`);
+      }
+
+      if (priceIdx !== -1 && priceVal !== "") {
+        price = parseNumber(priceVal);
+      } else if (totalIdx !== -1 && totalVal !== "") {
+        const totalAmount = parseNumber(totalVal);
+        price = shares > 0 ? totalAmount / shares : 0;
+      }
+
+      if (price <= 0) {
+        throw new Error(`Row ${rowNum}: Price must be positive. Found: "${priceVal || totalVal}"`);
+      }
     }
 
-    const price = parseNumber(priceVal);
-    if (type !== 'DIVIDEND' && price <= 0) {
-      throw new Error(`Row ${rowNum}: Price must be positive. Found: "${priceVal}"`);
-    }
-    if (type === 'DIVIDEND' && price < 0) {
-      throw new Error(`Row ${rowNum}: Dividend payout must be non-negative. Found: "${priceVal}"`);
-    }
-
-    const dateParts = dateVal.split(/[-/.]/);
-    if (dateParts.length !== 3) {
-      throw new Error(`Row ${rowNum}: Date format must be DD-MM-YYYY. Found: "${dateVal}"`);
-    }
-    const txDate = new Date(`${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}T00:00:00`);
-    if (isNaN(txDate.getTime())) {
-      throw new Error(`Row ${rowNum}: Date "${dateVal}" is invalid.`);
-    }
-    if (txDate > today) {
-      throw new Error(`Row ${rowNum}: Date is in the future.`);
-    }
+    const txDate = parseCSVDate(dateVal, rowNum);
 
     const feesVal = feesIdx !== -1 ? row[feesIdx] : "0";
     const fees = parseNumber(feesVal);
@@ -130,7 +212,7 @@ export function importTransactionsFromCSV(csvText) {
       throw new Error(`Row ${rowNum}: Fees must be non-negative.`);
     }
 
-    const account = accountIdx !== -1 ? row[accountIdx].trim() : "Default";
+    const account = accountIdx !== -1 && row[accountIdx] ? row[accountIdx].trim() : "Default";
 
     importedTxs.push({
       timestamp: txDate.getTime(),

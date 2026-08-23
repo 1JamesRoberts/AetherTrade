@@ -460,6 +460,10 @@ export default function App() {
       addToast("No transactions to export.", "warning");
       return;
     }
+    const count = port.transactions.length;
+    const confirmed = window.confirm(`Are you sure you want to export ${count} transaction${count === 1 ? '' : 's'} from "${port.name}" to CSV?`);
+    if (!confirmed) return;
+
     exportTransactionsAsCSV(port.transactions, port.name);
     addToast("Transactions exported successfully!", "success");
   };
