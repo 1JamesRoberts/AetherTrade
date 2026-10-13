@@ -1,3 +1,4 @@
+import { isCloudEnabled } from '../lib/supabase.js';
 import { useState } from 'react';
 
 export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
@@ -15,7 +16,7 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
       if (isSignUp) {
         await onSignUp(email, password);
         setError('');
-        alert('Check your email for a confirmation link!');
+        if (isCloudEnabled) alert('Check your email for a confirmation link!');
       } else {
         await onSignIn(email, password);
       }
@@ -47,7 +48,8 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
           </div>
         </div>
 
-        <h2 className="auth-title">{isSignUp ? 'Create Account' : 'Sign In'}</h2>
+        <h2 className="auth-title">{!isCloudEnabled ? 'Open Local Workspace' : isSignUp ? 'Create Account' : 'Sign In'}</h2>
+        {!isCloudEnabled && <p className="auth-toggle">Your data stays in this browser. Email selects a workspace; this mode does not authenticate an account.</p>}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-field">
@@ -60,7 +62,7 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
               required
             />
           </div>
-          <div className="auth-field">
+          {isCloudEnabled && <div className="auth-field">
             <label>Password</label>
             <input
               type="password"
@@ -70,15 +72,16 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
               required
               minLength={6}
             />
-          </div>
+          </div>}
 
           {error && <div className="auth-error">{error}</div>}
 
           <button type="submit" className="auth-submit" disabled={loading}>
-            {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
+            {loading ? 'Please wait...' : !isCloudEnabled ? 'Continue on This Device' : isSignUp ? 'Create Account' : 'Sign In'}
           </button>
         </form>
 
+        {isCloudEnabled && <>
         <div className="auth-divider">
           <span>or continue with</span>
         </div>
@@ -98,6 +101,7 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
             {isSignUp ? 'Sign In' : 'Sign Up'}
           </button>
         </p>
+        </>}
       </div>
     </div>
   );

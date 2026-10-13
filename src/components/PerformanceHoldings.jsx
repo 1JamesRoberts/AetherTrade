@@ -1,3 +1,4 @@
+import { investedCapital } from '../utils/portfolioLedger.js';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import RebalanceStudio from './RebalanceStudio';
@@ -107,7 +108,8 @@ export default function PerformanceHoldings({
 
   // Total Net Return = Open Gains (netProfit) + Closed Gains (realizedPL) + Total Dividend Income
   const totalReturnVal = netProfit + realizedPL + totalDividends;
-  const totalReturnPct = totalCostBasis > 0 ? (totalReturnVal / totalCostBasis) * 100 : 0;
+  const lifetimePurchaseCost = investedCapital(activePortfolio.transactions || [], baseCurrency, fxRate);
+  const totalReturnPct = lifetimePurchaseCost > 0 ? (totalReturnVal / lifetimePurchaseCost) * 100 : 0;
 
   const sortedHoldings = [...rawHoldings].sort((a, b) => {
     let valA = a[sortColumn];
@@ -519,7 +521,7 @@ export default function PerformanceHoldings({
           <div className="metric-subtext">Cumulative cash payouts received</div>
         </div>
         <div className={`metric-card ${totalReturnVal >= 0 ? 'card-green' : 'card-red'}`}>
-          <div className="metric-card-header"><span className="title">Total Return (ROI)</span><i className="fa-solid fa-percent text-cyan"></i></div>
+          <div className="metric-card-header"><span className="title" title="Total gains divided by all purchase costs, including closed positions. Uses current FX; not annualized or cash-flow adjusted.">Total Return (ROI)</span><i className="fa-solid fa-percent text-cyan"></i></div>
           <div className={`metric-val tabular-nums ${totalReturnVal >= 0 ? 'text-green' : 'text-red'}`}>{totalReturnVal >= 0 ? '+' : ''}{formatMoney(totalReturnVal, baseCurrency)} ({totalReturnVal >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)</div>
           <div className="metric-subtext">Capital gains + dividend payouts</div>
         </div>

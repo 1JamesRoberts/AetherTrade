@@ -1,3 +1,4 @@
+import { calculateVolumeData } from '../utils/chartUtils.js';
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { createChart, CrosshairMode, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 import StockInsights from './StockInsights';
@@ -55,24 +56,6 @@ function calculateSMA(data, period = 50) {
     results.push({ time: data[i].time, value: parseFloat((sum / period).toFixed(2)) });
   }
   return results;
-}
-
-function calculateVolumeData(data, rawValues) {
-  if (!data || data.length === 0) return [];
-  return data.map((item, idx) => {
-    const raw = rawValues[idx];
-    let vol = raw && raw.volume ? parseFloat(raw.volume) : null;
-    if (!vol || isNaN(vol)) {
-      const spread = Math.abs(item.high - item.low) || (item.close * 0.002);
-      vol = Math.round(spread * 300000 + 100000 + (idx % 5) * 20000);
-    }
-    const isUp = item.close >= item.open;
-    return {
-      time: item.time,
-      value: vol,
-      color: isUp ? 'rgba(16, 185, 129, 0.45)' : 'rgba(244, 63, 94, 0.45)',
-    };
-  });
 }
 
 export default function ChartContainer({
@@ -179,7 +162,7 @@ export default function ChartContainer({
   const activeStock = {
     ticker: activeTicker,
     name: `${activeTicker} Stock`,
-    price: 150.00,
+    price: 0,
     change: 0.0,
     timeframeChange: 0.0,
     liveCloses: [],
@@ -195,16 +178,10 @@ export default function ChartContainer({
     if (rawValues.length === 0 && activeStock.liveCloses.length > 0) {
       const closes = activeStock.liveCloses;
       const labels = activeStock.liveLabels;
-      dataPoints = closes.map((c, idx) => {
-        const prev = idx > 0 ? closes[idx - 1] : c * 0.985;
-        const o = parseFloat(prev.toFixed(2));
-        const cl = parseFloat(c.toFixed(2));
-        const spread = Math.abs(cl - o) || c * 0.005;
-        const pseudo = Math.abs((Math.sin(idx * 12.9898 + 78.233) * 43758.5453) % 1);
-        const h = parseFloat((Math.max(o, cl) + pseudo * spread * 0.5).toFixed(2));
-        const l = parseFloat((Math.min(o, cl) - pseudo * spread * 0.5).toFixed(2));
-        return { open: o, close: cl, high: h, low: l, datetime: labels[idx] };
-      });
+      // Legacy close-only caches can draw a line, but cannot supply candle OHLC/volume.
+      dataPoints = chartType === 'candle' ? [] : closes.map((close, idx) => ({
+        open: close, close, high: close, low: close, volume: null, datetime: labels[idx]
+      }));
     } else {
       dataPoints = rawValues;
     }
@@ -241,7 +218,8 @@ export default function ChartContainer({
           high: parseFloat(item.high),
           low: parseFloat(item.low),
           close: parseFloat(item.close),
-          value: parseFloat(item.close)
+          value: parseFloat(item.close),
+          volume: item.volume ?? null
         });
       }
     });
@@ -256,7 +234,7 @@ export default function ChartContainer({
 
       if (startTime > 0 && !seenTimes.has(startTime)) {
         return [
-          { time: startTime, open: prevClose, high: prevClose, low: prevClose, close: prevClose, value: prevClose },
+          { time: startTime, open: prevClose, high: prevClose, low: prevClose, close: prevClose, value: prevClose, volume: null },
           ...sorted
         ];
       }
@@ -782,7 +760,8 @@ export default function ChartContainer({
             </h1>
             <div className="stock-metrics">
               <span className="stock-price tabular-nums" id="activePrice" style={activeHoverValue !== null ? { color: 'var(--cyan)' } : {}}>
-                {formatMoney(activeHoverValue !== null ? activeHoverValue : activeStock.price, tickerCurrency)}
+                {activeHoverValue !== null || activeStock.price > 0
+                  ? formatMoney(activeHoverValue !== null ? activeHoverValue : activeStock.price, tickerCurrency) : '--'}
               </span>
               <span className={`stock-trend tabular-nums ${isUp ? 'positive' : 'negative'}`} id="activeChange" title={range === '1D' ? 'Day change relative to Yesterday Close' : `${range} change`}>
                 {isUp ? '+' : ''}

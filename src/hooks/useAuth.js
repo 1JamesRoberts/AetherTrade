@@ -1,21 +1,34 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
+import { migrateLegacyStorage } from '../utils/accountStorage.js';
 
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    let active = true;
+    const receiveSession = session => {
+      if (!active) return;
+      const nextUser = session?.user ?? null;
+      if (nextUser) migrateLegacyStorage(nextUser.id);
+      setUser(nextUser);
       setLoading(false);
-    });
-
+    };
+    // Register first, so a newer sign-in cannot be overwritten by an older session read.
+    let authEventReceived = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      authEventReceived = true;
+      receiveSession(session);
     });
-
-    return () => subscription.unsubscribe();
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) console.warn('Could not restore session:', error);
+      if (!authEventReceived) receiveSession(data?.session);
+    }).catch(error => {
+      console.warn('Could not restore session:', error);
+      if (!authEventReceived) receiveSession(null);
+    });
+    return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
   const signUp = useCallback(async (email, password) => {

@@ -1,3 +1,5 @@
+import { dividendGross } from '../../utils/portfolioLedger.js';
+import { localDateString, parseTransactionDate } from '../../utils/dateUtils.js';
 import { useState, useEffect, useRef } from 'react';
 import {
   detectTickerCurrency,
@@ -17,26 +19,18 @@ export default function TradeOrderForm({
   showNotification,
   onFetchPrice
 }) {
-  // Get today's local date YYYY-MM-DD
-  const getTodayLocalDate = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  // Form states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTicker, setSelectedTicker] = useState(null);
-  const [txType, setTxType] = useState('BUY'); // 'BUY' | 'SELL' | 'DIVIDEND'
-  const [shares, setShares] = useState(10);
-  // For DIVIDEND mode: tracks the "total dividend received" amount the user types
-  const [dividendTotal, setDividendTotal] = useState(0.00);
-  const [price, setPrice] = useState(185.50);
-  const [txDate, setTxDate] = useState(getTodayLocalDate);
-  const [fees, setFees] = useState(0.00);
-  const [accountName, setAccountName] = useState(activePortfolio?.name || 'Primary Portfolio');
+  // The parent remounts the form when its portfolio or edited transaction changes.
+  const [searchQuery, setSearchQuery] = useState(editingTx?.ticker || '');
+  const [selectedTicker, setSelectedTicker] = useState(editingTx?.ticker || null);
+  const [txType, setTxType] = useState(editingTx?.type || 'BUY'); // 'BUY' | 'SELL' | 'DIVIDEND'
+  const [shares, setShares] = useState(Number(editingTx?.shares ?? 10));
+  // For DIVIDEND mode: total gross amount, including per-share imported dividends.
+  const [dividendTotal, setDividendTotal] = useState(editingTx?.type === 'DIVIDEND' ? dividendGross(editingTx) : 0);
+  const [price, setPrice] = useState(Number(editingTx?.price ?? 185.50));
+  const [txDate, setTxDate] = useState(() => localDateString(editingTx?.timestamp));
+  const [fees, setFees] = useState(Number(editingTx?.fees || 0));
+  const [accountName, setAccountName] = useState(editingTx?.account || activePortfolio?.name || 'Primary Portfolio');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Search filter autocomplete
   const [searchResults, setSearchResults] = useState([]);
@@ -52,39 +46,7 @@ export default function TradeOrderForm({
     stocksRef.current = stocks;
   });
 
-  // Sync accountName when active portfolio changes
-  useEffect(() => {
-    if (activePortfolio?.name && editingTxIndex === null) {
-      setAccountName(activePortfolio.name);
-    }
-  }, [activePortfolio?.name, editingTxIndex]);
-
-  // Sync form inputs when editingTx changes
-  useEffect(() => {
-    if (editingTxIndex !== null && editingTx) {
-      setSelectedTicker(editingTx.ticker);
-      setSearchQuery(editingTx.ticker);
-      const editType = editingTx.type || 'BUY';
-      setTxType(editType);
-      if (editType === 'DIVIDEND') {
-        // Stored as shares=1, price=totalAmount — restore the total for the UI
-        const storedTotal = parseFloat(Number(editingTx.price !== undefined ? editingTx.price : 0).toFixed(4));
-        setDividendTotal(storedTotal);
-      } else {
-        setShares(parseFloat(Number(editingTx.shares || 0).toFixed(6)));
-        setPrice(parseFloat(Number(editingTx.price !== undefined ? editingTx.price : 0).toFixed(4)));
-      }
-      setFees(editingTx.fees !== undefined ? parseFloat(editingTx.fees) || 0 : 0);
-      if (editingTx.account) setAccountName(editingTx.account);
-      if (editingTx.timestamp) {
-        const d = new Date(editingTx.timestamp);
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        setTxDate(`${year}-${month}-${day}`);
-      }
-    }
-  }, [editingTxIndex, editingTx]);
+  // Initial inputs come from the keyed transaction snapshot, without cascading effects.
 
   // Pre-fill form when user clicks "Fill in Form" from Rebalance Studio
   useEffect(() => {
@@ -309,122 +271,46 @@ export default function TradeOrderForm({
     return parseFloat(String(val).replace(/,/g, '').trim());
   };
 
-  // Record or Update transaction submit
-  const handleRecordTransaction = () => {
-    if (!selectedTicker) {
-      alert("Please select a stock asset first.");
-      return;
-    }
-
+  // Record or Update transaction submit; keep the form intact if validation or saving fails.
+  const handleRecordTransaction = async () => {
+    if (isSaving) return;
+    if (!selectedTicker) { alert('Please select a stock asset first.'); return; }
     const stockData = stocks?.[selectedTicker];
-    if (txType !== 'DIVIDEND' && (!stockData || !stockData.price || stockData.price <= 0)) {
+    if (!editingTx && txType !== 'DIVIDEND' && (!stockData || !stockData.price || stockData.price <= 0)) {
       showNotification?.(`"${selectedTicker}" does not exist or has no valid price data. Please check the symbol.`, 'error');
       return;
     }
-
-    const txFees = cleanFloat(fees) || 0;
-
-    if (txType === 'DIVIDEND') {
-      // DIVIDEND: user enters the total gross amount directly
-      const totalDividend = cleanFloat(dividendTotal);
-      if (isNaN(totalDividend) || totalDividend < 0) {
-        alert("Please enter a valid non-negative total dividend amount.");
-        return;
-      }
-      if (isNaN(txFees) || txFees < 0) {
-        alert("Please enter a valid non-negative fee/tax amount.");
-        return;
-      }
-      if (txDate) {
-        const selectedDate = new Date(txDate + 'T00:00:00');
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (selectedDate > today) {
-          alert("Invalid Transaction Date: Transactions cannot be recorded with a future date.");
-          return;
-        }
-      }
-      const timestamp = txDate ? new Date(txDate + 'T00:00:00').getTime() : Date.now();
-      // Store shares=1, price=totalDividend so gross = 1 * totalDividend in rebuildPortfolioHoldings
-      const finalTxData = {
-        timestamp,
-        ticker: selectedTicker,
-        type: 'DIVIDEND',
-        shares: 1,
-        price: totalDividend,
-        fees: txFees,
-        account: accountName.trim() || 'Default'
-      };
-      if (editingTxIndex !== null && onEditTransaction) {
-        onEditTransaction(activePortfolio.id, editingTxIndex, finalTxData);
-        onCancelEdit?.();
-      } else if (onAddTransaction) {
-        onAddTransaction(activePortfolio.id, finalTxData);
-      }
-      setDividendTotal(0.00);
-      setFees(0.00);
+    const txFees = fees === '' ? 0 : cleanFloat(fees);
+    const sharesQty = txType === 'DIVIDEND' ? 1 : cleanFloat(shares);
+    const pricePerShare = txType === 'DIVIDEND' ? cleanFloat(dividendTotal) : cleanFloat(price);
+    if (!Number.isFinite(sharesQty) || sharesQty <= 0) { alert('Please enter a valid quantity of shares.'); return; }
+    if (!Number.isFinite(pricePerShare) || (txType === 'DIVIDEND' ? pricePerShare < 0 : pricePerShare <= 0)) {
+      alert('Please enter a valid price or dividend amount.'); return;
+    }
+    if (!Number.isFinite(txFees) || txFees < 0) { alert('Please enter a valid non-negative fee/tax amount.'); return; }
+    try {
+      const selectedDate = parseTransactionDate(txDate);
+      // Preserve execution time and same-day order when editing only amounts/fees.
+      const timestamp = editingTx && txDate === localDateString(editingTx.timestamp)
+        ? editingTx.timestamp : selectedDate.getTime();
+      // DIVIDEND direct entry uses shares=1, price=totalDividend.
+      const finalTxData = { timestamp, ticker: selectedTicker, type: txType,
+        shares: sharesQty, price: pricePerShare, fees: txFees, account: accountName.trim() || activePortfolio.name };
+      setIsSaving(true);
+      // The portfolio hook validates the entire chronological ledger for all mutations.
+      const saved = editingTxIndex !== null
+        ? await onEditTransaction(activePortfolio.id, editingTxIndex, finalTxData)
+        : await onAddTransaction(activePortfolio.id, finalTxData);
+      if (!saved) return;
+      if (editingTxIndex !== null) { onCancelEdit?.(); return; }
+      setShares(10);
+      setDividendTotal(0);
+      setFees(0);
       setSearchQuery('');
       setSelectedTicker(null);
-      return;
-    }
-
-    const sharesQty = cleanFloat(shares);
-    const pricePerShare = cleanFloat(price);
-
-    if (isNaN(sharesQty) || sharesQty <= 0) {
-      alert("Please enter a valid quantity of shares.");
-      return;
-    }
-    if (isNaN(pricePerShare) || pricePerShare <= 0) {
-      alert("Please enter a valid price per share.");
-      return;
-    }
-    if (isNaN(txFees) || txFees < 0) {
-      alert("Please enter a valid non-negative fee/tax amount.");
-      return;
-    }
-
-    if (txDate) {
-      const selectedDate = new Date(txDate + 'T00:00:00');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (selectedDate > today) {
-        alert("Invalid Transaction Date: Transactions cannot be recorded with a future date.");
-        return;
-      }
-    }
-
-    if (txType === 'SELL' && editingTxIndex === null) {
-      const holding = activePortfolio?.holdings?.[selectedTicker];
-      if (!holding || holding.shares + 1e-9 < sharesQty) {
-        alert(`Insufficient shares. You are attempting to sell ${sharesQty} shares of ${selectedTicker}, but you only own ${holding ? holding.shares : 0} shares.`);
-        return;
-      }
-    }
-
-    const timestamp = txDate ? new Date(txDate + 'T00:00:00').getTime() : Date.now();
-    const finalTxData = {
-      timestamp: timestamp,
-      ticker: selectedTicker,
-      type: txType,
-      shares: sharesQty,
-      price: pricePerShare,
-      fees: txFees,
-      account: accountName.trim() || 'Default'
-    };
-
-    if (editingTxIndex !== null && onEditTransaction) {
-      onEditTransaction(activePortfolio.id, editingTxIndex, finalTxData);
-      onCancelEdit?.();
-    } else if (onAddTransaction) {
-      onAddTransaction(activePortfolio.id, finalTxData);
-    }
-
-    // Reset inputs
-    setShares(10);
-    setFees(0.00);
-    setSearchQuery('');
-    setSelectedTicker(null);
+    } catch (error) {
+      showNotification?.(error.message, 'error');
+    } finally { setIsSaving(false); }
   };
 
   // Estimated total calculation
@@ -731,6 +617,7 @@ export default function TradeOrderForm({
       <button
         type="button"
         onClick={handleRecordTransaction}
+        disabled={isSaving}
         id="btnRecordTx"
         className={`btn-record-tx ${txType.toLowerCase()} ${editingTxIndex !== null ? 'editing' : ''}`}
       >

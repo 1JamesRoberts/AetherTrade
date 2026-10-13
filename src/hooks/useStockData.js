@@ -1,3 +1,4 @@
+import { validStockValues } from '../utils/marketDataUtils.js';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { parseStockLabels } from '../utils/stockUtils';
 
@@ -18,11 +19,13 @@ function persistStocks(stocks) {
       toCache[ticker] = stocks[ticker];
     }
   });
-  localStorage.setItem('aethertrade_cached_stocks', JSON.stringify(toCache));
+  try { localStorage.setItem('aethertrade_cached_stocks', JSON.stringify(toCache)); }
+  catch (error) { console.warn('Market cache could not be saved:', error); }
 }
 
 export function useStockData(activeTicker, selectedRange, selectedInterval, addToast) {
   const [stocks, setStocks] = useState(loadCachedStocks);
+  const historyRequestsRef = useRef(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const abortRef = useRef(null);
 
@@ -37,19 +40,19 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
 
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/stock?ticker=${ticker}&range=${rangeVal}&interval=${intervalVal}`, {
+      const res = await fetch(`/api/stock?ticker=${encodeURIComponent(ticker)}&range=${rangeVal}&interval=${intervalVal}`, {
         signal: controller.signal
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `Proxy error: ${res.status}`);
+        throw new Error(errJson.error || errJson.message || `Proxy error: ${res.status}`);
       }
       const json = await res.json();
       if (json.status !== 'ok') {
         throw new Error(json.message || "Twelve Data error status");
       }
 
-      const values = json.values || [];
+      const values = validStockValues(json.values);
       if (values.length === 0) throw new Error("No values returned in series");
 
       const fetchedPrice = parseFloat(values[values.length - 1].close);
@@ -94,16 +97,18 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
 
       return { success: false };
     } finally {
-      setIsLoading(false);
+      if (abortRef.current === controller) setIsLoading(false);
     }
   }, [addToast]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const fetchBackgroundPrice = useCallback(async (ticker) => {
     try {
       // Fetch daily close for price + 1-day % change
       const [dailyRes, intradayRes] = await Promise.allSettled([
-        fetch(`/api/stock?ticker=${ticker}&range=1M&interval=1d`),
-        fetch(`/api/stock?ticker=${ticker}&range=1D&interval=15m`)
+        fetch(`/api/stock?ticker=${encodeURIComponent(ticker)}&range=1M&interval=1d`),
+        fetch(`/api/stock?ticker=${encodeURIComponent(ticker)}&range=1D&interval=15m`)
       ]);
 
       let fetchedPrice = null;
@@ -113,8 +118,8 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
       // Parse daily data for price and change
       if (dailyRes.status === 'fulfilled' && dailyRes.value.ok) {
         const json = await dailyRes.value.json();
-        if (json.status === 'ok' && json.values?.length > 0) {
-          const values = json.values;
+        const values = validStockValues(json.values);
+        if (json.status === 'ok' && values.length > 0) {
           fetchedPrice = parseFloat(values[values.length - 1].close);
           const prevPrice = values.length > 1 ? parseFloat(values[values.length - 2].close) : fetchedPrice;
           change = prevPrice ? ((fetchedPrice - prevPrice) / prevPrice) * 100 : 0;
@@ -124,8 +129,9 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
       // Parse intraday 15m data for sparkline close points (1-day session shape)
       if (intradayRes.status === 'fulfilled' && intradayRes.value.ok) {
         const json = await intradayRes.value.json();
-        if (json.status === 'ok' && json.values?.length > 1) {
-          sparklinePoints = json.values.map(v => parseFloat(v.close));
+        const values = validStockValues(json.values);
+        if (json.status === 'ok' && values.length > 1) {
+          sparklinePoints = values.map(v => parseFloat(v.close));
         }
       }
 
@@ -151,43 +157,50 @@ export function useStockData(activeTicker, selectedRange, selectedInterval, addT
   }, []);
 
   const fetchPortfolioHistory = useCallback(async (ticker) => {
-    try {
-      const res = await fetch(`/api/stock?ticker=${ticker}&range=5Y&interval=1d`);
-      if (!res.ok) throw new Error();
-      const json = await res.json();
-      if (json.status !== 'ok') throw new Error();
+    if (historyRequestsRef.current.has(ticker)) return historyRequestsRef.current.get(ticker);
+    const request = (async () => {
+      try {
+        const res = await fetch(`/api/stock?ticker=${encodeURIComponent(ticker)}&range=5Y&interval=1d`);
+        if (!res.ok) throw new Error();
+        const json = await res.json();
+        if (json.status !== 'ok') throw new Error();
 
-      const values = json.values || [];
-      if (values.length === 0) throw new Error();
+        const values = validStockValues(json.values);
+        if (values.length === 0) throw new Error();
 
-      const closes = [];
-      const labels = [];
-      values.forEach(v => {
-        closes.push(parseFloat(v.close));
-        labels.push(v.datetime.split(' ')[0]);
-      });
+        const closes = [];
+        const labels = [];
+        values.forEach(v => {
+          closes.push(parseFloat(v.close));
+          labels.push(v.datetime.split(' ')[0]);
+        });
 
-      // Cache the last price and change so the table has data immediately
-      const fetchedPrice = closes[closes.length - 1];
-      const prevPrice = closes.length > 1 ? closes[closes.length - 2] : fetchedPrice;
-      const change = prevPrice ? ((fetchedPrice - prevPrice) / prevPrice) * 100 : 0;
+        // Cache the last price and change so the table has data immediately
+        const fetchedPrice = closes[closes.length - 1];
+        const prevPrice = closes.length > 1 ? closes[closes.length - 2] : fetchedPrice;
+        const change = prevPrice ? ((fetchedPrice - prevPrice) / prevPrice) * 100 : 0;
 
-      setStocks(prev => ({
-        ...prev,
-        [ticker]: {
-          ...prev[ticker],
-          ticker,
-          name: prev[ticker]?.name || `${ticker} Stock`,
-          portfolioHistory: closes,
-          portfolioLabels: labels,
-          price: prev[ticker]?.price || fetchedPrice,
-          change: prev[ticker]?.change ?? change,
-          isLive: true
-        }
-      }));
-    } catch {
-      console.warn(`Portfolio history fetch failed for ${ticker}`);
-    }
+        setStocks(prev => ({
+          ...prev,
+          [ticker]: {
+            ...prev[ticker],
+            ticker,
+            name: prev[ticker]?.name || `${ticker} Stock`,
+            portfolioHistory: closes,
+            portfolioLabels: labels,
+            price: prev[ticker]?.price || fetchedPrice,
+            change: prev[ticker]?.change ?? change,
+            isLive: true
+          }
+        }));
+      } catch {
+        console.warn(`Portfolio history fetch failed for ${ticker}`);
+        return false;
+      } finally { historyRequestsRef.current.delete(ticker); }
+      return true;
+    })();
+    historyRequestsRef.current.set(ticker, request);
+    return request;
   }, []);
 
   return { stocks, setStocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory };

@@ -45,7 +45,8 @@ export default function AnalysisEngine({
   };
 
   const handleAutoDetectLevels = () => {
-    const price = currentPrice || 150;
+    const price = currentPrice;
+    if (!Number.isFinite(price) || price <= 0) return;
     const rawSupports = [];
     const rawResistances = [];
 
@@ -239,6 +240,7 @@ export default function AnalysisEngine({
           <div className="levels-actions-group">
             <button
               onClick={handleAutoDetectLevels}
+              disabled={!Number.isFinite(currentPrice) || currentPrice <= 0}
               className="btn-auto-levels"
               title="Automatically detect key support and resistance levels"
             >

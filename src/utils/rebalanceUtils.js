@@ -346,12 +346,12 @@ export function computeDepositRebalance(
     if (priceNative <= 0 || cashBase <= 0) return;
 
     // Convert cash allocation from base currency to asset's native currency
-    const cashNative = convertCurrency(cashBase, baseCurrency, currency, fxRate);
+    const cashNative = convertCurrency(cashBase, actualBaseCurrency, currency, actualFxRate);
 
     // Floor rounding ensures total spend does not exceed deposit
     const buyShares = Math.floor((cashNative / priceNative) * 10000) / 10000;
     const orderTotalNative = buyShares * priceNative;
-    const orderTotalBase = convertCurrency(orderTotalNative, currency, baseCurrency, fxRate);
+    const orderTotalBase = convertCurrency(orderTotalNative, currency, actualBaseCurrency, actualFxRate);
 
     if (buyShares >= 1e-6 && orderTotalNative >= 0.01) {
       totalBuysBase += orderTotalBase;
@@ -378,6 +378,6 @@ export function computeDepositRebalance(
     orders: buyOrders,
     totalBuys: Math.round(totalBuysBase * 100) / 100,
     cashRemaining: Math.round(Math.max(0, depositBase - totalBuysBase) * 100) / 100,
-    baseCurrency
+    baseCurrency: actualBaseCurrency
   };
 }

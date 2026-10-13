@@ -24,7 +24,7 @@ export default function PortfolioManager({
   const [activeSubTab, setActiveSubTab] = useState('trade');
 
   // Editing state for existing transaction
-  const [editingTxIndex, setEditingTxIndex] = useState(null);
+  const [editingSelection, setEditingSelection] = useState(null);
 
   const activePortfolio = portfolios.find(p => p.id === activePortfolioId) || {
     id: 'default',
@@ -40,7 +40,7 @@ export default function PortfolioManager({
   const handlePortfolioSelect = (e) => {
     const nextId = e.target.value;
     setActivePortfolioId(nextId);
-    setEditingTxIndex(null);
+    setEditingSelection(null);
   };
 
   // Create Portfolio
@@ -78,17 +78,20 @@ export default function PortfolioManager({
   };
 
   // Start editing existing transaction
-  const handleStartEdit = (index, _tx) => {
-    setEditingTxIndex(index);
+  const handleStartEdit = (index, tx) => {
+    setEditingSelection({ id: tx.id, tx, index });
     setActiveSubTab('trade');
   };
 
   // Cancel editing existing transaction
   const handleCancelEdit = () => {
-    setEditingTxIndex(null);
+    setEditingSelection(null);
   };
 
-  const editingTx = editingTxIndex !== null ? activePortfolio.transactions?.[editingTxIndex] : null;
+  const foundIndex = editingSelection ? activePortfolio.transactions.findIndex(tx =>
+    editingSelection.id ? tx.id === editingSelection.id : tx === editingSelection.tx) : -1;
+  const editingTxIndex = foundIndex >= 0 ? foundIndex : null;
+  const editingTx = editingTxIndex !== null ? activePortfolio.transactions[editingTxIndex] : null;
 
   return (
     <section className="panel panel-portfolio-left" aria-label="Portfolio Allocations">
@@ -109,6 +112,10 @@ export default function PortfolioManager({
         stocks={stocks}
         baseCurrency={baseCurrency}
       />
+
+      {activePortfolio.ledgerError && <p role="alert" className="auth-error">
+        Ledger needs correction: {activePortfolio.ledgerError} Edit Audit History or import a corrected CSV.
+      </p>}
 
       {/* Sub-Tab Navigation Bar: Record Trade vs Transaction History */}
       <div className="portfolio-subtab-bar">
@@ -133,6 +140,7 @@ export default function PortfolioManager({
 
       {activeSubTab === 'trade' ? (
         <TradeOrderForm
+          key={`${activePortfolio.id}:${editingTx?.id || (editingTxIndex ?? 'new')}`}
           activePortfolio={activePortfolio}
           stocks={stocks}
           editingTxIndex={editingTxIndex}
@@ -146,6 +154,7 @@ export default function PortfolioManager({
         />
       ) : (
         <TransactionLedger
+          key={activePortfolio.id}
           activePortfolio={activePortfolio}
           onStartEdit={handleStartEdit}
           onDeleteTransaction={onDeleteTransaction}

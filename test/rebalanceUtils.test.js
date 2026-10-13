@@ -241,3 +241,12 @@ describe('Rebalance Utilities Pure Math Tests', () => {
     assert.equal(buyAAPL.shares, 5);
   });
 });
+
+test('deposit rebalance applies the same FX conversion with both supported signatures', () => {
+  const holdings = { AAPL: { shares: 10, avgCost: 100 }, 'PTT.BK': { shares: 100, avgCost: 35 } };
+  const stocks = { AAPL: { price: 100 }, 'PTT.BK': { price: 35 } };
+  const targets = { AAPL: 50, 'PTT.BK': 50 };
+  const explicit = computeDepositRebalance(holdings, targets, stocks, 3500, {}, 'THB', 35);
+  const shorthand = computeDepositRebalance(holdings, targets, stocks, 3500, 'THB', 35);
+  assert.deepEqual(shorthand, explicit);
+});

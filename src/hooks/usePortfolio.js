@@ -1,779 +1,261 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabase.js';
-import { detectTickerCurrency } from '../utils/currencyUtils.js';
+import { supabase, isCloudEnabled } from '../lib/supabase.js';
+import { accountKey, readStored, writeStored } from '../utils/accountStorage.js';
+import { rebuildPortfolio, restorePortfolio } from '../utils/portfolioLedger.js';
+import { assertResult, transactionRow, loadCloudPortfolios, replaceCloudTransactions } from '../lib/portfolioService.js';
 
-function loadLocalTargetAllocations() {
-  try {
-    const saved = localStorage.getItem('aethertrade_target_allocations');
-    if (saved) return JSON.parse(saved);
-  } catch (e) { console.error('Error loading target allocations:', e); }
-  return {};
+export { rebuildPortfolioHoldings } from '../utils/portfolioLedger.js';
+
+const newId = prefix => `${prefix}_${crypto.randomUUID()}`;
+function defaultPortfolio(userId) {
+  return rebuildPortfolio({ id: `default_${userId}`, name: 'Primary Portfolio', transactions: [] });
 }
-
-function saveLocalTargetAllocations(targetMap) {
-  try {
-    localStorage.setItem('aethertrade_target_allocations', JSON.stringify(targetMap));
-  } catch (e) { console.error('Error saving target allocations:', e); }
-}
-
-function loadLocalBaseCurrencies() {
-  try {
-    const saved = localStorage.getItem('aethertrade_base_currencies');
-    if (saved) return JSON.parse(saved);
-  } catch (e) { console.error('Error loading base currencies:', e); }
-  return {};
-}
-
-function saveLocalBaseCurrencies(currMap) {
-  try {
-    localStorage.setItem('aethertrade_base_currencies', JSON.stringify(currMap));
-  } catch (e) { console.error('Error saving base currencies:', e); }
-}
-
-function loadLocalPortfolios() {
-  const targetMap = loadLocalTargetAllocations();
-  const currMap = loadLocalBaseCurrencies();
-  try {
-    const saved = localStorage.getItem('aethertrade_portfolios_list');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed.map(p => {
-        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(p.transactions || []);
-        return {
-          ...p,
-          holdings,
-          realizedPL,
-          realizedPLByCurrency,
-          totalDividends,
-          dividendsByCurrency,
-          dividendsByTicker,
-          baseCurrency: p.baseCurrency || currMap[p.id] || 'USD',
-          targetAllocations: p.targetAllocations || targetMap[p.id] || {}
-        };
-      });
-    }
-  } catch (e) { console.error(e); }
-  return [{
-    id: 'default',
-    name: 'Primary Portfolio',
-    holdings: {},
-    transactions: [],
-    realizedPL: 0,
-    realizedPLByCurrency: { USD: 0, THB: 0 },
-    totalDividends: 0,
-    dividendsByCurrency: { USD: 0, THB: 0 },
-    dividendsByTicker: {},
-    baseCurrency: currMap['default'] || 'USD',
-    targetAllocations: targetMap['default'] || {}
-  }];
-}
-
-function loadLocalActiveId() {
-  try {
-    const saved = localStorage.getItem('aethertrade_active_portfolio_id');
-    if (saved && saved !== 'undefined') return saved;
-  } catch (e) { console.error(e); }
-  return 'default';
-}
-
-export function rebuildPortfolioHoldings(txs) {
-  txs.sort((a, b) => a.timestamp - b.timestamp);
-  const holdings = {};
-  let realizedPL = 0;
-  const realizedPLByCurrency = { USD: 0, THB: 0 };
-  let totalDividends = 0;
-  const dividendsByCurrency = { USD: 0, THB: 0 };
-  const dividendsByTicker = {};
-
-  txs.forEach(tx => {
-    const txFees = parseFloat(tx.fees) || 0;
-    const txShares = parseFloat(tx.shares) || 0;
-    const txPrice = parseFloat(tx.price) || 0;
-    const curr = detectTickerCurrency(tx.ticker);
-
-    if (tx.type === 'BUY') {
-      if (!holdings[tx.ticker]) {
-        holdings[tx.ticker] = {
-          shares: 0,
-          avgCost: 0,
-          totalFees: 0,
-          totalDividends: dividendsByTicker[tx.ticker] || 0,
-          currency: curr
-        };
-      }
-      const h = holdings[tx.ticker];
-      const newCost = (h.shares * h.avgCost) + (txShares * txPrice);
-      h.shares += txShares;
-      h.avgCost = h.shares > 0 ? (newCost / h.shares) : 0;
-      h.totalFees += txFees;
-    } else if (tx.type === 'SELL') {
-      if (holdings[tx.ticker]) {
-        const h = holdings[tx.ticker];
-        const originalShares = h.shares;
-        const soldShares = Math.min(originalShares, txShares);
-        const proportionalBuyFee = originalShares > 0 ? (soldShares / originalShares) * (h.totalFees || 0) : 0;
-        
-        const gain = soldShares * (txPrice - h.avgCost) - txFees - proportionalBuyFee;
-        realizedPL += gain;
-        realizedPLByCurrency[curr] = (realizedPLByCurrency[curr] || 0) + gain;
-
-        h.shares = Math.max(0, h.shares - soldShares);
-        h.totalFees = originalShares > 0 ? (h.totalFees || 0) * (h.shares / originalShares) : 0;
-        if (h.shares < 1e-9) delete holdings[tx.ticker];
-      }
-    } else if (tx.type === 'DIVIDEND') {
-      const grossDividend = txShares * txPrice;
-      const netDividend = Math.max(0, grossDividend - txFees);
-      totalDividends += netDividend;
-      dividendsByCurrency[curr] = (dividendsByCurrency[curr] || 0) + netDividend;
-      dividendsByTicker[tx.ticker] = (dividendsByTicker[tx.ticker] || 0) + netDividend;
-
-      if (holdings[tx.ticker]) {
-        holdings[tx.ticker].totalDividends = (holdings[tx.ticker].totalDividends || 0) + netDividend;
-      }
-    } else {
-      console.warn(`Unknown transaction type "${tx.type}" for ticker: ${tx.ticker}`);
-    }
-  });
-
-  return {
-    holdings,
-    realizedPL,
-    realizedPLByCurrency,
-    totalDividends,
-    dividendsByCurrency,
-    dividendsByTicker
-  };
+function loadLocalPortfolios(userId) {
+  const saved = readStored(accountKey('aethertrade_portfolios_list', userId), null);
+  if (!Array.isArray(saved) || !saved.length) return [defaultPortfolio(userId)];
+  // Never discard an old ledger just because it needs correction.
+  return saved.map(restorePortfolio);
 }
 
 export function usePortfolio(addToast, user) {
-  const [portfolios, setPortfolios] = useState(loadLocalPortfolios);
-  const [activePortfolioId, setActivePortfolioId] = useState(loadLocalActiveId);
-  const [dbLoaded, setDbLoaded] = useState(false);
-  const dbLoadedRef = useRef(false);
+  const userId = user.id;
+  const storageKey = accountKey('aethertrade_portfolios_list', userId);
+  const activeKey = accountKey('aethertrade_active_portfolio_id', userId);
+  const [portfolios, setPortfolios] = useState(() => loadLocalPortfolios(userId));
+  const [activePortfolioId, setActivePortfolioId] = useState(() => readStored(activeKey, `default_${userId}`));
+  const [dbLoaded, setDbLoaded] = useState(!isCloudEnabled);
+  const stateRef = useRef(portfolios);
+  const readyRef = useRef(!isCloudEnabled);
+  const aliveRef = useRef(false);
+  const requestRef = useRef(0);
+  const writeCountRef = useRef(0);
+  const queueRef = useRef(Promise.resolve());
 
-  // Reset first-load tracker when user logs out/in
-  useEffect(() => {
-    dbLoadedRef.current = false;
-  }, [user]);
+  const commit = useCallback(next => {
+    stateRef.current = next;
+    if (!writeStored(storageKey, next)) addToast('Could not save data on this device. Export a CSV backup.', 'warning');
+    setPortfolios(next);
+  }, [storageKey, addToast]);
 
   const loadFromDB = useCallback(async () => {
-    if (!user) { setDbLoaded(false); return; }
-
-    const { data: dbPortfolios } = await supabase
-      .from('portfolios')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true });
-
-    const { data: dbTransactions } = await supabase
-      .from('transactions')
-      .select('*')
-      .order('date', { ascending: true });
-
-    const dbTransactionsWithTimestamp = (dbTransactions || []).map(tx => ({
-      ...tx,
-      timestamp: tx.date ? new Date(tx.date).getTime() : Date.now()
-    }));
-
-    if (dbPortfolios && dbPortfolios.length > 0) {
-      const txMap = {};
-      dbTransactionsWithTimestamp.forEach(tx => {
-        if (!txMap[tx.portfolio_id]) txMap[tx.portfolio_id] = [];
-        txMap[tx.portfolio_id].push(tx);
-      });
-
-      const targetMap = loadLocalTargetAllocations();
-      const currMap = loadLocalBaseCurrencies();
-      const merged = dbPortfolios.map(dbPort => {
-        const dbTxs = txMap[dbPort.id] || [];
-        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(dbTxs);
-        const baseCurr = dbPort.base_currency || currMap[dbPort.id] || 'USD';
-        const targets = dbPort.target_allocations || targetMap[dbPort.id] || {};
-        currMap[dbPort.id] = baseCurr;
-        targetMap[dbPort.id] = targets;
-        return {
-          id: dbPort.id,
-          name: dbPort.name,
-          transactions: dbTxs,
-          holdings,
-          realizedPL,
-          realizedPLByCurrency,
-          totalDividends,
-          dividendsByCurrency,
-          dividendsByTicker,
-          baseCurrency: baseCurr,
-          targetAllocations: targets
-        };
-      });
-
-      saveLocalBaseCurrencies(currMap);
-      saveLocalTargetAllocations(targetMap);
-      setPortfolios(merged);
-      try {
-        localStorage.setItem('aethertrade_portfolios_list', JSON.stringify(merged));
-      } catch (e) { console.error('LocalStorage update error:', e); }
-      setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
-    } else {
-      // First login — create default portfolio in DB
-      const local = loadLocalPortfolios();
-      const targetMap = loadLocalTargetAllocations();
-      const currMap = loadLocalBaseCurrencies();
-      const uploaded = [];
-      for (const port of local) {
-        const dbPortId = port.id === 'default' ? `default_${user.id}` : port.id;
-        const baseCurr = port.baseCurrency || currMap[port.id] || 'USD';
-        const targets = port.targetAllocations || targetMap[port.id] || {};
-        const { data: newPort } = await supabase
-          .from('portfolios')
-          .insert({
-            id: dbPortId,
-            user_id: user.id,
-            name: port.name,
-            base_currency: baseCurr,
-            target_allocations: targets
-          })
-          .select()
-          .single();
-
-        const transactionsWithIds = port.transactions.map(tx => ({
-          ...tx,
-          id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    if (!isCloudEnabled || !aliveRef.current || writeCountRef.current) return;
+    const request = ++requestRef.current;
+    try {
+      let next = await loadCloudPortfolios(supabase, userId);
+      if (!aliveRef.current || request !== requestRef.current) return;
+      if (!next.length) {
+        // First login — initialize all portfolios and any owned local history atomically.
+        const local = stateRef.current.map(p => rebuildPortfolio(p));
+        const initial = local.map((p, index) => ({ ...p,
+          id: index === 0 ? `default_${userId}` : newId('portfolio'),
+          transactions: p.transactions.map(tx => ({ ...tx, id: newId('tx') }))
         }));
-
-        if (newPort && transactionsWithIds.length > 0) {
-          const txs = transactionsWithIds.map(tx => ({
-            id: tx.id,
-            portfolio_id: dbPortId,
-            ticker: tx.ticker,
-            type: tx.type,
-            shares: tx.shares,
-            price: tx.price,
-            fees: tx.fees || 0,
-            date: new Date(tx.timestamp).toISOString()
-          }));
-          await supabase.from('transactions').insert(txs);
-        }
-        uploaded.push({ ...port, id: dbPortId, baseCurrency: baseCurr, targetAllocations: targets, transactions: transactionsWithIds });
+        assertResult(await supabase.rpc('initialize_portfolios', {
+          p_portfolios: initial.map(p => ({ id: p.id, name: p.name,
+            base_currency: p.baseCurrency, target_allocations: p.targetAllocations })),
+          p_transactions: initial.flatMap(p => p.transactions.map(tx => transactionRow(tx, p.id)))
+        }));
+        next = await loadCloudPortfolios(supabase, userId);
       }
-      setPortfolios(uploaded);
-      setActivePortfolioId(prev => prev === 'default' ? `default_${user.id}` : prev);
+      if (!aliveRef.current || request !== requestRef.current || writeCountRef.current) return;
+      if (!next.length) throw new Error('No cloud portfolio could be loaded.');
+      commit(next);
+      readyRef.current = true;
+      setDbLoaded(true);
+    } catch (error) {
+      if (aliveRef.current && request === requestRef.current) {
+        addToast(`Cloud sync failed; saved data was kept. ${error.message}`, 'error');
+      }
     }
+  }, [userId, addToast, commit]);
 
-    dbLoadedRef.current = true;
-    setDbLoaded(true);
-  }, [user]);
-
-  // Load from Supabase when user logs in or hook mounts
+  // Load from Supabase and subscribe only for a real cloud client.
   useEffect(() => {
-    let isCancelled = false;
-    if (user) {
-      const initLoad = async () => {
-        if (!isCancelled) {
-          await loadFromDB();
-        }
-      };
-      initLoad();
-    }
+    aliveRef.current = true;
+    const requests = requestRef;
+    if (isCloudEnabled) void Promise.resolve().then(loadFromDB);
+    const channel = isCloudEnabled ? supabase.channel(`realtime_portfolio_sync_${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => { void loadFromDB(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'portfolios', filter: `user_id=eq.${userId}` }, () => { void loadFromDB(); })
+      .subscribe() : null;
+    const handleOnline = () => { void loadFromDB(); };
+    window.addEventListener('online', handleOnline);
     return () => {
-      isCancelled = true;
+      aliveRef.current = false;
+      ++requests.current;
+      if (channel) void supabase.removeChannel(channel);
+      window.removeEventListener('online', handleOnline);
     };
-  }, [user, loadFromDB]);
+  }, [userId, loadFromDB]);
 
-  // Supabase Real-time Sync subscription for transactions and portfolios
+  // Cross-tab window storage synchronization; never read another account's cache.
   useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel('realtime_portfolio_sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions' },
-        () => { loadFromDB(); }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'portfolios' },
-        () => { loadFromDB(); }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, loadFromDB]);
-
-  // Cross-tab window storage synchronization
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'aethertrade_portfolios_list' && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue);
-          setPortfolios(parsed);
-        } catch (err) {
-          console.error('Cross-tab storage sync error:', err);
-        }
+    const handleStorageChange = event => {
+      if (event.key === storageKey && !writeCountRef.current) {
+        const next = loadLocalPortfolios(userId);
+        stateRef.current = next;
+        setPortfolios(next);
       }
-      if (e.key === 'aethertrade_target_allocations' && e.newValue) {
-        try {
-          const targetMap = JSON.parse(e.newValue);
-          setPortfolios(prev => prev.map(p => ({
-            ...p,
-            targetAllocations: targetMap[p.id] || p.targetAllocations || {}
-          })));
-        } catch (err) {
-          console.error('Cross-tab target allocations sync error:', err);
-        }
-      }
-      if (e.key === 'aethertrade_active_portfolio_id' && e.newValue) {
-        setActivePortfolioId(e.newValue);
-      }
+      if (event.key === activeKey) setActivePortfolioId(readStored(activeKey, `default_${userId}`));
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [storageKey, activeKey, userId]);
 
-  // Persist to localStorage
-  useEffect(() => {
-    localStorage.setItem('aethertrade_portfolios_list', JSON.stringify(portfolios));
-  }, [portfolios]);
+  useEffect(() => { writeStored(activeKey, activePortfolioId); }, [activeKey, activePortfolioId]);
 
-  useEffect(() => {
-    localStorage.setItem('aethertrade_active_portfolio_id', activePortfolioId);
-  }, [activePortfolioId]);
-
-  // Keep activePortfolioId valid
-  const effectiveActivePortfolioId = portfolios.some(p => p.id === activePortfolioId)
-    ? activePortfolioId
-    : (portfolios[0]?.id || 'default');
-
-  const addTransaction = useCallback(async (portfolioId, newTx) => {
-    const txId = newTx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const txWithId = { ...newTx, id: txId };
-
-    // Resolve target portfolio ID: match requested portfolioId, fallback to activePortfolioId or first available portfolio
-    let targetPortId = portfolioId;
-    if (!portfolios.some(p => p.id === targetPortId)) {
-      if (portfolios.some(p => p.id === activePortfolioId)) {
-        targetPortId = activePortfolioId;
-      } else if (portfolios.length > 0) {
-        targetPortId = portfolios[0].id;
+  // Serialize writes against the latest ledger. Commit only after cloud persistence succeeds.
+  const mutate = useCallback((action, operation) => {
+    if (!readyRef.current) {
+      addToast('Wait for cloud sync, or refresh to retry it before saving.', 'error');
+      return Promise.resolve(false);
+    }
+    ++writeCountRef.current;
+    ++requestRef.current; // Invalidate any read that started before this mutation.
+    const task = queueRef.current.then(async () => {
+      try {
+        if (!aliveRef.current) return false;
+        if (!readyRef.current) throw new Error('Wait for cloud sync, or refresh to retry it before saving.');
+        const result = await operation(stateRef.current);
+        if (!aliveRef.current) return false;
+        commit(result.portfolios);
+        if (result.activeId) setActivePortfolioId(result.activeId);
+        addToast(result.message || action, 'success');
+        return true;
+      } catch (error) {
+        if (aliveRef.current) addToast(`${action} failed. ${error.message}`, 'error');
+        return false;
+      } finally {
+        --writeCountRef.current;
+        if (!writeCountRef.current && aliveRef.current) void loadFromDB();
       }
-    }
-
-    if (portfolios.length === 0) {
-      targetPortId = 'default';
-      const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings([txWithId]);
-      const newPort = {
-        id: targetPortId,
-        name: 'Primary Portfolio',
-        transactions: [txWithId],
-        holdings,
-        realizedPL,
-        realizedPLByCurrency,
-        totalDividends,
-        dividendsByCurrency,
-        dividendsByTicker
-      };
-      setPortfolios([newPort]);
-      setActivePortfolioId(targetPortId);
-    } else {
-      const updated = portfolios.map(p => {
-        if (p.id === targetPortId) {
-          const transactions = [...p.transactions, txWithId];
-          const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(transactions);
-          return { ...p, transactions, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
-        }
-        return p;
-      });
-      setPortfolios(updated);
-    }
-
-    addToast(`Recorded ${newTx.type} transaction for ${newTx.ticker}!`, 'success');
-
-    // Persist to Supabase
-    if (user) {
-      const { error } = await supabase.from('transactions').insert({
-        id: txId,
-        portfolio_id: targetPortId,
-        ticker: newTx.ticker,
-        type: newTx.type,
-        shares: newTx.shares,
-        price: newTx.price,
-        fees: newTx.fees || 0,
-        date: new Date(newTx.timestamp).toISOString()
-      });
-      if (error) console.error('Supabase insert error:', error);
-    }
-  }, [portfolios, activePortfolioId, user, addToast]);
-
-  const deleteTransaction = useCallback(async (portfolioId, index) => {
-    let targetPortId = portfolioId;
-    if (!portfolios.some(p => p.id === targetPortId)) {
-      targetPortId = activePortfolioId;
-    }
-
-    let deletedTxId = null;
-    const updated = portfolios.map(p => {
-      if (p.id === targetPortId) {
-        const transactions = [...p.transactions];
-        deletedTxId = transactions[index]?.id;
-        transactions.splice(index, 1);
-        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(transactions);
-        return { ...p, transactions, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
-      }
-      return p;
     });
-    setPortfolios(updated);
-    addToast("Transaction entry deleted and reverted.", "warning");
+    queueRef.current = task;
+    return task;
+  }, [commit, addToast, loadFromDB]);
 
-    if (user && deletedTxId) {
-      const { error } = await supabase.from('transactions').delete().eq('id', deletedTxId);
-      if (error) console.error('Supabase delete error:', error);
-    }
-  }, [portfolios, activePortfolioId, user, addToast]);
-
-  const editTransaction = useCallback(async (portfolioId, index, updatedTx) => {
-    let targetPortId = portfolioId;
-    if (!portfolios.some(p => p.id === targetPortId)) {
-      targetPortId = activePortfolioId;
-    }
-
-    let existingTxId = null;
-    let finalTx = null;
-
-    setPortfolios(prev => prev.map(p => {
-      if (p.id === targetPortId) {
-        const transactions = [...p.transactions];
-        existingTxId = transactions[index]?.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        finalTx = {
-          ...updatedTx,
-          id: existingTxId,
-          portfolio_id: targetPortId
-        };
-        transactions[index] = finalTx;
-        // Re-sort chronologically by timestamp
-        transactions.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(transactions);
-        return { ...p, transactions, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
-      }
-      return p;
-    }));
-
-    addToast(`Updated ${updatedTx.type} transaction for ${updatedTx.ticker}!`, 'success');
-
-    if (user && existingTxId && finalTx) {
-      const { error } = await supabase.from('transactions').upsert({
-        id: existingTxId,
-        portfolio_id: targetPortId,
-        ticker: finalTx.ticker,
-        type: finalTx.type,
-        shares: finalTx.shares,
-        price: finalTx.price,
-        fees: finalTx.fees || 0,
-        date: new Date(finalTx.timestamp).toISOString()
-      });
-      if (error) console.error('Supabase edit transaction error:', error);
-    }
-  }, [portfolios, activePortfolioId, user, addToast]);
-
-  const resetPortfolio = useCallback(async (portfolioId) => {
-    let targetPortId = portfolioId;
-    if (!portfolios.some(p => p.id === targetPortId)) {
-      targetPortId = activePortfolioId;
-    }
-
-    const updated = portfolios.map(p => {
-      if (p.id === targetPortId) {
-        return {
-          ...p,
-          transactions: [],
-          holdings: {},
-          realizedPL: 0,
-          realizedPLByCurrency: { USD: 0, THB: 0 },
-          totalDividends: 0,
-          dividendsByCurrency: { USD: 0, THB: 0 },
-          dividendsByTicker: {}
-        };
-      }
-      return p;
-    });
-    setPortfolios(updated);
-    addToast("Portfolio liquidated and logs cleared.", "info");
-
-    if (user) {
-      const { error } = await supabase.from('transactions').delete().eq('portfolio_id', targetPortId);
-      if (error) console.error('Supabase reset error:', error);
-    }
-  }, [portfolios, activePortfolioId, user, addToast]);
-
-  const importCSVTransactions = useCallback(async (txsByPortfolio, isAppend) => {
-    const allInsertedTxs = [];
-
-    const updated = portfolios.map(port => {
-      const imported = txsByPortfolio[port.id];
-      if (!imported) return port;
-
-      const importedWithIds = imported.map(tx => ({
-        ...tx,
-        id: tx.id || `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${Math.random().toString(36).substring(2, 6)}`
-      }));
-
-      allInsertedTxs.push(...importedWithIds.map(tx => ({ ...tx, portfolio_id: port.id })));
-
-      const existing = isAppend ? port.transactions : [];
-      const combined = [...existing, ...importedWithIds].sort((a, b) => a.timestamp - b.timestamp);
-      const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(combined);
-      return { ...port, transactions: combined, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
-    });
-
-    setPortfolios(updated);
-
-    // Synchronize to Supabase database if logged in
-    if (user) {
-      for (const portId of Object.keys(txsByPortfolio)) {
-        if (!isAppend) {
-          // In REPLACE mode, clear old transactions for this portfolio in Supabase
-          const { error: delErr } = await supabase.from('transactions').delete().eq('portfolio_id', portId);
-          if (delErr) console.error('Supabase CSV replace delete error:', delErr);
-        }
-      }
-
-      if (allInsertedTxs.length > 0) {
-        const dbRows = allInsertedTxs.map(tx => ({
-          id: tx.id,
-          portfolio_id: tx.portfolio_id,
-          ticker: tx.ticker,
-          type: tx.type,
-          shares: tx.shares,
-          price: tx.price,
-          fees: tx.fees || 0,
-          date: new Date(tx.timestamp).toISOString()
-        }));
-
-        const { error: insErr } = await supabase.from('transactions').insert(dbRows);
-        if (insErr) console.error('Supabase batch CSV insert error:', insErr);
-      }
-    }
-
-    return updated;
-  }, [portfolios, user]);
-
-  const createPortfolio = useCallback(async (name) => {
-    const cleanName = name.trim();
-    if (portfolios.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) {
-      addToast(`A portfolio named "${cleanName}" already exists!`, 'error');
-      return false;
-    }
-
-    const newId = 'portfolio_' + Date.now();
-    const newPort = {
-      id: newId,
-      name: cleanName,
-      holdings: {},
-      transactions: [],
-      realizedPL: 0,
-      realizedPLByCurrency: { USD: 0, THB: 0 },
-      totalDividends: 0,
-      dividendsByCurrency: { USD: 0, THB: 0 },
-      dividendsByTicker: {}
-    };
-
-    const updated = [...portfolios, newPort];
-    setPortfolios(updated);
-    setActivePortfolioId(newId);
-    addToast(`Created portfolio "${cleanName}" successfully!`, 'success');
-
-    if (user) {
-      const { error } = await supabase.from('portfolios').insert({
-        id: newId,
-        user_id: user.id,
-        name: cleanName,
-        base_currency: 'USD',
-        target_allocations: {}
-      });
-      if (error) console.error('Supabase create portfolio error:', error);
-    }
-    return true;
-  }, [portfolios, user, addToast]);
-
-  const renamePortfolio = useCallback(async (portfolioId, newName) => {
-    const cleanName = newName.trim();
-    if (portfolios.some(p => p.id !== portfolioId && p.name.toLowerCase() === cleanName.toLowerCase())) {
-      addToast(`A portfolio named "${cleanName}" already exists!`, 'error');
-      return false;
-    }
-
-    const updated = portfolios.map(p => {
-      if (p.id === portfolioId) return { ...p, name: cleanName };
-      return p;
-    });
-    setPortfolios(updated);
-    addToast(`Renamed portfolio to "${cleanName}" successfully!`, 'success');
-
-    if (user) {
-      const { error } = await supabase.from('portfolios').update({ name: cleanName }).eq('id', portfolioId);
-      if (error) console.error('Supabase rename portfolio error:', error);
-    }
-    return true;
-  }, [portfolios, user, addToast]);
-
-  const deletePortfolio = useCallback(async (portfolioId) => {
-    if (portfolios.length <= 1) {
-      addToast("You must keep at least one portfolio!", "error");
-      return false;
-    }
-
-    const deletedPort = portfolios.find(p => p.id === portfolioId);
-    const remaining = portfolios.filter(p => p.id !== portfolioId);
-    setPortfolios(remaining);
-    if (activePortfolioId === portfolioId) {
-      setActivePortfolioId(remaining[0].id);
-    }
-
-    // Prune target allocations for deleted portfolio
-    const targetMap = loadLocalTargetAllocations();
-    if (targetMap[portfolioId]) {
-      delete targetMap[portfolioId];
-      saveLocalTargetAllocations(targetMap);
-    }
-
-    addToast(`Deleted portfolio "${deletedPort?.name || ''}" successfully.`, "success");
-
-    if (user) {
-      const { error: txErr } = await supabase.from('transactions').delete().eq('portfolio_id', portfolioId);
-      if (txErr) console.error('Supabase delete portfolio transactions error:', txErr);
-
-      const { error: portErr } = await supabase.from('portfolios').delete().eq('id', portfolioId);
-      if (portErr) console.error('Supabase delete portfolio error:', portErr);
-    }
-    return true;
-  }, [portfolios, activePortfolioId, user, addToast]);
-
-  const updateTargetAllocations = useCallback((portfolioId, newTargets) => {
-    let targetPortId = portfolioId;
-    if (!portfolios.some(p => p.id === targetPortId)) {
-      targetPortId = activePortfolioId;
-    }
-
-    // 1. Update state
-    setPortfolios(prev => prev.map(p => {
-      if (p.id === targetPortId) {
-        return { ...p, targetAllocations: newTargets };
-      }
-      return p;
-    }));
-
-    // 2. Persist to dedicated localStorage key
-    const targetMap = loadLocalTargetAllocations();
-    targetMap[targetPortId] = newTargets;
-    saveLocalTargetAllocations(targetMap);
-
-    // 3. Persist to Supabase if logged in
-    if (user) {
-      supabase.from('portfolios').update({ target_allocations: newTargets }).eq('id', targetPortId).then(({ error }) => {
-        if (error) console.error('Supabase target allocations update error:', error);
-      });
-    }
-  }, [portfolios, activePortfolioId, user]);
-
-  const updateBaseCurrency = useCallback((portfolioId, currency) => {
-    const safeCurr = currency === 'THB' ? 'THB' : 'USD';
-    let targetPortId = portfolioId;
-    if (!portfolios.some(p => p.id === targetPortId)) {
-      targetPortId = activePortfolioId;
-    }
-
-    // 1. Update state
-    setPortfolios(prev => prev.map(p => {
-      if (p.id === targetPortId) {
-        return { ...p, baseCurrency: safeCurr };
-      }
-      return p;
-    }));
-
-    // 2. Persist to localStorage
-    const currMap = loadLocalBaseCurrencies();
-    currMap[targetPortId] = safeCurr;
-    saveLocalBaseCurrencies(currMap);
-
-    // 3. Persist to Supabase if logged in
-    if (user) {
-      supabase.from('portfolios').update({ base_currency: safeCurr }).eq('id', targetPortId).then(({ error }) => {
-        if (error) console.error('Supabase base currency update error:', error);
-      });
-    }
-
-    addToast(`Portfolio base currency set to ${safeCurr}`, 'info');
-  }, [portfolios, activePortfolioId, user, addToast]);
-
-  const executeRebalance = useCallback(async (portfolioId, trades) => {
-    if (!trades || trades.length === 0) return;
-
-    let targetPortId = portfolioId;
-    const targetPort = portfolios.find(p => p.id === targetPortId) || portfolios.find(p => p.id === activePortfolioId) || portfolios[0];
-    if (targetPort) targetPortId = targetPort.id;
-    const accountName = targetPort?.name || 'Default';
-
-    const now = Date.now();
-    const newTxs = trades.map((t, idx) => ({
-      id: `tx_reb_${now}_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-      portfolio_id: targetPortId,
-      ticker: t.ticker,
-      type: t.type,
-      shares: t.shares,
-      price: t.price,
-      fees: 0,
-      timestamp: now + idx * 10,
-      account: accountName
-    }));
-
-    // 1. Atomic functional state update
-    setPortfolios(prev => prev.map(p => {
-      if (p.id === targetPortId) {
-        const combined = [...p.transactions, ...newTxs];
-        const { holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker } = rebuildPortfolioHoldings(combined);
-        return { ...p, transactions: combined, holdings, realizedPL, realizedPLByCurrency, totalDividends, dividendsByCurrency, dividendsByTicker };
-      }
-      return p;
-    }));
-
-    addToast(`Executed ${trades.length} rebalance order${trades.length === 1 ? '' : 's'} successfully!`, 'success');
-
-    // 2. Batch insert to Supabase if logged in
-    if (user) {
-      const dbRows = newTxs.map(tx => ({
-        id: tx.id,
-        portfolio_id: targetPortId,
-        ticker: tx.ticker,
-        type: tx.type,
-        shares: tx.shares,
-        price: tx.price,
-        fees: 0,
-        date: new Date(tx.timestamp).toISOString()
-      }));
-
-      const { error } = await supabase.from('transactions').insert(dbRows);
-      if (error) console.error('Supabase batch rebalance insert error:', error);
-    }
-  }, [portfolios, activePortfolioId, user, addToast]);
-
-  return {
-    portfolios,
-    setPortfolios,
-    activePortfolioId: effectiveActivePortfolioId,
-    setActivePortfolioId,
-    addTransaction,
-    editTransaction,
-    deleteTransaction,
-    resetPortfolio,
-    importCSVTransactions,
-    createPortfolio,
-    renamePortfolio,
-    deletePortfolio,
-    updateTargetAllocations,
-    updateBaseCurrency,
-    executeRebalance,
-    dbLoaded
+  const requirePort = (list, id) => {
+    const port = list.find(p => p.id === id);
+    if (!port) throw new Error('This portfolio is no longer available.');
+    return port;
   };
+  const replacePort = (list, port) => list.map(p => p.id === port.id ? port : p);
+
+  const addTransaction = (id, tx) => mutate('Record transaction', async list => {
+    const port = requirePort(list, id);
+    const finalTx = { ...tx, id: newId('tx') };
+    const next = rebuildPortfolio(port, [...port.transactions, finalTx]);
+    if (isCloudEnabled) assertResult(await supabase.from('transactions').insert(transactionRow(finalTx, id)).select('id').single());
+    return { portfolios: replacePort(list, next), message: `Recorded ${tx.type} transaction for ${tx.ticker}!` };
+  });
+
+  const editTransaction = (id, index, tx) => {
+    // Capture a stable identity before any queued write can reorder the ledger.
+    const existingId = stateRef.current.find(p => p.id === id)?.transactions[index]?.id;
+    const original = stateRef.current.find(p => p.id === id)?.transactions[index];
+    return mutate('Update transaction', async list => {
+      const port = requirePort(list, id);
+      const at = port.transactions.findIndex(t => existingId ? t.id === existingId : t === original);
+      if (at < 0) throw new Error('This transaction is no longer available.');
+      const finalTx = { ...port.transactions[at], ...tx, id: existingId || newId('tx') };
+      const txs = [...port.transactions];
+      txs[at] = finalTx;
+      const next = rebuildPortfolio(port, txs);
+      if (isCloudEnabled) assertResult(await supabase.from('transactions').update(transactionRow(finalTx, id))
+        .eq('id', existingId).eq('portfolio_id', id).select('id').single());
+      return { portfolios: replacePort(list, next), message: `Updated ${tx.type} transaction for ${tx.ticker}!` };
+    });
+  };
+
+  const deleteTransaction = (id, index) => {
+    const original = stateRef.current.find(p => p.id === id)?.transactions[index];
+    return mutate('Delete transaction', async list => {
+      const port = requirePort(list, id);
+      const at = port.transactions.findIndex(t => original?.id ? t.id === original.id : t === original);
+      if (at < 0) throw new Error('This transaction is no longer available.');
+      const txs = port.transactions.filter((_, i) => i !== at);
+      const next = rebuildPortfolio(port, txs);
+      if (isCloudEnabled) assertResult(await supabase.from('transactions').delete()
+        .eq('id', original.id).eq('portfolio_id', id).select('id').single());
+      return { portfolios: replacePort(list, next), message: 'Transaction entry deleted and reverted.' };
+    });
+  };
+
+  const resetPortfolio = id => mutate('Reset portfolio', async list => {
+    const next = rebuildPortfolio(requirePort(list, id), []);
+    if (isCloudEnabled) await replaceCloudTransactions(supabase, [id], []);
+    return { portfolios: replacePort(list, next), message: 'Portfolio logs cleared.' };
+  });
+
+  const importCSVTransactions = (byPortfolio, isAppend) => mutate('Import CSV', async list => {
+    const rows = [];
+    for (const id of Object.keys(byPortfolio)) requirePort(list, id);
+    const next = list.map(port => {
+      if (!byPortfolio[port.id]) return port;
+      const imported = byPortfolio[port.id].map(tx => ({ ...tx, id: newId('tx') }));
+      rows.push(...imported.map(tx => transactionRow(tx, port.id)));
+      return rebuildPortfolio(port, [...(isAppend ? port.transactions : []), ...imported]);
+    });
+    if (isCloudEnabled) {
+      // In REPLACE mode, clear old transactions and insert replacements in one SQL transaction.
+      if (!isAppend) await replaceCloudTransactions(supabase, Object.keys(byPortfolio), rows);
+      else if (rows.length) assertResult(await supabase.from('transactions').insert(rows));
+    }
+    return { portfolios: next, message: `Imported ${rows.length} transactions!` };
+  });
+
+  const createPortfolio = name => mutate('Create portfolio', async list => {
+    const cleanName = name.trim();
+    if (!cleanName || list.some(p => p.name.toLowerCase() === cleanName.toLowerCase())) throw new Error('Choose a unique, non-empty portfolio name.');
+    const port = rebuildPortfolio({ id: newId('portfolio'), name: cleanName, transactions: [] });
+    if (isCloudEnabled) assertResult(await supabase.from('portfolios').insert({ id: port.id,
+      user_id: userId, name: cleanName, base_currency: 'USD', target_allocations: {} }).select('id').single());
+    return { portfolios: [...list, port], activeId: port.id, message: `Created portfolio "${cleanName}".` };
+  });
+
+  const renamePortfolio = (id, name) => mutate('Rename portfolio', async list => {
+    const cleanName = name.trim();
+    if (!cleanName || list.some(p => p.id !== id && p.name.toLowerCase() === cleanName.toLowerCase())) throw new Error('Choose a unique, non-empty portfolio name.');
+    const port = { ...requirePort(list, id), name: cleanName };
+    if (isCloudEnabled) assertResult(await supabase.from('portfolios').update({ name: cleanName }).eq('id', id).select('id').single());
+    return { portfolios: replacePort(list, port), message: `Renamed portfolio to "${cleanName}".` };
+  });
+
+  const deletePortfolio = id => mutate('Delete portfolio', async list => {
+    const port = requirePort(list, id);
+    if (list.length <= 1) throw new Error('Keep at least one portfolio.');
+    // Database cascade removes transactions atomically with the portfolio.
+    if (isCloudEnabled) assertResult(await supabase.from('portfolios').delete().eq('id', id).select('id').single());
+    return { portfolios: list.filter(p => p.id !== id), message: `Deleted portfolio "${port.name}".` };
+  });
+
+  const updateTargetAllocations = (id, targets) => mutate('Save target allocations', async list => {
+    const port = { ...requirePort(list, id), targetAllocations: targets };
+    if (isCloudEnabled) assertResult(await supabase.from('portfolios').update({ target_allocations: targets }).eq('id', id).select('id').single());
+    return { portfolios: replacePort(list, port), message: 'Target allocations saved.' };
+  });
+
+  const updateBaseCurrency = (id, currency) => mutate('Save base currency', async list => {
+    const safeCurr = currency === 'THB' ? 'THB' : 'USD';
+    const port = { ...requirePort(list, id), baseCurrency: safeCurr };
+    if (isCloudEnabled) assertResult(await supabase.from('portfolios').update({ base_currency: safeCurr }).eq('id', id).select('id').single());
+    return { portfolios: replacePort(list, port), message: `Portfolio base currency set to ${safeCurr}` };
+  });
+
+  const executeRebalance = (id, trades) => mutate('Record rebalance', async list => {
+    const port = requirePort(list, id);
+    const now = Date.now();
+    const txs = trades.map(t => ({ id: newId('tx'), ticker: t.ticker, type: t.type,
+      shares: t.shares, price: t.price, fees: 0, timestamp: now, account: port.name }));
+    const next = rebuildPortfolio(port, [...port.transactions, ...txs]);
+    if (isCloudEnabled && txs.length) assertResult(await supabase.from('transactions').insert(txs.map(tx => transactionRow(tx, id))));
+    return { portfolios: replacePort(list, next), message: `Recorded ${txs.length} rebalance orders.` };
+  });
+
+  const effectiveActivePortfolioId = portfolios.some(p => p.id === activePortfolioId)
+    ? activePortfolioId : portfolios[0]?.id;
+  return { portfolios, activePortfolioId: effectiveActivePortfolioId, setActivePortfolioId,
+    addTransaction, editTransaction, deleteTransaction, resetPortfolio, importCSVTransactions,
+    createPortfolio, renamePortfolio, deletePortfolio, updateTargetAllocations,
+    updateBaseCurrency, executeRebalance, dbLoaded };
 }

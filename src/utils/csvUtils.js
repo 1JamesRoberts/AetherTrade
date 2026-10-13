@@ -1,3 +1,6 @@
+import { parseTransactionDate } from './dateUtils.js';
+import { validateLedger } from './portfolioLedger.js';
+
 function parseCSV(text) {
   const lines = [];
   let row = [""];
@@ -32,57 +35,6 @@ function parseCSV(text) {
   return lines;
 }
 
-function parseCSVDate(dateVal, rowNum) {
-  if (!dateVal || typeof dateVal !== 'string') {
-    throw new Error(`Row ${rowNum}: Date is missing.`);
-  }
-  const clean = dateVal.trim();
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-
-  // 1. ISO or standard format: YYYY-MM-DD or YYYY/MM/DD
-  const isoMatch = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  if (isoMatch) {
-    const y = parseInt(isoMatch[1], 10);
-    const m = parseInt(isoMatch[2], 10) - 1;
-    const d = parseInt(isoMatch[3], 10);
-    const dateObj = new Date(y, m, d);
-    if (isNaN(dateObj.getTime())) throw new Error(`Row ${rowNum}: Date "${dateVal}" is invalid.`);
-    if (dateObj > today) throw new Error(`Row ${rowNum}: Date is in the future.`);
-    return dateObj;
-  }
-
-  // 2. D/M/YYYY or DD/MM/YYYY or DD-MM-YYYY (or D/M/YY)
-  const parts = clean.split(/[-/.]/);
-  if (parts.length >= 3) {
-    let d = parseInt(parts[0], 10);
-    let m = parseInt(parts[1], 10) - 1;
-    let y = parseInt(parts[2], 10);
-    if (y < 100) y += 2000; // Handle 2-digit years e.g. 25 -> 2025
-
-    // If month > 11 and day <= 12, check if swapped (MM/DD/YYYY)
-    if (m > 11 && d <= 12) {
-      const temp = d - 1;
-      d = m + 1;
-      m = temp;
-    }
-
-    const dateObj = new Date(y, m, d);
-    if (isNaN(dateObj.getTime())) throw new Error(`Row ${rowNum}: Date "${dateVal}" is invalid.`);
-    if (dateObj > today) throw new Error(`Row ${rowNum}: Date is in the future.`);
-    return dateObj;
-  }
-
-  // 3. General Date.parse fallback
-  const parsed = new Date(clean);
-  if (!isNaN(parsed.getTime())) {
-    if (parsed > today) throw new Error(`Row ${rowNum}: Date is in the future.`);
-    return parsed;
-  }
-
-  throw new Error(`Row ${rowNum}: Date format must be DD/MM/YYYY or YYYY-MM-DD. Found: "${dateVal}"`);
-}
-
 export function importTransactionsFromCSV(csvText) {
   const rows = parseCSV(csvText);
   if (rows.length < 2) {
@@ -108,7 +60,7 @@ export function importTransactionsFromCSV(csvText) {
 
   // Total amount / Gross amount (commonly present in broker exports like Dime)
   const totalIdx = headers.findIndex((h, idx) => 
-    idx !== priceIdx && (
+    idx !== priceIdx && !/fee|commission|tax|charge|brokerage/.test(h) && (
       h.includes("total") || 
       h.includes("gross") || 
       h.includes("net amount") ||
@@ -131,7 +83,7 @@ export function importTransactionsFromCSV(csvText) {
     if (val === undefined || val === null) return 0;
     const cleaned = String(val).replace(/[^0-9.-]/g, '').trim();
     const num = parseFloat(cleaned);
-    return isNaN(num) ? 0 : num;
+    return Number.isFinite(num) ? num : NaN;
   };
 
   const importedTxs = [];
@@ -154,7 +106,7 @@ export function importTransactionsFromCSV(csvText) {
 
     const ticker = symbolVal.toUpperCase().trim();
     const rawType = typeVal.toUpperCase().trim();
-    let type = '';
+    let type;
     if (rawType.includes('BUY') || rawType === 'B' || rawType.includes('PURCHASE') || rawType.includes('LONG')) {
       type = 'BUY';
     } else if (rawType.includes('SELL') || rawType === 'S' || rawType.includes('SALE') || rawType.includes('SHORT')) {
@@ -165,7 +117,7 @@ export function importTransactionsFromCSV(csvText) {
       throw new Error(`Row ${rowNum}: Type must be BUY, SELL, or DIVIDEND. Found: "${typeVal}"`);
     }
 
-    let shares = 0;
+    let shares;
     let price = 0;
 
     if (type === 'DIVIDEND') {
@@ -188,7 +140,7 @@ export function importTransactionsFromCSV(csvText) {
     } else {
       // For BUY / SELL
       shares = parseNumber(qtyVal);
-      if (shares <= 0) {
+      if (!Number.isFinite(shares) || shares <= 0) {
         throw new Error(`Row ${rowNum}: Quantity must be positive. Found: "${qtyVal}"`);
       }
 
@@ -199,16 +151,16 @@ export function importTransactionsFromCSV(csvText) {
         price = shares > 0 ? totalAmount / shares : 0;
       }
 
-      if (price <= 0) {
+      if (!Number.isFinite(price) || price <= 0) {
         throw new Error(`Row ${rowNum}: Price must be positive. Found: "${priceVal || totalVal}"`);
       }
     }
 
-    const txDate = parseCSVDate(dateVal, rowNum);
+    const txDate = parseTransactionDate(dateVal, `Row ${rowNum}`);
 
-    const feesVal = feesIdx !== -1 ? row[feesIdx] : "0";
+    const feesVal = feesIdx !== -1 ? (row[feesIdx] || "0") : "0";
     const fees = parseNumber(feesVal);
-    if (fees < 0) {
+    if (!Number.isFinite(fees) || fees < 0) {
       throw new Error(`Row ${rowNum}: Fees must be non-negative.`);
     }
 
@@ -231,11 +183,10 @@ export function importTransactionsFromCSV(csvText) {
 export function exportTransactionsAsCSV(transactions, portfolioName) {
   let csvContent = "Date,Type,Symbol,Quantity,Price,Fee/Withholding Tax,Account\r\n";
   transactions.forEach(tx => {
-    const d = new Date(tx.timestamp);
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dateStr = `${dd}-${mm}-${d.getFullYear()}`;
-    csvContent += `${dateStr},${tx.type},${tx.ticker},${tx.shares},${tx.price},${tx.fees || 0},"${tx.account || 'Default'}"\r\n`;
+    const escape = value => `"${String(value).replace(/"/g, '""')}"`;
+    const dateStr = new Date(tx.timestamp).toISOString();
+    csvContent += [dateStr, tx.type, tx.ticker, tx.shares, tx.price,
+      tx.fees || 0, tx.account || portfolioName].map(escape).join(',') + '\r\n';
   });
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -247,9 +198,10 @@ export function exportTransactionsAsCSV(transactions, portfolioName) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
-export function validateCSVImport(importedTxs, portfolios, activePortfolioId) {
+export function validateCSVImport(importedTxs, portfolios, activePortfolioId, isAppend = true) {
   const active = portfolios.find(p => p.id === activePortfolioId) || portfolios[0];
 
   const txsByPortfolio = {};
@@ -267,25 +219,8 @@ export function validateCSVImport(importedTxs, portfolios, activePortfolioId) {
     if (!port) continue;
 
     const imported = txsByPortfolio[id];
-    const existing = port.transactions || [];
-    const combined = [...existing, ...imported].sort((a, b) => a.timestamp - b.timestamp);
-
-    const simHoldings = {};
-    for (const tx of combined) {
-      if (tx.type === 'BUY') {
-        simHoldings[tx.ticker] = (simHoldings[tx.ticker] || 0) + tx.shares;
-      } else if (tx.type === 'SELL') {
-        const owned = simHoldings[tx.ticker] || 0;
-        if (owned + 1e-9 < tx.shares) {
-          const dateStr = new Date(tx.timestamp).toLocaleDateString();
-          throw new Error(`Insufficiency in "${port.name}": On ${dateStr}, you sold ${tx.shares} ${tx.ticker} but only owned ${owned} shares.`);
-        }
-        simHoldings[tx.ticker] = owned - tx.shares;
-        if (simHoldings[tx.ticker] < 1e-9) delete simHoldings[tx.ticker];
-      } else if (tx.type === 'DIVIDEND') {
-        // Dividend transactions do not reduce share balances
-      }
-    }
+    const existing = isAppend ? (port.transactions || []) : [];
+    validateLedger([...existing, ...imported]);
   }
 
   return txsByPortfolio;

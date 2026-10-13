@@ -11,16 +11,10 @@ import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
 import { usePortfolio } from './hooks/usePortfolio';
 import { useAuth } from './hooks/useAuth';
-import { supabase } from './lib/supabase';
+import { useSyncedRecord } from './hooks/useSyncedRecord';
 import { importTransactionsFromCSV, validateCSVImport, exportTransactionsAsCSV } from './utils/csvUtils';
 
-function loadLinesMap() {
-  try {
-    const saved = localStorage.getItem('aethertrade_support_resistance');
-    if (saved) return JSON.parse(saved);
-  } catch (e) { console.error(e); }
-  return {};
-}
+const EMPTY_ANNOTATIONS = {};
 
 function getMarketStatus() {
   try {
@@ -71,7 +65,15 @@ function getMarketStatus() {
 }
 
 export default function App() {
-  const { user, loading: authLoading, signUp, signIn, signInWithGitHub, signInWithGoogle, signOut } = useAuth();
+  const auth = useAuth();
+  if (auth.loading) return <div className="auth-page"><p>Loading...</p></div>;
+  if (!auth.user) return <AuthPage onSignUp={auth.signUp} onSignIn={auth.signIn}
+    onGitHub={auth.signInWithGitHub} onGoogle={auth.signInWithGoogle} />;
+  // Remount account-owned state, requests and subscriptions on account changes.
+  return <Workspace key={auth.user.id} user={auth.user} signOut={auth.signOut} />;
+}
+
+function Workspace({ user, signOut }) {
   const [view, setView] = useState(() => {
     try {
       const saved = localStorage.getItem('aethertrade_active_view');
@@ -108,7 +110,7 @@ export default function App() {
     } catch (e) { console.error(e); return false; }
   });
   const [zoomLevel, setZoomLevel] = useState(100);
-  const [linesMap, setLinesMap] = useState(loadLinesMap);
+
   const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(() => {
     try {
       return localStorage.getItem('aethertrade_watchlist_collapsed') === 'true';
@@ -239,11 +241,12 @@ export default function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const { watchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist(user);
+  const [linesMap, setLinesMap] = useSyncedRecord(user, 'chart_annotations', 'lines_map',
+    'aethertrade_support_resistance', EMPTY_ANNOTATIONS, addToast);
+  const { watchlist, activeTicker, setActiveTicker, removeTicker, addTicker } = useWatchlist(user, addToast);
   const { stocks, isLoading, loadStockData, fetchBackgroundPrice, fetchPortfolioHistory } = useStockData(activeTicker, selectedRange, selectedInterval, addToast);
   const {
     portfolios,
-    setPortfolios,
     activePortfolioId,
     setActivePortfolioId,
     addTransaction,
@@ -267,133 +270,8 @@ export default function App() {
   useEffect(() => { fetchBackgroundPriceRef.current = fetchBackgroundPrice; }, [fetchBackgroundPrice]);
   useEffect(() => { watchlistRef.current = watchlist; }, [watchlist]);
 
-  // Load S&R lines from Supabase on login
-  useEffect(() => {
-    if (!user) return;
-    async function loadCloudAnnotations() {
-      try {
-        const { data, error } = await supabase
-          .from('chart_annotations')
-          .select('lines_map')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (error) {
-          console.error('Supabase load annotations error:', error);
-          return;
-        }
-
-        if (data && data.lines_map && typeof data.lines_map === 'object') {
-          setLinesMap(data.lines_map);
-          localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
-        } else if (!data) {
-          // Initial insert for user without existing cloud annotations
-          const local = loadLinesMap();
-          const { error: insertErr } = await supabase
-            .from('chart_annotations')
-            .insert({
-              user_id: user.id,
-              lines_map: local,
-              updated_at: new Date().toISOString()
-            });
-          if (insertErr) console.error('Supabase initial annotations insert error:', insertErr);
-        }
-      } catch (err) {
-        console.warn('Chart annotations cloud sync skipped:', err);
-      }
-    }
-    loadCloudAnnotations();
-  }, [user]);
-
-  // Persist S&R lines to localStorage & Supabase
-  useEffect(() => {
-    localStorage.setItem('aethertrade_support_resistance', JSON.stringify(linesMap));
-    if (user) {
-      (async () => {
-        try {
-          const { data: existing } = await supabase
-            .from('chart_annotations')
-            .select('user_id')
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          if (existing) {
-            const { error } = await supabase
-              .from('chart_annotations')
-              .update({
-                lines_map: linesMap,
-                updated_at: new Date().toISOString()
-              })
-              .eq('user_id', user.id);
-            if (error) console.error('Supabase S&R update error:', error);
-          } else {
-            const { error } = await supabase
-              .from('chart_annotations')
-              .insert({
-                user_id: user.id,
-                lines_map: linesMap,
-                updated_at: new Date().toISOString()
-              });
-            if (error) console.error('Supabase S&R insert error:', error);
-          }
-        } catch (err) {
-          console.error('Supabase S&R sync error:', err);
-        }
-      })();
-    }
-  }, [linesMap, user]);
-
-  // Real-time live sync for S&R annotations across devices/tabs
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel(`realtime_annotations_${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'chart_annotations'
-        },
-        async (payload) => {
-          if (payload?.new && payload.new.user_id === user.id && payload.new.lines_map && typeof payload.new.lines_map === 'object') {
-            setLinesMap(payload.new.lines_map);
-            localStorage.setItem('aethertrade_support_resistance', JSON.stringify(payload.new.lines_map));
-          } else {
-            // Re-fetch cloud annotations
-            const { data } = await supabase
-              .from('chart_annotations')
-              .select('lines_map')
-              .eq('user_id', user.id)
-              .maybeSingle();
-            if (data?.lines_map) {
-              setLinesMap(data.lines_map);
-              localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
-            }
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          supabase
-            .from('chart_annotations')
-            .select('lines_map')
-            .eq('user_id', user.id)
-            .maybeSingle()
-            .then(({ data }) => {
-              if (data?.lines_map) {
-                setLinesMap(data.lines_map);
-                localStorage.setItem('aethertrade_support_resistance', JSON.stringify(data.lines_map));
-              }
-            });
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
+  // Cloud annotation hydration and realtime updates are handled by useSyncedRecord.
+  // Only explicit local edits persist to Supabase; received events never echo back.
 
   // Fetch portfolio histories for held tickers + USD/THB forex history
   useEffect(() => {
@@ -413,9 +291,9 @@ export default function App() {
   useEffect(() => {
     loadStockDataRef.current(activeTicker, selectedRange, selectedInterval);
     fetchBackgroundPriceRef.current(activeTicker);
-    watchlistRef.current.filter(t => t !== activeTicker).forEach((ticker, i) => {
-      setTimeout(() => fetchBackgroundPriceRef.current(ticker), (i + 1) * 2000);
-    });
+    const timers = watchlistRef.current.filter(t => t !== activeTicker).map((ticker, i) =>
+      setTimeout(() => fetchBackgroundPriceRef.current(ticker), (i + 1) * 2000));
+    return () => timers.forEach(clearTimeout);
   }, [activeTicker, selectedRange, selectedInterval]);
 
   const handleRefresh = () => loadStockDataRef.current(activeTicker, selectedRange, selectedInterval);
@@ -438,9 +316,9 @@ export default function App() {
       if (importedTxs.length === 0) { addToast("No transactions found in CSV.", "error"); return; }
 
       const choice = confirm(`Found ${importedTxs.length} valid transactions.\n\nOK = APPEND, CANCEL = REPLACE`);
-      const txsByPortfolio = validateCSVImport(importedTxs, portfolios, activePortfolioId);
+      const txsByPortfolio = validateCSVImport(importedTxs, portfolios, activePortfolioId, choice);
 
-      await importCSVTransactions(txsByPortfolio, choice);
+      if (!await importCSVTransactions(txsByPortfolio, choice)) return;
 
       // Fetch live prices for all imported tickers so the table updates
       const importedTickers = [...new Set(importedTxs.map(tx => tx.ticker))];
@@ -448,7 +326,7 @@ export default function App() {
         setTimeout(() => fetchBackgroundPriceRef.current(ticker), i * 500);
       });
 
-      addToast(`Successfully imported ${importedTxs.length} transactions!`, 'success');
+
     } catch (err) {
       alert(`CSV Import Failed:\n\n${err.message}`);
     }
@@ -468,27 +346,6 @@ export default function App() {
     addToast("Transactions exported successfully!", "success");
   };
 
-  if (authLoading) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card" style={{ textAlign: 'center', padding: '40px' }}>
-          <div className="logo-icon" style={{ margin: '0 auto 16px' }}><i className="fa-solid fa-chart-line"></i></div>
-          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <AuthPage
-        onSignUp={signUp}
-        onSignIn={signIn}
-        onGitHub={signInWithGitHub}
-        onGoogle={signInWithGoogle}
-      />
-    );
-  }
 
   return (
     <>
@@ -619,7 +476,7 @@ export default function App() {
             />
             <AnalysisEngine
               activeTicker={activeTicker}
-              currentPrice={stocks[activeTicker]?.price || 150.00}
+              currentPrice={stocks[activeTicker]?.price || 0}
               lines={linesMap[activeTicker] || []}
               setLinesMap={setLinesMap}
               linesMap={linesMap}
@@ -641,7 +498,6 @@ export default function App() {
             <ErrorBoundary name="Portfolio Manager">
               <PortfolioManager
                 portfolios={portfolios}
-                setPortfolios={setPortfolios}
                 activePortfolioId={activePortfolioId}
                 setActivePortfolioId={setActivePortfolioId}
                 stocks={stocks}

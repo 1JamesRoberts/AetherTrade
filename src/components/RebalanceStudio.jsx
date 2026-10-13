@@ -172,7 +172,7 @@ export default function RebalanceStudio({
     if (onAddTransaction) {
       try {
         const ordCurr = detectTickerCurrency(ord.ticker);
-        await onAddTransaction(activePortfolio?.id, {
+        const saved = await onAddTransaction(activePortfolio?.id, {
           ticker: ord.ticker,
           type: ord.type,
           shares: ord.shares,
@@ -181,6 +181,7 @@ export default function RebalanceStudio({
           account: activePortfolio?.name || 'Primary Portfolio',
           timestamp: Date.now()
         });
+        if (!saved) return;
         showNotification(`Logged ${ord.type} ${parseFloat(Number(ord.shares || 0).toFixed(4))} ${ord.ticker} at ${formatMoney(ord.price, ordCurr)}`, 'success');
       } catch (err) {
         showNotification(`Failed to log trade: ${err.message}`, 'error');

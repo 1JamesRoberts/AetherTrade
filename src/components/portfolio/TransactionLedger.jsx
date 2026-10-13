@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   detectTickerCurrency,
   formatMoney
@@ -13,11 +13,7 @@ export default function TransactionLedger({
   const [ledgerTypeFilter, setLedgerTypeFilter] = useState('ALL'); // 'ALL' | 'BUY' | 'SELL' | 'DIVIDEND'
   const [ledgerSearchQuery, setLedgerSearchQuery] = useState('');
 
-  // Reset filters when active portfolio changes
-  useEffect(() => {
-    setLedgerTypeFilter('ALL');
-    setLedgerSearchQuery('');
-  }, [activePortfolio?.id]);
+  // The parent keys this component by portfolio, resetting filters on switches.
 
   // Memoized filtered transactions retaining original 0-indexed positions
   const filteredTransactions = useMemo(() => {

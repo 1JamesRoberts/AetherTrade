@@ -1,3 +1,4 @@
+import math
 from http.server import BaseHTTPRequestHandler
 import os
 import urllib.parse
@@ -34,11 +35,11 @@ INTERVAL_MAP = {
     ('1W', '5m'):  ('5min', '390'),
     ('1W', '15m'): ('15min', '130'),
     ('1W', '1h'):  ('1h', '35'),
-    ('1W', '1d'):  ('1day', '5'),
-    ('1M', '15m'): ('15min', '546'),
+    ('1W', '1d'):  ('1day', '7'),
+    ('1M', '15m'): ('15min', '500'),
     ('1M', '1h'):  ('1h', '150'),
     ('1M', '1d'):  ('1day', '30'),
-    ('1M', '1w'):  ('1week', '4'),
+    ('1M', '1w'):  ('1week', '5'),
     ('1Y', '1d'):  ('1day', '260'),
     ('1Y', '1w'):  ('1week', '52'),
     ('5Y', '1d'):  ('1day', '1260'),
@@ -58,23 +59,25 @@ def fetch_yfinance_timeseries(query_ticker, range_v, interval_v):
 
     int_translation = {
         '1min': '1m', '5min': '5m', '15min': '15m', '1h': '1h',
-        '1day': '1d', '1week': '1wk'
+        '1day': '1d', '1week': '1wk', '1w': '1wk'
     }
     yf_int = int_translation.get(yf_int, yf_int)
 
     candidates = [query_ticker]
-    if not query_ticker.endswith('.BK') and '/' not in query_ticker and '=' not in query_ticker:
-        candidates.append(f"{query_ticker}.BK")
 
     for sym_try in candidates:
         try:
             t_obj = yf.Ticker(sym_try)
-            hist = t_obj.history(period=period, interval=yf_int)
+            hist = t_obj.history(period=period, interval=yf_int, auto_adjust=False, timeout=5)
             if hist is not None and not hist.empty and len(hist) > 0:
                 vals = []
                 for row_idx, row in hist.iterrows():
+                    # Yahoo can append an unfinished row with NaN OHLC values.
+                    prices = [float(row[field]) for field in ('Open', 'High', 'Low', 'Close')]
+                    if not all(math.isfinite(price) and price > 0 for price in prices):
+                        continue
                     if hasattr(row_idx, 'strftime'):
-                        if 'm' in yf_int or 'h' in yf_int:
+                        if yf_int in {'1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h'}:
                             dt_str = row_idx.strftime('%Y-%m-%d %H:%M:%S')
                         else:
                             dt_str = row_idx.strftime('%Y-%m-%d')
@@ -94,6 +97,8 @@ def fetch_yfinance_timeseries(query_ticker, range_v, interval_v):
                         "volume": str(vol_int)
                     })
                 
+                if not vals:
+                    continue
                 sym_curr = 'THB' if sym_try.endswith('.BK') else 'USD'
                 meta_obj = {
                     "symbol": sym_try,
@@ -142,11 +147,12 @@ class handler(BaseHTTPRequestHandler):
 
         # If it's a Thai stock (.BK), immediately scrape with yfinance
         if twelve_ticker.endswith('.BK'):
-            yf_bytes = fetch_yfinance_timeseries(twelve_ticker, range_val, interval_val)
+            yf_bytes = fetch_yfinance_timeseries(ticker, range_val, interval_val)
             if yf_bytes:
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=15')
                 self.end_headers()
                 self.wfile.write(yf_bytes)
                 return
@@ -168,7 +174,7 @@ class handler(BaseHTTPRequestHandler):
                 break
             twelve_data_url = (
                 f"https://api.twelvedata.com/time_series?"
-                f"symbol={twelve_ticker}&interval={interval}&outputsize={outputsize}"
+                f"symbol={urllib.parse.quote(twelve_ticker, safe='')}&interval={interval}&outputsize={outputsize}"
                 f"&order=asc&apikey={api_key}"
             )
             try:
@@ -180,6 +186,7 @@ class handler(BaseHTTPRequestHandler):
                         self.send_response(200)
                         self.send_header('Content-Type', 'application/json')
                         self.send_header('Access-Control-Allow-Origin', '*')
+                        self.send_header('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=15')
                         self.end_headers()
                         self.wfile.write(payload)
                         return
@@ -189,11 +196,12 @@ class handler(BaseHTTPRequestHandler):
                 last_error = str(e)
 
         # Fallback to yfinance if Twelve Data failed or exhausted
-        yf_bytes = fetch_yfinance_timeseries(twelve_ticker, range_val, interval_val)
+        yf_bytes = fetch_yfinance_timeseries(ticker, range_val, interval_val)
         if yf_bytes:
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=15')
             self.end_headers()
             self.wfile.write(yf_bytes)
             return

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_URL) || '';
-const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof process !== 'undefined' && process.env?.VITE_SUPABASE_ANON_KEY) || '';
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || (typeof globalThis.process !== 'undefined' && globalThis.process.env?.VITE_SUPABASE_URL) || '';
+const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || (typeof globalThis.process !== 'undefined' && globalThis.process.env?.VITE_SUPABASE_ANON_KEY) || '';
 
 const isConfigured = 
   supabaseUrl && 
@@ -118,8 +118,13 @@ class MockQueryBuilder {
 class MockAuth {
   constructor() {
     this.listeners = new Set();
-    const savedSession = typeof localStorage !== 'undefined' ? localStorage.getItem('aethertrade_mock_session') : null;
-    this.session = savedSession ? JSON.parse(savedSession) : null;
+    try {
+      const savedSession = typeof localStorage !== 'undefined' ? localStorage.getItem('aethertrade_mock_session') : null;
+      this.session = savedSession ? JSON.parse(savedSession) : null;
+      if (this.session?.user?.id === 'mock-user-id' && this.session.user.email) {
+        this.session.user.id = `mock-${encodeURIComponent(this.session.user.email.trim().toLowerCase())}`;
+      }
+    } catch { this.session = null; }
   }
 
   async getSession() {
@@ -130,7 +135,7 @@ class MockAuth {
     this.listeners.add(callback);
     // Trigger callback with initial session
     setTimeout(() => {
-      callback('SIGNED_IN', this.session);
+      if (this.listeners.has(callback)) callback(this.session ? 'SIGNED_IN' : 'SIGNED_OUT', this.session);
     }, 0);
     return {
       data: {
@@ -150,7 +155,7 @@ class MockAuth {
   }
 
   async signUp({ email }) {
-    const user = { id: 'mock-user-id', email };
+    const user = { id: `mock-${encodeURIComponent(email.trim().toLowerCase())}`, email };
     this.session = { user };
     localStorage.setItem('aethertrade_mock_session', JSON.stringify(this.session));
     this._notify();
@@ -158,7 +163,7 @@ class MockAuth {
   }
 
   async signInWithPassword({ email }) {
-    const user = { id: 'mock-user-id', email };
+    const user = { id: `mock-${encodeURIComponent(email.trim().toLowerCase())}`, email };
     this.session = { user };
     localStorage.setItem('aethertrade_mock_session', JSON.stringify(this.session));
     this._notify();
@@ -189,17 +194,25 @@ class MockSupabaseClient {
   from(table) {
     return new MockQueryBuilder(table);
   }
+
+  channel() {
+    return { on() { return this; }, subscribe() { return this; } };
+  }
+
+  async removeChannel() { return 'ok'; }
 }
 
-if (isConfigured) {
-  console.log('%cAetherTrade: Connected to Supabase backend.', 'color: #10b981; font-weight: bold;');
-} else {
-  console.warn(
-    '%cAetherTrade: Supabase environment variables not found or unconfigured. Running in Mock Database / local-only mode.',
-    'color: #f59e0b; font-weight: bold;'
-  );
+let client;
+let cloudEnabled = false;
+try {
+  if (isConfigured) {
+    client = createClient(supabaseUrl, supabaseAnonKey);
+    cloudEnabled = true;
+  }
+} catch (error) {
+  console.warn('Supabase configuration is invalid; using local storage.', error);
 }
+if (!client) client = new MockSupabaseClient();
 
-export const supabase = isConfigured 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : new MockSupabaseClient();
+export const isCloudEnabled = cloudEnabled;
+export const supabase = client;

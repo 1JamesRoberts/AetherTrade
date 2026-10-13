@@ -16,5 +16,11 @@
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/*.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{src/**,test/**,.agents/**,supabase/**}"
+    }
+  }
 }

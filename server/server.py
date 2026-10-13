@@ -1,3 +1,4 @@
+import math
 import http.server
 import urllib.request
 import urllib.parse
@@ -397,18 +398,20 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
             period, yf_int = YF_MAPPING.get((range_v, interval_v), ('1mo', '1d'))
             
             candidates = [query_ticker]
-            if not query_ticker.endswith('.BK') and '/' not in query_ticker and '=' not in query_ticker:
-                candidates.append(f"{query_ticker}.BK")
 
             for sym_try in candidates:
                 try:
                     t_obj = yf.Ticker(sym_try)
-                    hist = t_obj.history(period=period, interval=yf_int)
+                    hist = t_obj.history(period=period, interval=yf_int, auto_adjust=False, timeout=5)
                     if hist is not None and not hist.empty and len(hist) > 0:
                         vals = []
                         for row_idx, row in hist.iterrows():
+                            # Yahoo can append an unfinished row with NaN OHLC values.
+                            prices = [float(row[field]) for field in ('Open', 'High', 'Low', 'Close')]
+                            if not all(math.isfinite(price) and price > 0 for price in prices):
+                                continue
                             if hasattr(row_idx, 'strftime'):
-                                if 'm' in yf_int or 'h' in yf_int:
+                                if yf_int in {'1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h'}:
                                     dt_str = row_idx.strftime('%Y-%m-%d %H:%M:%S')
                                 else:
                                     dt_str = row_idx.strftime('%Y-%m-%d')
@@ -428,6 +431,8 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                                 "volume": str(vol_int)
                             })
                         
+                        if not vals:
+                            continue
                         sym_curr = 'THB' if sym_try.endswith('.BK') else 'USD'
                         meta_obj = {
                             "symbol": sym_try,
@@ -527,14 +532,14 @@ class StockProxyHandler(http.server.SimpleHTTPRequestHandler):
                 # Rotate through all available API keys in case one is rate limited
                 for _ in range(len(API_KEYS)):
                     key = get_next_api_key()
-                    url = f"https://api.twelvedata.com/time_series?symbol={twelve_ticker}&interval={mapped_interval}&outputsize={mapped_outputsize}&order=asc&apikey={key}"
+                    url = f"https://api.twelvedata.com/time_series?symbol={urllib.parse.quote(twelve_ticker, safe='')}&interval={mapped_interval}&outputsize={mapped_outputsize}&order=asc&apikey={key}"
                     
                     try:
                         req = urllib.request.Request(
                             url, 
                             headers={'User-Agent': 'Mozilla/5.0'}
                         )
-                        with urllib.request.urlopen(req) as response:
+                        with urllib.request.urlopen(req, timeout=5) as response:
                             res_data = response.read()
                             res_json = json.loads(res_data.decode('utf-8'))
                             
