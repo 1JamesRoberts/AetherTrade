@@ -1,10 +1,10 @@
+import { formatPerformanceAxisValue } from '../utils/chartUtils.js';
 import { investedCapital } from '../utils/portfolioLedger.js';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import RebalanceStudio from './RebalanceStudio';
 import {
   detectTickerCurrency,
-  getCurrencySymbol,
   formatMoney,
   convertCurrency
 } from '../utils/currencyUtils';
@@ -416,24 +416,16 @@ export default function PerformanceHoldings({
             position: 'left',
             border: { display: false },
             grid: { color: 'rgba(255, 255, 255, 0.04)' },
-            // Keep currency labels readable and reserve a gutter when switching USD/THB.
-            afterFit: scale => { scale.width = Math.max(scale.width, 80); },
+            // Use left-aligned labels and a system font to keep text inside the axis gutter.
+            afterFit: scale => { scale.width = Math.max(scale.width, 104); },
             ticks: {
               display: true,
               color: '#94A3B8',
-              font: { family: 'Inter, sans-serif', size: 12 },
+              font: { family: 'Arial, sans-serif', size: 12 },
+              crossAlign: 'far',
               padding: 8,
               maxTicksLimit: 6,
-              callback: value => {
-                const amount = Number(value);
-                const magnitude = Math.abs(amount);
-                const sign = amount < 0 ? '-' : amount > 0 ? '+' : '';
-                const label = magnitude.toLocaleString('en-US', {
-                  notation: magnitude >= 10000 ? 'compact' : 'standard',
-                  maximumFractionDigits: magnitude < 1 ? 4 : 2
-                });
-                return `${sign}${getCurrencySymbol(baseCurrency)}${label}`;
-              }
+              callback: value => formatPerformanceAxisValue(value, baseCurrency)
             }
           }
         }
