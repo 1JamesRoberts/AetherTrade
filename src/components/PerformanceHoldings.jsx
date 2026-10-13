@@ -4,6 +4,7 @@ import { Chart, registerables } from 'chart.js';
 import RebalanceStudio from './RebalanceStudio';
 import {
   detectTickerCurrency,
+  getCurrencySymbol,
   formatMoney,
   convertCurrency
 } from '../utils/currencyUtils';
@@ -410,7 +411,31 @@ export default function PerformanceHoldings({
         },
         scales: {
           x: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
-          y: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, callback: function (val) { const sign = val >= 0 ? '+' : '-'; const sym = baseCurrency === 'THB' ? '฿' : '$'; return `${sign}${sym}${Math.abs(val).toLocaleString('en-US', { notation: 'compact' })}`; } } }
+          y: {
+            display: true,
+            position: 'left',
+            border: { display: false },
+            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            // Keep currency labels readable and reserve a gutter when switching USD/THB.
+            afterFit: scale => { scale.width = Math.max(scale.width, 80); },
+            ticks: {
+              display: true,
+              color: '#94A3B8',
+              font: { family: 'Inter, sans-serif', size: 12 },
+              padding: 8,
+              maxTicksLimit: 6,
+              callback: value => {
+                const amount = Number(value);
+                const magnitude = Math.abs(amount);
+                const sign = amount < 0 ? '-' : amount > 0 ? '+' : '';
+                const label = magnitude.toLocaleString('en-US', {
+                  notation: magnitude >= 10000 ? 'compact' : 'standard',
+                  maximumFractionDigits: magnitude < 1 ? 4 : 2
+                });
+                return `${sign}${getCurrencySymbol(baseCurrency)}${label}`;
+              }
+            }
+          }
         }
       }
     });
