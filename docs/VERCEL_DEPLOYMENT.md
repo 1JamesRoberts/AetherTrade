@@ -1,6 +1,6 @@
 # Deploying the review fixes on Vercel
 
-The fixes are on `codex/fix-review-findings`. Deploy a preview first, then merge when checked. They do not require a paid Vercel plan.
+The portfolio and chart fixes have been merged into `main`. Deploy a preview and verify the database setup before promoting to production.
 
 ## If you use Supabase
 
@@ -24,7 +24,7 @@ Leave the Supabase environment variables empty. The sign-in page clearly labels 
 ## Vercel settings
 
 - Framework: Vite. Build command: `npm run build`. Output directory: `dist`.
-- Node.js: 24.x (also used for verification). Existing Vite 8 requires a modern Node runtime; the former Node 18 README prerequisite is outdated.
+- Node.js: 24.x (also used for verification). Use the same Node runtime for local checks and Vercel builds.
 - Stock, search, and fundamentals routes use the Python handlers in `api/`. `vercel.json` retains those routes and gives each Python function a 60-second limit. It excludes frontend source, tests, agent files, and database scripts from their bundles.
 - Set `TWELVE_DATA_KEY_1` through `TWELVE_DATA_KEY_7` if you use Twelve Data. Yahoo fallback also works without those keys. Backend API keys must not use a `VITE_` prefix.
 - Successful production stock responses are cached at the CDN for 15 seconds. Yahoo weekly intervals and FX/crypto symbols are translated correctly. Incomplete candles with non-finite prices are discarded.

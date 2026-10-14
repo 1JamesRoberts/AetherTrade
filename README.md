@@ -1,103 +1,126 @@
-# 🌌 AetherTrade - Interactive Stock Terminal & Portfolio Intelligence Suite
+# AetherTrade - Stock Terminal & Portfolio Tracker
 
-AetherTrade is a state-of-the-art financial terminal featuring interactive TradingView-style candlestick charting, support & resistance crosshairs, fundamental stock intelligence, Wall Street analyst consensus targets, and real-time portfolio management.
+AetherTrade is a stock terminal and personal portfolio tracker for US and Thai assets, built with React, Vite, and Python market-data endpoints. It supports browser-local storage or Supabase authentication and synchronization, and can be deployed on Vercel.
 
----
+## Features
 
-## ✨ Key Features
+- Interactive line and candlestick charts across daily, weekly, monthly, yearly, and five-year ranges, with support/resistance overlays and optional volume and moving averages.
+- Company profiles, financial fundamentals, 52-week ranges, and analyst targets fetched through `yfinance`.
+- Multiple portfolios with `BUY`, `SELL`, and `DIVIDEND` transactions, purchase/sale fees, average cost, realized/unrealized profit, and dividend income.
+- USD and THB portfolio currencies with FX conversion and performance charts. Axis labels use an explicit `THB` prefix for compatibility with Safari.
+- CSV import/export, chronological ledger validation, and atomic cloud CSV replacement. Invalid sales and edits that invalidate later sales are rejected.
+- Target allocations and proposed full/deposit rebalancing orders. Recording an order updates the ledger; it does not place a trade with a broker.
+- Supabase email, Google, and GitHub authentication, with separate browser caches for each account. Failed cloud saves report an error and preserve the current ledger.
+- Local-only workspaces when Supabase is unconfigured. Email selects a workspace on the device; this mode does not authenticate an account or synchronize across devices.
 
-### 📊 Advanced Candlestick Charting & Historical Analysis
-- **TradingView-Grade Interactive Charts**: High-performance multi-timeframe candlestick series (`1D`, `1W`, `1M`, `1Y`, `5Y`) powered by Lightweight Charts.
-- **Support & Resistance Overlays**: Dynamically plot key resistance and support boundaries with live price distance markers.
-- **Responsive Mobile Layout**: Right price axis scales dynamically collapse on mobile (`< 600px`) to maximize screen width.
+## Technology Stack
 
-### 🧠 Stock Intelligence & Fundamentals Suite
-- **Interactive 52-Week Range Meter**: Live price position indicator with `Near 52W High`, `Near 52W Low`, or `Mid-Range` momentum status badges.
-- **8-Card Financial Fundamentals Grid**: Real-time Market Cap, Trailing P/E, Forward P/E, EPS, Dividend Yield, 30-Day Average Volume, 5Y Beta, and Shares Outstanding.
-- **Company Profile & Executive Overview**: Sector and industry categorization pills, verified corporate website link, executive business summary, CEO leadership, Headquarters, and Global Workforce count.
-- **Wall Street Analyst Targets & Consensus**: Consensus Rating badge (`Strong Buy`, `Buy`, `Hold`, `Sell`), 1Y Average Target Price with Implied Upside/Downside %, visual price target range track, and Buy/Hold/Sell analyst opinion breakdown bar.
+- **Frontend:** React 19, Vite 8, Lightweight Charts, Chart.js.
+- **Styling:** Vanilla CSS.
+- **Database/authentication:** Supabase PostgreSQL and Auth, with row-level security.
+- **Local backend:** Python `ThreadingHTTPServer`, Twelve Data, and `yfinance` fallback.
+- **Production backend:** Vercel Python functions in `api/`, routed through `vercel.json`.
 
-### 💼 Portfolio Management & Tracking
-- **Transaction Engine**: Record `BUY`, `SELL`, and `DIVIDEND` transactions, execution prices, quantities, and broker/withholding fees with dynamic real-time average cost basis and realized/unrealized P&L calculations.
-- **Dividend Income & Total Return (ROI)**: Track cumulative cash dividend payouts received per holding and portfolio-wide, fully integrated into Total Return ROI calculations ($\text{Total Return} = \text{Unrealized P\&L} + \text{Realized P\&L} + \text{Dividend Income}$).
-- **Multi-Currency Support**: Real-time FX conversion between USD and THB base currencies for holdings, closed gains, and dividend cash flows.
-- **CSV Import & Export**: Seamlessly import existing transaction ledgers (with automatic `DIVIDEND` synonym detection and Fee/Withholding Tax mapping) and export full audit records.
-- **Flexible Auth & Smart Offline Fallback**: Authenticate via Supabase (OAuth Google/GitHub or Email) or run completely offline with instant browser `localStorage` persistence.
+## Local Setup
 
----
+### Prerequisites
 
-## 🛠️ Technology Stack
+- Node.js 24.x, used for verification.
+- Python 3.10 or newer.
 
-- **Frontend**: React 19 (Vite), Lightweight Charts (`lightweight-charts`), Chart.js
-- **Styling**: Vanilla CSS (CSS variables, glassmorphism, responsive flex/grid)
-- **Database/Auth**: Supabase (PostgreSQL, GoTrue)
-- **Local Proxy Server**: Python 3 (`ThreadingHTTPServer` with `yfinance`)
-- **Serverless Production**: Vercel Serverless Functions (`api/stock.js` & `api/fundamentals.py`)
+### Installation
 
----
+```sh
+git clone https://github.com/1JamesRoberts/Aether-Trade.git
+cd Aether-Trade
+npm ci
 
-## 🚀 Quickstart & Local Setup
-
-### 1. Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or higher recommended)
-- [Python 3.10+](https://www.python.org/)
-
-### 2. Installation
-```bash
-# Clone the repository
-git clone https://github.com/1JamesRoberts/VibecodePortfolioTracker.git
-cd VibecodePortfolioTracker
-
-# Install Node dependencies
-npm install
-
-# Set up Python virtual environment
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-### 3. Environment Configuration (`.env`)
-Create a `.env` file in the project root:
-```env
-# Optional: Supabase configuration (omit to run in local-only offline mode)
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+These commands use macOS/Linux virtual-environment paths.
 
-# Required: Twelve Data API key(s) for key rotation
-TWELVE_DATA_KEY_1=your_twelve_data_key_1
-TWELVE_DATA_KEY_2=your_twelve_data_key_2
+### Environment Configuration
+
+Create `.env` in the project root. Uncomment and fill in the settings you use:
+
+```env
+# Optional: Supabase authentication and cloud synchronization
+# VITE_SUPABASE_URL=https://your-project.supabase.co
+# VITE_SUPABASE_ANON_KEY=your_public_anon_or_publishable_key
+
+# Optional: Twelve Data keys; Yahoo fallback works without them
+# TWELVE_DATA_KEY_1=your_twelve_data_key
+# TWELVE_DATA_KEY_2=your_second_key
 ```
 
-### 4. Running Locally
+Up to seven Twelve Data keys are supported (`TWELVE_DATA_KEY_1` through `TWELVE_DATA_KEY_7`). Keep backend keys out of `VITE_` variables, which are exposed to the browser. Never use a Supabase service-role key in the frontend.
 
-Start the backend proxy and Vite dev server:
-```bash
-# Terminal 1: Start Backend Proxy (runs on .venv at http://127.0.0.1:8080)
+For a fresh Supabase project, run [supabase/schema.sql](supabase/schema.sql) in its SQL Editor. For an existing installation, run [the safe portfolio sync migration](supabase/migrations/20261014_safe_portfolio_sync.sql) before using the updated frontend. The migration preserves existing transactions and adds stable entry ordering, atomic replacement/setup functions, and ledger validation.
+
+### Start Both Servers
+
+**Local stock synchronization requires both processes to keep running.** `npm run dev` starts only the frontend.
+
+In terminal 1:
+
+```sh
 npm run server
+```
 
-# Terminal 2: Start Frontend Dev Server (runs at http://localhost:5173)
+The Python backend listens on `http://127.0.0.1:8080` and uses `.venv` when available.
+
+In terminal 2:
+
+```sh
 npm run dev
 ```
 
----
+Open the URL Vite prints, normally `http://localhost:5173`. Vite forwards `/api` requests to the Python backend. If prices fail to sync, check that the backend is running, Python dependencies are installed, and the market-data providers are reachable.
 
-## ☁️ Vercel Deployment
+Local-only storage does not remove the need for the backend or internet access to fetch fresh market data. Clearing browser storage removes local portfolios; export CSV backups for records you want to retain.
 
-AetherTrade is configured out of the box for **1-click Vercel Deployment**:
+## Vercel Deployment
 
-1. **Deploy to Vercel**: Push to your GitHub repository or connect via the Vercel Dashboard.
-2. **Environment Variables**: Add your `TWELVE_DATA_KEY_1`...`7` in **Vercel Settings > Environment Variables**.
-3. **Serverless Architecture**:
-   - `/api/stock` is handled by `api/stock.js` (Node.js Twelve Data proxy).
-   - `/api/stock/fundamentals` is handled by `api/fundamentals.py` (Python `yfinance` function).
-   - `vercel.json` automatically manages routing and single-page application fallbacks.
+1. Connect the GitHub repository to Vercel. Use **Vite**, build command `npm run build`, output directory `dist`, and Node.js **24.x**.
+2. If using Supabase, apply the database schema/migration above before deploying. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the intended Vercel environment, and configure Supabase Auth URLs for the deployment.
+3. Optionally set `TWELVE_DATA_KEY_1` through `TWELVE_DATA_KEY_7` as backend environment variables.
+4. Deploy and check stock loading, portfolio changes, and CSV import/export. A local merge or commit does not update Vercel until that commit is pushed and deployed.
 
----
+The production routes are:
 
-## 🧪 Testing
+| Route | Handler |
+| --- | --- |
+| `/api/stock` | `api/stock.py` |
+| `/api/stock/search` | `api/stock-search.py` |
+| `/api/stock/fundamentals` | `api/fundamentals.py` |
 
-Run the automated backend testing suite to verify Twelve Data key rotation and yfinance endpoints:
-```bash
-python .agents/skills/tester/scripts/test_backend.py
+Vercel installs Python dependencies from `requirements.txt` and runs the handlers on demand. You do not need an always-running Python server in production. The project configures a 60-second function limit and brief CDN caching for stock responses.
+
+See [the deployment guide](docs/VERCEL_DEPLOYMENT.md) for database migration, account-cache recovery, and preview configuration details.
+
+## Portfolio Return Calculation
+
+Total gain is unrealized profit/loss plus realized profit/loss plus net dividend income. Total ROI divides that gain by the cost of **all purchases**, including purchase fees and closed positions, so selling the final holding does not reset ROI to zero.
+
+USD/THB totals use the current FX rate. This is a simple cumulative return metric, not an annualized or cash-flow-adjusted return. It does not measure historical FX gains separately.
+
+## Verification
+
+```sh
+npm test
+npm run lint
+npm run build
+.venv/bin/python test/test_stock_api.py
 ```
 
+The JavaScript suite covers currency/rebalancing calculations, ledger validation, CSV dates, account storage, React synchronization, chart formatting, and isolated PostgreSQL migration/rollback/ownership checks. Python unit tests verify the production stock fallback without network access.
+
+For live backend checks, keep `npm run server` running and use another terminal:
+
+```sh
+.venv/bin/python .agents/skills/tester/scripts/test_backend.py
+```
+
+Live checks require access to the market-data providers. The production build currently passes with a large JavaScript bundle warning.
