@@ -1,0 +1,9 @@
+Date,Type,Symbol,Shares,Price,Fees,Account
+2026-01-06,BUY,AAPL,100,190,1,Primary Portfolio
+2026-02-03,BUY,MSFT,60,360,1,Primary Portfolio
+2026-03-09,BUY,VOO,80,470,1,Primary Portfolio
+2026-04-14,BUY,NVDA,100,105,1,Primary Portfolio
+2026-05-04,BUY,ADVANC.BK,1000,245,35,Primary Portfolio
+2026-08-12,DIVIDEND,AAPL,100,0.26,3.90,Primary Portfolio
+2026-09-16,DIVIDEND,VOO,80,1.81,21.72,Primary Portfolio
+2026-10-01,SELL,AAPL,10,225,1,Primary Portfolio

@@ -81,6 +81,20 @@ Open the URL Vite prints, normally `http://localhost:5173`. Vite forwards `/api`
 
 Local-only storage does not remove the need for the backend or internet access to fetch fresh market data. Clearing browser storage removes local portfolios; export CSV backups for records you want to retain.
 
+## Local redesign review
+
+The integrated redesign can be reviewed with the full feature components in a separate local-only workspace:
+
+```sh
+# Keep the backend running in another terminal:
+npm run server
+
+# Start the isolated review frontend:
+npm run dev:review
+```
+
+Open **http://127.0.0.1:5174/**, choose a disposable local workspace, and select **Load fictional sample** to explore the working portfolio, research, and transaction screens. This review configuration excludes cloud environment variables and uses a different browser origin from normal development. Normal development and production retain their existing authentication and persistence behavior. See [the redesign integration notes](docs/REDESIGN_INTEGRATION.md) for the feature map and testing limits.
+
 ## Vercel Deployment
 
 1. Connect the GitHub repository to Vercel. Use **Vite**, build command `npm run build`, output directory `dist`, and Node.js **24.x**.

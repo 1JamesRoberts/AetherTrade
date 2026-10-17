@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:review": "vite --config vite.review.config.js --mode review",
     "server": "if [ -d .venv ]; then .venv/bin/python server/server.py; else python3 server/server.py; fi",
     "build": "vite build",
+    "build:prototype": "vite build --config vite.prototype.config.js",
     "lint": "eslint .",
     "test": "node --test",
     "preview": "vite preview"

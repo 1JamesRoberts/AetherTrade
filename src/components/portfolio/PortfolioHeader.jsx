@@ -21,18 +21,19 @@ export default function PortfolioHeader({
             onClick={() => onUpdateBaseCurrency && onUpdateBaseCurrency(activePortfolio.id, 'USD')}
             className={`currency-toggle-btn ${baseCurrency !== 'THB' ? 'active' : ''}`}
           >
-            $ USD
+            USD
           </button>
           <button
             type="button"
             onClick={() => onUpdateBaseCurrency && onUpdateBaseCurrency(activePortfolio.id, 'THB')}
             className={`currency-toggle-btn ${baseCurrency === 'THB' ? 'active' : ''}`}
           >
-            ฿ THB
+            THB
           </button>
         </div>
         <div className="portfolio-select-wrap">
           <select
+            aria-label="Active portfolio"
             id="portfolioSelector"
             value={activePortfolioId}
             onChange={onPortfolioSelect}
@@ -53,7 +54,7 @@ export default function PortfolioHeader({
           title="Create new portfolio"
           aria-label="Create new portfolio"
         >
-          <i className="fa-solid fa-plus"></i>
+          <i className="fa-solid fa-plus"></i><span className="portfolio-action-label">New</span>
         </button>
         <button
           type="button"
@@ -63,7 +64,7 @@ export default function PortfolioHeader({
           title="Rename active portfolio"
           aria-label="Rename active portfolio"
         >
-          <i className="fa-solid fa-pen"></i>
+          <i className="fa-solid fa-pen"></i><span className="portfolio-action-label">Rename</span>
         </button>
         <button
           type="button"
@@ -73,7 +74,7 @@ export default function PortfolioHeader({
           title="Delete active portfolio"
           aria-label="Delete active portfolio"
         >
-          <i className="fa-solid fa-trash-can"></i>
+          <i className="fa-solid fa-trash-can"></i><span className="portfolio-action-label">Delete</span>
         </button>
       </div>
     </div>

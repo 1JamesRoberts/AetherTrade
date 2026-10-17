@@ -1,3 +1,4 @@
+import { useAppearance, systemFont } from '../../theme/appearanceContext.js';
 import { useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import {
@@ -8,20 +9,10 @@ import {
 
 Chart.register(...registerables);
 
-const ALLOCATION_COLORS = [
-  '#06B6D4', // Cyan
-  '#10B981', // Emerald
-  '#3B82F6', // Blue
-  '#8B5CF6', // Purple
-  '#F59E0B', // Amber
-  '#EC4899', // Pink
-  '#14B8A6', // Teal
-  '#6366F1', // Indigo
-  '#F97316', // Orange
-  '#84CC16', // Lime
-];
+const ALLOCATION_COLORS = ['#0d8074', '#587eab', '#bd9c69', '#8c81a6', '#7e9b76', '#af7c89', '#6f9fa5', '#8b8fae', '#c28c67', '#9b9b64'];
 
 export default function AllocationDonut({ activePortfolio, stocks, baseCurrency = 'USD' }) {
+  const { palette } = useAppearance();
   const allocationCanvasRef = useRef(null);
   const allocationChartRef = useRef(null);
 
@@ -76,7 +67,7 @@ export default function AllocationDonut({ activePortfolio, stocks, baseCurrency 
         datasets: [{
           data: holdingsList.map(h => parseFloat(Number(h.baseMarketValue || 0).toFixed(2))),
           backgroundColor: ALLOCATION_COLORS.slice(0, holdingsList.length),
-          borderColor: 'rgba(13, 19, 33, 0.95)',
+          borderColor: palette.surface,
           borderWidth: 3,
           hoverOffset: 6
         }]
@@ -84,16 +75,18 @@ export default function AllocationDonut({ activePortfolio, stocks, baseCurrency 
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        // Financial values update immediately, including when reduced motion is enabled.
+        animation: false,
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#060912',
-            titleColor: '#06B6D4',
-            bodyColor: '#ffffff',
-            borderColor: 'rgba(255, 255, 255, 0.12)',
+            backgroundColor: palette.tooltip,
+            titleColor: palette.tooltipText,
+            bodyColor: palette.tooltipText,
+            borderColor: palette.grid,
             borderWidth: 1,
-            titleFont: { family: 'Outfit', weight: '700', size: 12 },
-            bodyFont: { family: 'JetBrains Mono', size: 11 },
+            titleFont: { family: systemFont, weight: '700', size: 12 },
+            bodyFont: { family: systemFont, size: 11 },
             padding: 10,
             cornerRadius: 8,
             displayColors: false,
@@ -116,7 +109,7 @@ export default function AllocationDonut({ activePortfolio, stocks, baseCurrency 
         allocationChartRef.current = null;
       }
     };
-  }, [holdingsList, totalAssetValue, baseCurrency]);
+  }, [holdingsList, totalAssetValue, baseCurrency, palette]);
 
   return (
     <div className="analysis-section allocation-section">

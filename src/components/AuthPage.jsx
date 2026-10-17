@@ -1,5 +1,6 @@
 import { isCloudEnabled } from '../lib/supabase.js';
 import { useState } from 'react';
+import { AppearancePicker } from './layout/WorkspaceShell';
 
 export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -39,6 +40,7 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
 
   return (
     <div className="auth-page">
+      <div className="auth-appearance"><AppearancePicker /></div>
       <div className="auth-card">
         <div className="auth-logo">
           <div className="logo-icon"><i className="fa-solid fa-chart-line"></i></div>
@@ -53,8 +55,9 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-field">
-            <label>Email</label>
+            <label htmlFor="workspace-email">Email</label>
             <input
+              id="workspace-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -63,8 +66,9 @@ export default function AuthPage({ onSignUp, onSignIn, onGitHub, onGoogle }) {
             />
           </div>
           {isCloudEnabled && <div className="auth-field">
-            <label>Password</label>
+            <label htmlFor="workspace-password">Password</label>
             <input
+              id="workspace-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

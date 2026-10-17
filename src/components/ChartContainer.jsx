@@ -1,3 +1,4 @@
+import { useAppearance, systemFont } from '../theme/appearanceContext.js';
 import { calculateVolumeData } from '../utils/chartUtils.js';
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { createChart, CrosshairMode, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
@@ -76,6 +77,7 @@ export default function ChartContainer({
   onRefresh,
   isLoading
 }) {
+  const { palette } = useAppearance();
   const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const seriesRef = useRef(null);
@@ -389,6 +391,9 @@ export default function ChartContainer({
       try {
         const volSeries = chart.addSeries(HistogramSeries, {
           priceFormat: { type: 'volume' },
+          // Volume is a separate measure, not a quote on the stock price axis.
+          lastValueVisible: false,
+          priceLineVisible: false,
           priceScaleId: 'volume_scale',
         });
         chart.priceScale('volume_scale').applyOptions({
@@ -626,6 +631,27 @@ export default function ChartContainer({
     setZoomLevel
   ]);
 
+  // Theme only the existing chart in place so zoom, indicators and annotations survive.
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart) return;
+    chart.applyOptions({
+      layout: { background: { color: palette.surface }, textColor: palette.muted, fontFamily: systemFont },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
+      rightPriceScale: { borderColor: palette.grid },
+      timeScale: { borderColor: palette.grid },
+      crosshair: { vertLine: { color: palette.accent }, horzLine: { color: palette.accent } },
+    });
+    if (seriesRef.current) {
+      const color = (activeStock.change ?? 0) >= 0 ? palette.positive : palette.negative;
+      seriesRef.current.applyOptions(chartType === 'candle' ? {
+        upColor: palette.positive, downColor: palette.negative,
+        borderUpColor: palette.positive, borderDownColor: palette.negative,
+        wickUpColor: palette.positive, wickDownColor: palette.negative, priceLineColor: palette.muted,
+      } : { lineColor: color, topColor: `${color}35`, bottomColor: `${color}00`, priceLineColor: palette.muted });
+    }
+  }, [palette, activeTicker, activeStock.change, chartType, range, interval, indicators.volume, indicators.ema20, indicators.sma50, setZoomLevel]);
+
   // 2. Data Update Effect (Updates series data without recreating the chart canvas)
   useEffect(() => {
     if (!seriesRef.current || formattedData.length === 0) return;
@@ -731,7 +757,7 @@ export default function ChartContainer({
         width: '100vw',
         height: '100vh',
         zIndex: 99999,
-        background: '#060912',
+        background: 'var(--bg-panel)',
         padding: '16px',
         borderRadius: 0,
         boxSizing: 'border-box',

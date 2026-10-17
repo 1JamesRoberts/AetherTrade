@@ -1,8 +1,10 @@
+import { useAppearance, systemFont } from '../theme/appearanceContext.js';
 import { formatPerformanceAxisValue } from '../utils/chartUtils.js';
 import { investedCapital } from '../utils/portfolioLedger.js';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import RebalanceStudio from './RebalanceStudio';
+import AllocationDonut from './portfolio/AllocationDonut';
 import {
   detectTickerCurrency,
   formatMoney,
@@ -26,6 +28,7 @@ export default function PerformanceHoldings({
   onPrefillTrade,
   showNotification
 }) {
+  const { palette } = useAppearance();
   const performanceCanvasRef = useRef(null);
   const performanceChartRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -356,11 +359,11 @@ export default function PerformanceHoldings({
 
     const ctx = performanceCanvasRef.current.getContext('2d');
     const isOverallGain = data.length > 0 && data[data.length - 1] >= 0;
-    const accentColor = isOverallGain ? '#10B981' : '#F43F5E';
+    const accentColor = isOverallGain ? palette.positive : palette.negative;
 
     const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-    gradient.addColorStop(0, isOverallGain ? 'rgba(16, 185, 129, 0.25)' : 'rgba(244, 63, 94, 0.25)');
-    gradient.addColorStop(1, 'rgba(13, 19, 33, 0)');
+    gradient.addColorStop(0, `${accentColor}30`);
+    gradient.addColorStop(1, `${accentColor}00`);
 
     const datasetLabel = chartMode === 'total' ? 'Total P&L' : 'Unrealized P&L';
 
@@ -379,25 +382,27 @@ export default function PerformanceHoldings({
           pointHoverRadius: 6,
           pointHitRadius: 12,
           pointBackgroundColor: accentColor,
-          pointBorderColor: '#ffffff',
+          pointBorderColor: palette.surface,
           pointBorderWidth: 2,
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        // Financial values update immediately, including when reduced motion is enabled.
+        animation: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
             displayColors: false,
-            backgroundColor: '#060912',
-            titleColor: '#06B6D4',
-            bodyColor: '#ffffff',
-            borderColor: 'rgba(255, 255, 255, 0.12)',
+            backgroundColor: palette.tooltip,
+            titleColor: palette.tooltipText,
+            bodyColor: palette.tooltipText,
+            borderColor: palette.grid,
             borderWidth: 1,
-            titleFont: { family: 'Outfit', weight: '700', size: 12 },
-            bodyFont: { family: 'JetBrains Mono', size: 11 },
+            titleFont: { family: systemFont, weight: '700', size: 12 },
+            bodyFont: { family: systemFont, size: 11 },
             padding: 10,
             cornerRadius: 8,
             callbacks: {
@@ -410,17 +415,17 @@ export default function PerformanceHoldings({
           }
         },
         scales: {
-          x: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+          x: { grid: { color: palette.grid, drawBorder: false }, ticks: { color: palette.muted, font: { family: systemFont, size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
           y: {
             display: true,
             position: 'left',
             border: { display: false },
-            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            grid: { color: palette.grid },
             // Use left-aligned labels and a system font to keep text inside the axis gutter.
             afterFit: scale => { scale.width = Math.max(scale.width, 104); },
             ticks: {
               display: true,
-              color: '#94A3B8',
+              color: palette.muted,
               font: { family: 'Arial, sans-serif', size: 12 },
               crossAlign: 'far',
               padding: 8,
@@ -438,7 +443,7 @@ export default function PerformanceHoldings({
         performanceChartRef.current = null;
       }
     };
-  }, [activePortfolio, stocks, chartMode, timeRange, mountTime, baseCurrency, fxRate]);
+  }, [activePortfolio, stocks, chartMode, timeRange, mountTime, baseCurrency, fxRate, palette]);
 
   const handleRefreshPrices = async () => {
     if (isRefreshing) return;
@@ -523,7 +528,7 @@ export default function PerformanceHoldings({
         <div className={`metric-card ${netProfit >= 0 ? 'card-green' : 'card-red'}`}>
           <div className="metric-card-header"><span className="title">Unrealized P&L</span><i className={`fa-solid ${netProfit >= 0 ? 'fa-arrow-trend-up text-green' : 'fa-arrow-trend-down text-red'}`}></i></div>
           <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>
-            {netProfit >= 0 ? '+' : ''}{formatMoney(netProfit, baseCurrency)} ({netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%)
+            <span className="metric-val-amount">{netProfit >= 0 ? '+' : ''}{formatMoney(netProfit, baseCurrency)}</span> <span className="metric-val-rate">({netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%)</span>
           </div>
           <div className="metric-subtext">Open positions return on cost</div>
         </div>
@@ -539,57 +544,61 @@ export default function PerformanceHoldings({
         </div>
         <div className={`metric-card ${totalReturnVal >= 0 ? 'card-green' : 'card-red'}`}>
           <div className="metric-card-header"><span className="title" title="Total gains divided by all purchase costs, including closed positions. Uses current FX; not annualized or cash-flow adjusted.">Total Return (ROI)</span><i className="fa-solid fa-percent text-cyan"></i></div>
-          <div className={`metric-val tabular-nums ${totalReturnVal >= 0 ? 'text-green' : 'text-red'}`}>{totalReturnVal >= 0 ? '+' : ''}{formatMoney(totalReturnVal, baseCurrency)} ({totalReturnVal >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)</div>
+          <div className={`metric-val tabular-nums ${totalReturnVal >= 0 ? 'text-green' : 'text-red'}`}><span className="metric-val-amount">{totalReturnVal >= 0 ? '+' : ''}{formatMoney(totalReturnVal, baseCurrency)}</span> <span className="metric-val-rate">({totalReturnVal >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)</span></div>
           <div className="metric-subtext">Capital gains + dividend payouts</div>
         </div>
       </div>
 
-      <div className="analysis-section portfolio-chart-section">
-        <div className="section-subtitle portfolio-chart-subtitle">
-          <div className="chart-mode-cluster">
-            <span>Portfolio Valuation Progression</span>
-            <div className="chart-mode-pill-group">
-              <button type="button" onClick={() => setChartMode('total')} className={`chart-mode-pill ${chartMode === 'total' ? 'active' : ''}`}>Total P&L</button>
-              <button type="button" onClick={() => setChartMode('unrealized')} className={`chart-mode-pill ${chartMode === 'unrealized' ? 'active' : ''}`}>Unrealized P&L</button>
+      <div className="portfolio-visuals-grid">
+        <div className="analysis-section portfolio-chart-section">
+          <div className="section-subtitle portfolio-chart-subtitle">
+            <div className="chart-mode-cluster">
+              <span>Portfolio Valuation Progression</span>
+              <div className="chart-mode-pill-group">
+                <button type="button" onClick={() => setChartMode('total')} className={`chart-mode-pill ${chartMode === 'total' ? 'active' : ''}`}>Total P&L</button>
+                <button type="button" onClick={() => setChartMode('unrealized')} className={`chart-mode-pill ${chartMode === 'unrealized' ? 'active' : ''}`}>Unrealized P&L</button>
+              </div>
+            </div>
+
+            <div className="chart-right-controls">
+              <div className="time-range-pill-group">
+                {['1W', '1M', '1Y', '5Y', 'ALL'].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setTimeRange(r)}
+                    className={`time-range-pill ${timeRange === r ? 'active' : ''}`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              {(activePortfolio?.transactions || []).length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRefreshPrices}
+                  disabled={isRefreshing}
+                  className="btn-refresh"
+                  title="Refresh chart prices"
+                  aria-label="Refresh chart prices"
+                >
+                  <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="chart-right-controls">
-            <div className="time-range-pill-group">
-              {['1W', '1M', '1Y', '5Y', 'ALL'].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setTimeRange(r)}
-                  className={`time-range-pill ${timeRange === r ? 'active' : ''}`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-            {(activePortfolio?.transactions || []).length > 0 && (
-              <button
-                type="button"
-                onClick={handleRefreshPrices}
-                disabled={isRefreshing}
-                className="btn-refresh"
-                title="Refresh chart prices"
-                aria-label="Refresh chart prices"
-              >
-                <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
-              </button>
+          <div className="performance-chart-wrapper" id="performanceChartContainer">
+            <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart"></canvas>
+            {(activePortfolio?.transactions || []).length === 0 && (
+              <div id="performanceEmptyMsg" className="empty-chart-overlay">
+                <i className="fa-solid fa-chart-line empty-chart-icon"></i> <span>No performance history available yet. Record transactions to plot growth.</span>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="performance-chart-wrapper" id="performanceChartContainer">
-          <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart"></canvas>
-          {(activePortfolio?.transactions || []).length === 0 && (
-            <div id="performanceEmptyMsg" className="empty-chart-overlay">
-              <i className="fa-solid fa-chart-line empty-chart-icon"></i> <span>No performance history available yet. Record transactions to plot growth.</span>
-            </div>
-          )}
-        </div>
+        <AllocationDonut activePortfolio={activePortfolio} stocks={stocks} baseCurrency={baseCurrency} />
       </div>
 
       <div className="analysis-section holdings-table-section">
@@ -616,7 +625,7 @@ export default function PerformanceHoldings({
             <div className="empty-table-state" id="emptyPortfolioState">
               <div className="empty-icon"><i className="fa-solid fa-briefcase"></i></div>
               <p className="empty-title">Your Portfolio is Empty</p>
-              <p className="empty-desc">Search for a ticker and record a BUY transaction in the left panel to build your portfolio holdings.</p>
+              <p className="empty-desc">Choose Record transaction to add your first purchase and build your portfolio holdings.</p>
             </div>
           ) : (
             <table className="projection-table holdings-table" id="portfolioTable">
@@ -705,15 +714,18 @@ export default function PerformanceHoldings({
       </div>
 
       <div className="analysis-section rebalance-main-section">
-        <RebalanceStudio
-          activePortfolio={activePortfolio}
-          stocks={stocks}
-          onUpdateTargetAllocations={onUpdateTargetAllocations}
-          onExecuteRebalance={onExecuteRebalance}
-          onPrefillTrade={onPrefillTrade}
-          onAddTransaction={onAddTransaction}
-          showNotification={showNotification}
-        />
+        <details className="rebalance-disclosure">
+          <summary>Rebalancing & target allocations <span>Explore targets, deposit plans, and proposed orders</span></summary>
+          <RebalanceStudio
+            activePortfolio={activePortfolio}
+            stocks={stocks}
+            onUpdateTargetAllocations={onUpdateTargetAllocations}
+            onExecuteRebalance={onExecuteRebalance}
+            onPrefillTrade={onPrefillTrade}
+            onAddTransaction={onAddTransaction}
+            showNotification={showNotification}
+          />
+        </details>
       </div>
     </section>
   );
