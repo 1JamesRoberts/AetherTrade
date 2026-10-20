@@ -1,3 +1,4 @@
+import { SegmentedControl, AssetMark } from './ui/Controls.jsx';
 import { useState, useRef, useEffect } from 'react';
 import { detectTickerCurrency, formatMoney } from '../utils/currencyUtils';
 
@@ -396,33 +397,14 @@ export default function Watchlist({
       </div>
 
       {/* Filter Tabs */}
-      <div className="watchlist-filter-tabs">
-        <button
-          onClick={() => setFilter('all')}
-          className={`filter-tab ${filter === 'all' ? 'active' : ''}`}
-        >
-          All
-        </button>
-        <button
-          onClick={() => setFilter('gainers')}
-          className={`filter-tab ${filter === 'gainers' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-arrow-trend-up"></i> Gainers
-        </button>
-        <button
-          onClick={() => setFilter('losers')}
-          className={`filter-tab ${filter === 'losers' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-arrow-trend-down"></i> Losers
-        </button>
-      </div>
-
+      <SegmentedControl className="watchlist-filters" label="Watchlist filter" value={filter} onChange={setFilter} options={[{ value: 'all', label: 'All' }, { value: 'gainers', label: 'Gainers' }, { value: 'losers', label: 'Losers' }]} />
       {/* Search Bar */}
       <div className="search-box" ref={searchContainerRef}>
         <div className="search-input-container">
           <i className="fa-solid fa-magnifying-glass search-icon"></i>
           <input
             ref={searchInputRef}
+            aria-label="Search watchlist or add a symbol"
             type="text"
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
@@ -531,55 +513,13 @@ export default function Watchlist({
             const isActive = ticker === activeTicker;
 
             return (
-              <li
-                key={ticker}
-                onClick={() => setActiveTicker(ticker)}
-                className={`stock-item ${isActive ? 'active' : ''}`}
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && setActiveTicker(ticker)}
-              >
-                {/* Left: Ticker Symbol & Full Name */}
-                <div className="stock-item-left">
-                  <div className={`stock-symbol-badge ${isActive ? 'active' : ''}`}>
-                    {ticker.slice(0, 3)}
-                  </div>
-                  <div className="stock-item-info">
-                    <span className="stock-item-ticker">{stock.ticker}</span>
-                    <span className="stock-item-name" title={stock.name}>{stock.name}</span>
-                  </div>
-                </div>
-
-                {/* Center: Dynamic Sparkline (real 1D intraday data) */}
-                <div className="stock-item-center">
-                  <Sparkline isUp={isUp} change={stock.change ?? 0} points={stock.sparklinePoints || null} />
-                </div>
-
-                {/* Right: Price, % Change Pill, and Delete */}
-                <div className="stock-item-right-wrapper">
-                  <div className="stock-item-stats">
-                    <span className="stock-item-price tabular-nums">{priceText}</span>
-                    {stock.isLive ? (
-                      <span className={`stock-item-change ${isUp ? 'up' : 'down'} tabular-nums`}>
-                        {isUp ? '+' : ''}{(stock.change ?? 0).toFixed(2)}%
-                      </span>
-                    ) : (
-                      <span className="stock-item-change loading">
-                        Syncing...
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveTicker(ticker);
-                    }}
-                    className="btn-watchlist-remove"
-                    title={`Remove ${stock.ticker} from watchlist`}
-                    aria-label={`Remove ${stock.ticker} from watchlist`}
-                  >
-                    <i className="fa-solid fa-trash-can"></i>
-                  </button>
-                </div>
+              <li key={ticker} className={`watch-asset ${isActive ? 'selected' : ''}`}>
+                <button type="button" className="watch-asset-select" aria-pressed={isActive} onClick={() => setActiveTicker(ticker)} aria-label={`Research ${ticker}`}>
+                  <AssetMark ticker={ticker} /><span className="watch-asset-identity"><strong>{stock.ticker}</strong><small title={stock.name}>{stock.name}</small></span>
+                  <span className="watch-asset-quote tabular-nums"><strong>{priceText}</strong><span className={isUp ? 'text-green' : 'text-red'}>{stock.isLive ? `${isUp ? '+' : ''}${(stock.change ?? 0).toFixed(2)}%` : 'Syncing…'}</span></span>
+                  <span className="watch-asset-trend"><Sparkline isUp={isUp} change={stock.change ?? 0} points={stock.sparklinePoints || null} /></span>
+                </button>
+                <button type="button" className="watch-asset-remove" onClick={event => { event.stopPropagation(); onRemoveTicker(ticker); }} aria-label={`Remove ${stock.ticker} from watchlist`} title={`Remove ${stock.ticker} from watchlist`}>×</button>
               </li>
             );
           })}

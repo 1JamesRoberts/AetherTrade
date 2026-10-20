@@ -1,3 +1,4 @@
+import { MetricGrid } from './ui/Controls.jsx';
 import { useState, useEffect } from 'react';
 import {
   detectTickerCurrency,
@@ -167,7 +168,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
 
   return (
     <div className={`stock-insights-container ${isCollapsed ? 'collapsed' : ''}`} id="stockInsightsPanel">
-      <div className="insights-header" onClick={() => setIsCollapsed(!isCollapsed)}>
+      <div className="insights-header">
         <div className="insights-header-left">
           <div className="insights-icon-badge">
             <i className={`fa-solid fa-chart-pie text-cyan ${isLoadingApi ? 'fa-pulse' : ''}`}></i>
@@ -189,6 +190,9 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
           <button
             type="button"
             className="btn-insights-toggle"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            aria-expanded={!isCollapsed}
+            aria-controls="stock-insights-content"
             aria-label={isCollapsed ? 'Expand insights panel' : 'Collapse insights panel'}
           >
             <i className={`fa-solid fa-chevron-${isCollapsed ? 'down' : 'up'}`}></i>
@@ -197,7 +201,7 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
       </div>
 
       {!isCollapsed && (
-        <div className="insights-body">
+        <div className="insights-body" id="stock-insights-content">
           {isLoadingApi && !data ? (
             <div className="insights-loading-skeleton">
               <div className="skeleton-line"></div>
@@ -267,80 +271,17 @@ export default function StockInsights({ activeTicker, currentPrice, historicalDa
                 </div>
               )}
 
-              {/* 8-Card Fundamentals Metric Grid */}
-              <div className="fundamentals-grid">
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">Market Cap</span>
-                    <i className="fa-solid fa-building-columns chip-icon text-cyan"></i>
-                  </div>
-                  <div className="chip-value tabular-nums">{formatLargeNumber(data.marketCap, true, tickerCurr)}</div>
-                  <div className="chip-subtext">Enterprise Valuation</div>
-                </div>
-
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">P/E Ratio (TTM)</span>
-                    <i className="fa-solid fa-scale-balanced chip-icon text-primary"></i>
-                  </div>
-                  <div className="chip-value tabular-nums">{data.peRatio || '--'}</div>
-                  <div className="chip-subtext">Price to Earnings</div>
-                </div>
-
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">Forward P/E</span>
-                    <i className="fa-solid fa-forward chip-icon text-cyan"></i>
-                  </div>
-                  <div className="chip-value tabular-nums">{data.forwardPE || '--'}</div>
-                  <div className="chip-subtext">1-Year Projected</div>
-                </div>
-
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">EPS (TTM)</span>
-                    <i className="fa-solid fa-coins chip-icon text-bullish"></i>
-                  </div>
-                  <div className="chip-value tabular-nums text-bullish">{data.eps || '--'}</div>
-                  <div className="chip-subtext">Earnings Per Share</div>
-                </div>
-
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">Dividend Yield</span>
-                    <i className="fa-solid fa-hand-holding-dollar chip-icon text-warning"></i>
-                  </div>
-                  <div className="chip-value tabular-nums">{formatPercentValue(data.dividendYield)}</div>
-                  <div className="chip-subtext">Annual Payout Rate</div>
-                </div>
-
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">Avg Volume (30D)</span>
-                    <i className="fa-solid fa-chart-simple chip-icon text-cyan"></i>
-                  </div>
-                  <div className="chip-value tabular-nums">{formatLargeNumber(data.avgVolume30D)}</div>
-                  <div className="chip-subtext">Daily Liquidity</div>
-                </div>
-
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">Beta (5Y)</span>
-                    <i className="fa-solid fa-wave-square chip-icon text-primary"></i>
-                  </div>
-                  <div className="chip-value tabular-nums">{data.beta || '--'}</div>
-                  <div className="chip-subtext">Market Volatility</div>
-                </div>
-
-                <div className="fundamental-chip">
-                  <div className="chip-header">
-                    <span className="chip-label">Shares Out</span>
-                    <i className="fa-solid fa-layer-group chip-icon text-muted"></i>
-                  </div>
-                  <div className="chip-value tabular-nums">{formatLargeNumber(data.sharesOutstanding)}</div>
-                  <div className="chip-subtext">Total Float Shares</div>
-                </div>
-              </div>
+              {/* Fundamentals are a semantic set of values with consistent emphasis. */}
+              <MetricGrid label="Company fundamentals" items={[
+                { label: 'Market cap', value: formatLargeNumber(data.marketCap, true, tickerCurr), hint: 'Enterprise valuation' },
+                { label: 'P/E ratio', value: data.peRatio || '--', hint: 'Trailing twelve months' },
+                { label: 'Forward P/E', value: data.forwardPE || '--', hint: 'One-year projected' },
+                { label: 'EPS', value: data.eps || '--', hint: 'Trailing twelve months' },
+                { label: 'Dividend yield', value: formatPercentValue(data.dividendYield), hint: 'Annual payout rate' },
+                { label: 'Average volume', value: formatLargeNumber(data.avgVolume30D), hint: '30-day daily average' },
+                { label: 'Beta', value: data.beta || '--', hint: 'Market volatility' },
+                { label: 'Shares outstanding', value: formatLargeNumber(data.sharesOutstanding), hint: 'Total float shares' },
+              ]} />
 
               {/* Company Profile & Executive Overview (Step 2) */}
               <div className="company-profile-card">

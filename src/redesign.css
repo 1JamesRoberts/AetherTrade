@@ -22,6 +22,8 @@
   --bullish-glow: transparent;
   --bearish: #bd424d;
   --bearish-bg: #bd424d12;
+  --dividend: #7052a3;
+  --dividend-bg: #7052a312;
   --bearish-glow: transparent;
   --warning: #966214;
   --warning-bg: #96621412;
@@ -65,6 +67,8 @@
   --bullish-bg: #75cfba12;
   --bearish: #f18e93;
   --bearish-bg: #f18e9312;
+  --dividend: #c2a6f2;
+  --dividend-bg: #c2a6f212;
   --warning: #dfbc7a;
   --warning-bg: #dfbc7a12;
   --text-primary: #e8eef0;
@@ -502,3 +506,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .workspace-shell .asset-ticker { color: var(--text-primary); }
 .workspace-shell .weight-track { background: var(--bg-surface-elevated); }
+/* Rebalancing uses div-based rows, separate from the holdings table. */
+.workspace-shell .rebalance-studio-container :is(.target-matrix-row, .deposit-config-card, .orders-summary-bar, .rebalance-order-item, .rebalance-mode-pill-group) {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+.workspace-shell .target-matrix-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+.workspace-shell .rebalance-studio-container :is(.target-pct-input, .deposit-cash-input) {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+.workspace-shell .matrix-progress-track { background: var(--bg-surface-elevated); }
+.workspace-shell .matrix-actual-fill { background: var(--primary); }
+.workspace-shell .matrix-target-marker { background: var(--text-primary); box-shadow: none; }
+.workspace-shell .rebalance-studio-container :is(.btn-target-tool, .deposit-preset-chip, .btn-copy-plan) {
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+.workspace-shell .rebalance-studio-container :is(.rebalance-mode-pill.active, .deposit-preset-chip.active, .btn-target-tool:hover, .deposit-preset-chip:hover, .btn-copy-plan:hover:not(:disabled)) {
+  background: var(--accent-soft);
+  color: var(--primary);
+  border-color: var(--border-active);
+}
+.workspace-shell .rebalance-studio-container :is(.studio-warning-alert, .target-status-pill.under, .drift-badge.overweight) {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+.workspace-shell .rebalance-studio-container :is(.target-matrix-list, .rebalance-orders-list)::-webkit-scrollbar-track { background: var(--bg-card); }
+.workspace-shell .rebalance-studio-container :is(.target-matrix-list, .rebalance-orders-list)::-webkit-scrollbar-thumb { background: var(--border-hover); }

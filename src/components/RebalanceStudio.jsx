@@ -1,3 +1,4 @@
+import { SegmentedControl, AssetMark } from './ui/Controls.jsx';
 import { useState, useMemo } from 'react';
 import {
   calculateEqualSplit,
@@ -190,35 +191,10 @@ export default function RebalanceStudio({
   };
 
   return (
-    <div className="rebalance-studio-container" aria-label="Target Strategy & Rebalance Studio">
+    <div className="rebalance-studio-container rebalance-workspace" aria-label="Target Strategy & Rebalance Studio">
       <div className="rebalance-targets-section">
         <div className="section-subtitle rebalance-studio-header">
-          <div className="rebalance-header-title-group">
-            <span className="studio-title">Target Asset Allocation</span>
-            <span
-              className={`target-status-pill ${
-                Math.abs(totalTargetPct - 100) <= 0.05
-                  ? 'balanced'
-                  : totalTargetPct < 100
-                  ? 'under'
-                  : 'over'
-              }`}
-            >
-              {Math.abs(totalTargetPct - 100) <= 0.05 ? (
-                <>
-                  <i className="fa-solid fa-circle-check"></i> 100% Allocated
-                </>
-              ) : totalTargetPct < 100 ? (
-                <>
-                  <i className="fa-solid fa-circle-exclamation"></i> {totalTargetPct.toFixed(1)}% / 100% ({(100 - totalTargetPct).toFixed(1)}% Left)
-                </>
-              ) : (
-                <>
-                  <i className="fa-solid fa-triangle-exclamation"></i> {totalTargetPct.toFixed(1)}% / 100% (+{(totalTargetPct - 100).toFixed(1)}% Over)
-                </>
-              )}
-            </span>
-          </div>
+          <div className="rebalance-step-heading"><span className="studio-step">1</span><div><h4 className="studio-title">Target allocation</h4><p>Choose the share of your portfolio for each asset.</p></div></div>
 
           <div className="target-tools-cluster">
             <button
@@ -245,9 +221,15 @@ export default function RebalanceStudio({
               className="btn-target-tool btn-target-clear"
               title="Clear all target weights"
             >
-              <i className="fa-solid fa-eraser"></i>
+              <i className="fa-solid fa-eraser" aria-hidden="true"></i><span>Clear weights</span>
             </button>
           </div>
+        </div>
+
+        <div className={`rebalance-allocation-summary ${Math.abs(totalTargetPct - 100) <= 0.05 ? 'balanced' : 'incomplete'}`}>
+          <div><span>Targets allocated</span><strong className="tabular-nums">{totalTargetPct.toFixed(1)}% <small>/ 100%</small></strong></div>
+          <progress aria-label="Total target allocation" value={Math.min(100, totalTargetPct)} max="100" />
+          <p>{Math.abs(totalTargetPct - 100) <= 0.05 ? 'Your target weights are fully allocated.' : totalTargetPct < 100 ? `${(100 - totalTargetPct).toFixed(1)}% left to allocate.` : `${(totalTargetPct - 100).toFixed(1)}% over the target total. Adjust or normalize your weights.`}</p>
         </div>
 
         {untargetedHeldCount > 0 && rebalanceMode === 'full' && (
@@ -279,19 +261,20 @@ export default function RebalanceStudio({
 
               return (
                 <div key={ticker} className="target-matrix-row">
-                  <div className="matrix-col-asset">
+                  <div className="matrix-col-asset"><AssetMark ticker={ticker} /><div className="target-asset-description">
                     <div className="matrix-ticker-group">
                       <span className="matrix-ticker">{ticker}</span>
                       <span className="matrix-name">{stocks[ticker]?.name || `${ticker} Stock`}</span>
                     </div>
                     <div className="matrix-val-sub tabular-nums">
-                      {formatMoney(baseVal, baseCurrency)} ({parseFloat(Number(shares || 0).toFixed(4))} sh @ {formatMoney(nativePrice, tickerCurr)})
+                      <strong>{formatMoney(baseVal, baseCurrency)}</strong><span>{parseFloat(Number(shares || 0).toFixed(4))} shares at {formatMoney(nativePrice, tickerCurr)}</span>
                     </div>
                   </div>
 
+                  </div>
                   <div className="matrix-col-drift">
                     <div className="matrix-weight-compare tabular-nums">
-                      <span className="actual-weight-tag">Actual: {actualWeight.toFixed(1)}%</span>
+                      <span className="actual-weight-tag">Current <strong>{actualWeight.toFixed(1)}%</strong></span>
                       <span className={`drift-badge ${status}`}>
                         {status === 'overweight' && <i className="fa-solid fa-arrow-up"></i>}
                         {status === 'underweight' && <i className="fa-solid fa-arrow-down"></i>}
@@ -316,8 +299,9 @@ export default function RebalanceStudio({
                   </div>
 
                   <div className="matrix-col-input">
-                    <div className="target-input-wrapper">
+                    <label className="target-input-label"><span>Target weight</span><div className="target-input-wrapper">
                       <input
+                        aria-label={`Target weight for ${ticker}`}
                         type="number"
                         min="0"
                         max="100"
@@ -330,7 +314,7 @@ export default function RebalanceStudio({
                         className="target-pct-input tabular-nums"
                       />
                       <span className="target-suffix">%</span>
-                    </div>
+                    </div></label>
                   </div>
                 </div>
               );
@@ -341,34 +325,18 @@ export default function RebalanceStudio({
 
       <div className="rebalance-action-section">
         <div className="section-subtitle rebalance-studio-header">
-          <span className="studio-title">Rebalancing Engine</span>
-          <div className="rebalance-mode-pill-group">
-            <button
-              type="button"
-              onClick={() => setRebalanceMode('full')}
-              className={`rebalance-mode-pill ${rebalanceMode === 'full' ? 'active' : ''}`}
-            >
-              <i className="fa-solid fa-rotate"></i>
-              <span>Full Rebalance</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setRebalanceMode('deposit')}
-              className={`rebalance-mode-pill ${rebalanceMode === 'deposit' ? 'active' : ''}`}
-            >
-              <i className="fa-solid fa-money-bill-wave"></i>
-              <span>Deposit Rebalance</span>
-            </button>
-          </div>
+          <div className="rebalance-step-heading"><span className="studio-step">2</span><div><h4 className="studio-title">Review your orders</h4><p>{rebalanceMode === 'full' ? 'Adjust existing positions toward your targets.' : 'Put new cash toward your target weights.'}</p></div></div>
+          <SegmentedControl label="Rebalance mode" value={rebalanceMode} onChange={setRebalanceMode} options={[{ value: 'full', label: 'Full rebalance' }, { value: 'deposit', label: 'Add cash' }]} />
         </div>
 
         {rebalanceMode === 'deposit' && (
           <div className="deposit-config-card">
             <div className="deposit-input-row">
-              <span className="deposit-label">Deposit Cash Amount:</span>
+              <label className="deposit-label" htmlFor="rebalanceDeposit">Cash to invest <small>{baseCurrency}</small></label>
               <div className="deposit-field-wrapper">
                 <span className="field-prefix">{getCurrencySymbol(baseCurrency)}</span>
                 <input
+                  id="rebalanceDeposit"
                   type="number"
                   min="1"
                   step="10"
@@ -402,15 +370,9 @@ export default function RebalanceStudio({
               <span className="orders-count-badge tabular-nums">
                 {rebalanceResult.orders.length} {rebalanceResult.orders.length === 1 ? 'Order' : 'Orders'} Proposed
               </span>
-              {rebalanceMode === 'full' ? (
-                <span className="orders-stat-sub tabular-nums">
-                  Sells: <strong className="text-red">{formatMoney(rebalanceResult.totalSells, baseCurrency)}</strong> | Buys: <strong className="text-green">{formatMoney(rebalanceResult.totalBuys, baseCurrency)}</strong>
-                </span>
-              ) : (
-                <span className="orders-stat-sub tabular-nums">
-                  Allocated: <strong className="text-green">{formatMoney(rebalanceResult.totalBuys, baseCurrency)}</strong> / {formatMoney(depositAmount, baseCurrency)} (Left: {formatMoney(rebalanceResult.cashRemaining, baseCurrency)})
-                </span>
-              )}
+              <dl className="rebalance-plan-totals">
+                {rebalanceMode === 'full' ? <><div><dt>Proposed sells</dt><dd className="text-red tabular-nums">{formatMoney(rebalanceResult.totalSells, baseCurrency)}</dd></div><div><dt>Proposed buys</dt><dd className="text-green tabular-nums">{formatMoney(rebalanceResult.totalBuys, baseCurrency)}</dd></div></> : <><div><dt>Cash allocated</dt><dd className="text-green tabular-nums">{formatMoney(rebalanceResult.totalBuys, baseCurrency)}</dd></div><div><dt>Cash remaining</dt><dd className="tabular-nums">{formatMoney(rebalanceResult.cashRemaining, baseCurrency)}</dd></div></>}
+              </dl>
             </div>
 
             <div className="orders-summary-actions">
@@ -488,7 +450,7 @@ export default function RebalanceStudio({
                         title={`Pre-fill ${ord.type} ${ord.ticker} in Record Trade form to adjust exact execution price`}
                       >
                         <i className="fa-solid fa-pen-to-square"></i>
-                        <span>Fill in Form</span>
+                        <span>Review entry</span>
                       </button>
                       <button
                         type="button"
@@ -497,7 +459,7 @@ export default function RebalanceStudio({
                         title={`Quick-log ${ord.type} ${ord.ticker} immediately at market estimate (${formatMoney(ord.price, ordCurr)})`}
                       >
                         <i className="fa-solid fa-bolt"></i>
-                        <span>Log</span>
+                        <span>Record</span>
                       </button>
                     </div>
                   </div>

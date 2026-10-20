@@ -1,3 +1,4 @@
+import { SegmentedControl, ComponentHeading, AssetMark } from '../ui/Controls.jsx';
 import { useState, useMemo } from 'react';
 import {
   detectTickerCurrency,
@@ -39,38 +40,17 @@ export default function TransactionLedger({
   const allTransactions = activePortfolio?.transactions || [];
 
   return (
-    <div className="analysis-section sidebar-ledger-section">
-      <div className="section-subtitle">
-        <span>Transaction Audit History</span>
-        <span className="ledger-count-tag tabular-nums">
-          {allTransactions.length === 0
-            ? '0 Records'
-            : filteredTransactions.length === allTransactions.length
-            ? `${allTransactions.length} Records`
-            : `Showing ${filteredTransactions.length} of ${allTransactions.length}`}
-        </span>
-      </div>
-
+    <div className="analysis-section sidebar-ledger-section activity-ledger">
+      <ComponentHeading title="Transaction Audit History" description="A complete record, with the details behind every entry."><span className="ui-count">{filteredTransactions.length} of {allTransactions.length} records</span></ComponentHeading>
       {/* Filter Toolbar (Type Pills + Search Box) */}
       <div className="ledger-filter-toolbar">
-        <div className="ledger-filter-pill-group">
-          {['ALL', 'BUY', 'SELL', 'DIVIDEND'].map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => setLedgerTypeFilter(type)}
-              className={`ledger-filter-pill ${type.toLowerCase()} ${ledgerTypeFilter === type ? 'active' : ''}`}
-            >
-              {type}
-            </button>
-          ))}
-        </div>
-
+        <SegmentedControl label="Filter transactions" value={ledgerTypeFilter} onChange={setLedgerTypeFilter} options={['ALL', 'BUY', 'SELL', 'DIVIDEND'].map(value => ({ value, label: value === 'ALL' ? 'All' : value[0] + value.slice(1).toLowerCase() }))} />
         <div className="ledger-search-box">
           <i className="fa-solid fa-magnifying-glass search-icon"></i>
           <input
             type="text"
-            placeholder="Filter symbol/account..."
+            aria-label="Filter transactions by symbol or account"
+            placeholder="Find symbol or account"
             value={ledgerSearchQuery}
             onChange={(e) => setLedgerSearchQuery(e.target.value)}
             className="ledger-search-input"
@@ -125,27 +105,11 @@ export default function TransactionLedger({
 
               return (
                 <li key={rowKey} className={`tx-ledger-item ${String(tx.type || 'BUY').toLowerCase()}`}>
-                  <div className="ledger-left">
-                    <div className="ledger-top-row">
-                      <span className={`type-badge ${String(tx.type || 'BUY').toLowerCase()}`}>
-                        {tx.type || 'BUY'}
-                      </span>
-                      <span className="ledger-shares-ticker tabular-nums">
-                        {tx.type === 'DIVIDEND'
-                          ? <strong>Dividend from {tx.ticker}</strong>
-                          : <><strong>{parseFloat(sharesNum.toFixed(6))} {tx.ticker}</strong> @ {formatMoney(priceNum, txCurr)}</>
-                        }
-                      </span>
-                    </div>
-                    <div className="ledger-meta-row tabular-nums">
-                      <span>Gross: {formatMoney(grossVal, txCurr)}</span>
-                      <span>{tx.type === 'DIVIDEND' ? 'Tax/Fee' : 'Fee'}: {formatMoney(txFees, txCurr)}</span>
-                      <span>Net: <strong className={tx.type === 'DIVIDEND' ? 'text-purple' : tx.type === 'BUY' ? 'text-green' : 'text-red'}>{tx.type === 'DIVIDEND' ? '+' : ''}{formatMoney(netVal, txCurr)}</strong></span>
-                      {accountStr && <span className="account-tag">{accountStr}</span>}
-                    </div>
-                  </div>
+                  <details className="audit-record">
+                    <summary><AssetMark ticker={tx.ticker || '?'} /><span className={`audit-type-indicator ${String(tx.type || 'BUY').toLowerCase()}`}><span className="audit-type-dot" aria-hidden="true" />{tx.type || 'BUY'}</span><span className="audit-identity"><strong>{tx.ticker}</strong><span>{tx.type === 'DIVIDEND' ? 'Dividend' : tx.type === 'SELL' ? 'Sale' : 'Purchase'} · {txDateStr}</span></span><span className="audit-amount tabular-nums"><strong>{tx.type === 'DIVIDEND' ? '+' : ''}{formatMoney(netVal, txCurr)}</strong><small>{txCurr} · Net</small></span><span className="audit-chevron" aria-hidden="true">⌄</span></summary>
+                    <div className="audit-detail"><dl><div><dt>Type</dt><dd>{tx.type || 'BUY'}</dd></div><div><dt>Quantity</dt><dd className="tabular-nums">{parseFloat(sharesNum.toFixed(6))}</dd></div><div><dt>Price</dt><dd className="tabular-nums">{formatMoney(priceNum, txCurr)}</dd></div><div><dt>Gross value</dt><dd className="tabular-nums">{formatMoney(grossVal, txCurr)}</dd></div><div><dt>{tx.type === 'DIVIDEND' ? 'Tax / fee' : 'Fee'}</dt><dd className="tabular-nums">{formatMoney(txFees, txCurr)}</dd></div><div><dt>Account</dt><dd>{accountStr ? tx.account : 'Default'}</dd></div></dl></div>
+                  </details>
                   <div className="ledger-right">
-                    <span className="tx-time tabular-nums">{txDateStr}</span>
                     <div className="ledger-actions-group">
                       {onStartEdit && (
                         <button

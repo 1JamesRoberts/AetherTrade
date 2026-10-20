@@ -1,3 +1,4 @@
+import { ComponentHeading } from './ui/Controls.jsx';
 import { useMemo } from 'react';
 
 export default function AnalysisEngine({
@@ -193,11 +194,7 @@ export default function AnalysisEngine({
 
   return (
     <section className="panel panel-right" aria-label="Trading Strategy & Analysis">
-      <div className="panel-header">
-        <h2 className="panel-title">
-          <i className="fa-solid fa-layer-group"></i> Analysis Engine
-        </h2>
-      </div>
+      <ComponentHeading eyebrow={activeTicker} title="Explore a scenario" description="Compare price levels, position sizes, and potential outcomes." />
 
       {/* Holdings Section */}
       {activeTickerHoldings.length > 0 && (
@@ -271,7 +268,7 @@ export default function AnalysisEngine({
             <div className="level-pills-scroll">
               <ul className="level-pills-list">
                 {supports.length === 0 ? (
-                  <li className="empty-pill-msg">No support lines set. Click on chart below price or click Auto Levels.</li>
+                  <li className="empty-pill-msg">No support levels yet. Use Add level on the chart, or choose Auto Levels.</li>
                 ) : (
                   supports.map((price) => {
                     const diff = currentPrice - price;
@@ -310,7 +307,7 @@ export default function AnalysisEngine({
             <div className="level-pills-scroll">
               <ul className="level-pills-list">
                 {resistances.length === 0 ? (
-                  <li className="empty-pill-msg">No resistance lines set. Click on chart above price or click Auto Levels.</li>
+                  <li className="empty-pill-msg">No resistance levels yet. Use Add level on the chart, or choose Auto Levels.</li>
                 ) : (
                   resistances.map((price) => {
                     const diff = price - currentPrice;
@@ -342,10 +339,11 @@ export default function AnalysisEngine({
       {/* Trade Projections Matrix */}
       <div className="analysis-section matrix-section">
         <div className="section-subtitle">
-          <span>Profit Projections Matrix</span>
+          <div className="scenario-heading"><span>Compare outcomes</span><p>Estimated profit, return, and risk/reward for each entry and target.</p></div>
           <div className="capital-input-wrapper">
-            <span className="capital-prefix">$</span>
+            <label className="scenario-capital-label" htmlFor="scenarioCapital">Scenario capital</label><span className="capital-prefix">$</span>
             <input
+              id="scenarioCapital"
               type="number"
               value={currentCapital}
               onChange={handleCapitalChange}
@@ -441,7 +439,7 @@ export default function AnalysisEngine({
               </div>
               <p className="empty-title">Formulate a Strategy</p>
               <p className="empty-desc">
-                Click <strong>Auto Levels</strong> or click on the chart canvas to set Support & Resistance price targets.
+                Choose <strong>Auto Levels</strong> or use <strong>Add level</strong> on the price chart to set support and resistance targets.
               </p>
             </div>
           )}

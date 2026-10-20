@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Watchlist from './components/Watchlist';
+import ResearchWorkspace from './components/research/ResearchWorkspace';
 import ChartContainer from './components/ChartContainer';
 import AnalysisEngine from './components/AnalysisEngine';
 import PortfolioManager from './components/PortfolioManager';
@@ -107,7 +108,8 @@ function Workspace({ user, signOut }) {
   });
   const [showLevels, setShowLevels] = useState(() => {
     try {
-      return localStorage.getItem('aethertrade_show_levels') === 'true';
+      const saved = localStorage.getItem('aethertrade_show_levels');
+      return saved === null ? true : saved === 'true';
     } catch (e) { console.error(e); return false; }
   });
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -120,15 +122,16 @@ function Workspace({ user, signOut }) {
   const [terminalMobileTab, setTerminalMobileTab] = useState(() => {
     try {
       const saved = localStorage.getItem('aethertrade_terminal_mobile_tab');
-      if (saved && ['chart', 'watchlist', 'analysis'].includes(saved)) return saved;
+      if (saved && ['chart', 'company', 'watchlist', 'analysis'].includes(saved)) return saved;
     } catch (e) { console.error(e); }
     return 'chart';
-  }); // 'chart' | 'watchlist' | 'analysis'
+  }); // 'chart' | 'company' | 'watchlist' | 'analysis'
   const [marketStatus, setMarketStatus] = useState(getMarketStatus);
   const [prefilledTrade, setPrefilledTrade] = useState(null);
   const [activityTab, setActivityTab] = useState('history');
   const [tradeRequest, setTradeRequest] = useState(0);
   const navigate = (nextView) => {
+    setPrefilledTrade(null);
     if (nextView === 'activity') setActivityTab('history');
     setView(nextView);
   };
@@ -140,7 +143,7 @@ function Workspace({ user, signOut }) {
   };
   const prefillTransaction = (trade) => {
     recordTransaction();
-    setPrefilledTrade(trade);
+    setPrefilledTrade({ ...trade, portfolioId: activePortfolioId });
   };
 
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
@@ -323,39 +326,16 @@ function Workspace({ user, signOut }) {
           await handleImportCSV(sample.default);
         } : undefined}>
         {view === 'terminal' ? (
-          <div
-            id="viewTerminal"
-            className={`workspace-view active mobile-tab-${terminalMobileTab} ${isWatchlistCollapsed ? 'watchlist-collapsed' : ''}`}
-          >
-            {/* Mobile Workspace Segmented Control (Visible on screens < 900px) */}
-            <div className="terminal-mobile-nav">
-              <button
-                type="button"
-                className={`mobile-tab-btn ${terminalMobileTab === 'chart' ? 'active' : ''}`}
-                onClick={() => setTerminalMobileTab('chart')}
-              >
-                <i className="fa-solid fa-chart-line"></i>
-                <span>Chart ({activeTicker})</span>
-              </button>
-              <button
-                type="button"
-                className={`mobile-tab-btn ${terminalMobileTab === 'watchlist' ? 'active' : ''}`}
-                onClick={() => setTerminalMobileTab('watchlist')}
-              >
-                <i className="fa-solid fa-star"></i>
-                <span>Watchlist ({watchlist.length})</span>
-              </button>
-              <button
-                type="button"
-                className={`mobile-tab-btn ${terminalMobileTab === 'analysis' ? 'active' : ''}`}
-                onClick={() => setTerminalMobileTab('analysis')}
-              >
-                <i className="fa-solid fa-layer-group"></i>
-                <span>Analysis</span>
-              </button>
-            </div>
-
-            <Watchlist
+          <ResearchWorkspace
+            section={terminalMobileTab}
+            onSectionChange={setTerminalMobileTab}
+            ticker={activeTicker}
+            stock={stocks[activeTicker]}
+            count={watchlist.length}
+            collapsed={isWatchlistCollapsed}
+            onRefresh={handleRefresh}
+            loading={isLoading}
+            watchlist={<Watchlist
               watchlist={watchlist}
               activeTicker={activeTicker}
               setActiveTicker={(ticker) => {
@@ -370,8 +350,9 @@ function Workspace({ user, signOut }) {
               onAddTicker={handleAddTicker}
               isCollapsed={isWatchlistCollapsed}
               onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)}
-            />
-            <ChartContainer
+            />}
+            chart={<ChartContainer
+              workspaceSection={terminalMobileTab === 'company' ? 'company' : 'chart'}
               activeTicker={activeTicker}
               stocks={stocks}
               range={selectedRange}
@@ -388,8 +369,8 @@ function Workspace({ user, signOut }) {
               setLinesMap={setLinesMap}
               onRefresh={handleRefresh}
               isLoading={isLoading}
-            />
-            <AnalysisEngine
+            />}
+            analysis={<AnalysisEngine
               activeTicker={activeTicker}
               currentPrice={stocks[activeTicker]?.price || 0}
               lines={linesMap[activeTicker] || []}
@@ -400,8 +381,8 @@ function Workspace({ user, signOut }) {
               activeTickerHoldings={activeTickerHoldings}
               activeStockPrice={activeStockPrice}
               liveRawValues={stocks[activeTicker]?.liveRawValues || []}
-            />
-          </div>
+            />}
+          />
         ) : (
           <div
             id="viewPortfolio"
@@ -443,6 +424,7 @@ function Workspace({ user, signOut }) {
                 onDeletePortfolio={deletePortfolio}
                 onUpdateBaseCurrency={updateBaseCurrency}
                 prefilledTrade={prefilledTrade}
+                onClearPrefilledTrade={() => setPrefilledTrade(null)}
                 showNotification={addToast}
                 onFetchPrice={fetchBackgroundPrice}
               />

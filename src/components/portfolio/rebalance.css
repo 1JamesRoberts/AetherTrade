@@ -1,0 +1,118 @@
+/* Comfortable insets keep the rebalance workflow readable at every width. */
+.workspace-shell .portfolio-rebalance-card { padding: clamp(1.25rem, 3vw, 2rem); }
+.portfolio-rebalance-card>.section-introduction { margin: 0 0 2rem; max-width: 65ch; }
+.portfolio-rebalance-card>.section-introduction h3 { font-size: 1.35rem; line-height: 1.3; margin-bottom: .65rem; }
+.portfolio-rebalance-card>.section-introduction p { line-height: 1.7; margin: 0; }
+.workspace-shell .rebalance-workspace { display: grid; grid-template-columns: minmax(0,1fr); gap: 2rem; min-width: 0; }
+.workspace-shell .rebalance-workspace :is(.rebalance-targets-section,.rebalance-action-section) { min-width: 0; width: 100%; padding: 1.5rem; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-panel); }
+.workspace-shell .rebalance-workspace .rebalance-studio-header { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; margin: 0 0 1.5rem; padding: 0; }
+.rebalance-step-heading { display: flex; align-items: flex-start; gap: .8rem; min-width: 0; }
+.rebalance-step-heading .studio-step { flex-shrink: 0; margin-top: .1rem; }
+.workspace-shell .rebalance-step-heading .studio-title { margin: 0; font-size: 1rem; line-height: 1.5; }
+.rebalance-step-heading p { color: var(--text-muted); font-size: .75rem; font-weight: 400; line-height: 1.65; margin: .35rem 0 0; }
+.workspace-shell .rebalance-workspace .target-tools-cluster { display: flex; flex-wrap: wrap; gap: .5rem; }
+.workspace-shell .rebalance-workspace .btn-target-tool { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 44px; padding: .65rem .9rem; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-panel); color: var(--text-secondary); font-size: .72rem; }
+.workspace-shell .rebalance-workspace .btn-target-tool:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+.rebalance-allocation-summary { padding: 1.25rem; margin-bottom: 1.25rem; background: var(--bg-card); border-radius: 12px; }
+.rebalance-allocation-summary>div { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.rebalance-allocation-summary>div>span { color: var(--text-secondary); font-size: .75rem; }
+.rebalance-allocation-summary strong { font-size: 1rem; font-weight: 600; }
+.rebalance-allocation-summary small { font-size: .7rem; color: var(--text-muted); font-weight: 400; }
+.rebalance-allocation-summary progress { display: block; width: 100%; height: 5px; margin: .85rem 0; appearance: none; -webkit-appearance: none; border: 0; border-radius: 4px; background: var(--bg-surface-elevated); color: var(--primary); accent-color: var(--primary); overflow: hidden; }
+.rebalance-allocation-summary progress::-webkit-progress-bar { background: var(--bg-surface-elevated); border-radius: 4px; }
+.rebalance-allocation-summary progress::-webkit-progress-value { background: var(--primary); border-radius: 4px; }
+.rebalance-allocation-summary progress::-moz-progress-bar { background: var(--primary); border-radius: 4px; }
+.rebalance-allocation-summary p { margin: 0; color: var(--text-muted); font-size: .7rem; line-height: 1.6; }
+.workspace-shell .rebalance-workspace .studio-warning-alert { display: flex; gap: .65rem; margin: 0 0 1.25rem; padding: 1rem 1.15rem; line-height: 1.7; font-size: .73rem; border-radius: 10px; }
+.workspace-shell .rebalance-workspace .target-matrix-list { margin: 0; padding: 0; gap: .75rem; overflow: visible; max-height: none; }
+.workspace-shell .rebalance-workspace .target-matrix-row { grid-template-columns: minmax(0,1.6fr) minmax(160px,1fr) 115px; gap: 1.5rem; padding: 1.25rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-panel); }
+.workspace-shell .rebalance-workspace .target-matrix-row:hover { background: var(--bg-card); border-color: var(--border-color); }
+.workspace-shell .rebalance-workspace .matrix-col-asset { gap: .9rem; min-width: 0; }
+.workspace-shell .rebalance-workspace .matrix-ticker { font-size: .85rem; }
+.workspace-shell .rebalance-workspace .matrix-name { font-size: .7rem; line-height: 1.5; }
+.workspace-shell .rebalance-workspace .matrix-val-sub { display: flex; flex-wrap: wrap; gap: .25rem .65rem; line-height: 1.65; font-size: .7rem; margin-top: .4rem; overflow-wrap: anywhere; }
+.matrix-val-sub>strong { font-weight: 500; color: var(--text-secondary); }
+.matrix-val-sub>span { color: var(--text-muted); }
+.workspace-shell .rebalance-workspace .matrix-weight-compare { flex-wrap: wrap; gap: .5rem; }
+.workspace-shell .rebalance-workspace .actual-weight-tag { font-size: .7rem; }
+.workspace-shell .rebalance-workspace .drift-badge { font-size: .65rem; padding: .3rem .45rem; }
+.workspace-shell .rebalance-workspace .matrix-col-input { min-width: 0; width: auto; }
+.workspace-shell .rebalance-workspace .target-pct-input { padding: .65rem 2rem .65rem .8rem; min-height: 46px; }
+.workspace-shell .rebalance-workspace .target-input-label>span { font-size: .7rem; margin-bottom: .5rem; }
+.workspace-shell .rebalance-workspace .rebalance-action-section>.rebalance-studio-header>.ui-segments { flex-wrap: wrap; }
+.workspace-shell .rebalance-workspace .deposit-config-card { padding: 1.25rem; margin: 0 0 1.5rem; border: 1px solid var(--border-color); background: var(--bg-card); }
+.workspace-shell .rebalance-workspace .deposit-input-row { flex-wrap: wrap; gap: 1rem; }
+.workspace-shell .rebalance-workspace .deposit-label { font-size: .8rem; line-height: 1.6; }
+.workspace-shell .rebalance-workspace .deposit-field-wrapper { min-width: 0; max-width: 100%; }
+.workspace-shell .rebalance-workspace .deposit-cash-input { max-width: 100%; min-height: 46px; padding-right: .9rem; background: var(--bg-panel); }
+.workspace-shell .rebalance-workspace .deposit-chips-row { gap: .5rem; flex-wrap: wrap; }
+.workspace-shell .rebalance-workspace .deposit-chips-label { width: 100%; font-size: .65rem; padding-bottom: .25rem; }
+.workspace-shell .rebalance-workspace .deposit-preset-chip { min-height: 40px; padding: .55rem .8rem; font-size: .7rem; }
+.workspace-shell .rebalance-workspace .rebalance-orders-card { margin: 0; gap: 1.25rem; }
+.workspace-shell .rebalance-workspace .orders-summary-bar { display: flex; align-items: center; gap: 1.5rem; padding: 1.25rem; border: 1px solid var(--border-color); background: var(--bg-card); border-radius: 12px; }
+.workspace-shell .rebalance-workspace .orders-summary-left { gap: 1rem; min-width: 0; flex: 1 1 280px; }
+.workspace-shell .rebalance-workspace .orders-count-badge { font-size: .9rem; line-height: 1.5; }
+.rebalance-plan-totals { display: flex; flex-wrap: wrap; gap: 1rem 2rem; margin: 0; }
+.rebalance-plan-totals>div { min-width: 0; }
+.rebalance-plan-totals dt { font-size: .65rem; color: var(--text-muted); margin-bottom: .4rem; }
+.rebalance-plan-totals dd { font-size: .85rem; font-weight: 550; margin: 0; overflow-wrap: anywhere; }
+.workspace-shell .rebalance-workspace .orders-summary-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.workspace-shell .rebalance-workspace :is(.btn-copy-plan,.btn-execute-rebalance,.btn-order-action) { min-height: 44px; padding: .65rem .9rem; font-size: .72rem; }
+.workspace-shell .rebalance-workspace .rebalance-orders-list { margin: 0; padding: 0; gap: .75rem; overflow: visible; }
+.workspace-shell .rebalance-workspace .rebalance-order-item { display: grid; grid-template-columns: minmax(0,1fr) minmax(130px,.7fr) auto; align-items: center; gap: 1.5rem; padding: 1.25rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-panel); }
+.workspace-shell .rebalance-workspace .order-left { min-width: 0; gap: .8rem; }
+.workspace-shell .rebalance-workspace .order-ticker-group { min-width: 0; gap: .4rem; }
+.workspace-shell .rebalance-workspace .order-ticker { font-size: .85rem; }
+.workspace-shell .rebalance-workspace .order-shares-desc { font-size: .7rem; white-space: normal; overflow-wrap: anywhere; line-height: 1.6; }
+.workspace-shell .rebalance-workspace .order-center-metric { min-width: 0; gap: .45rem; }
+.workspace-shell .rebalance-workspace .order-total { font-size: .9rem; overflow-wrap: anywhere; }
+.workspace-shell .rebalance-workspace .order-weight-transition { font-size: .7rem; }
+.workspace-shell .rebalance-workspace .order-actions-cluster { display: flex; flex-wrap: wrap; gap: .5rem; }
+.workspace-shell .rebalance-workspace .empty-orders-msg { padding: 2rem 1.5rem; line-height: 1.7; font-size: .8rem; }
+@media (max-width:1100px) {
+  .workspace-shell .rebalance-workspace .rebalance-studio-header { align-items: flex-start; }
+  .workspace-shell .rebalance-workspace .target-matrix-row { grid-template-columns: minmax(0,1fr) 110px; gap: 1.25rem; }
+  .workspace-shell .rebalance-workspace .matrix-col-asset { grid-column: 1/-1; }
+  .workspace-shell .rebalance-workspace .matrix-col-drift { grid-column: 1; }
+  .workspace-shell .rebalance-workspace .matrix-col-input { grid-column: 2; }
+  .workspace-shell .rebalance-workspace .rebalance-order-item { grid-template-columns: minmax(0,1fr) minmax(110px,.8fr); gap: 1.25rem; }
+  .workspace-shell .rebalance-workspace .order-actions-cluster { grid-column: 1/-1; justify-content: flex-end; width: auto; }
+}
+@media (max-width:650px) {
+  .workspace-shell .portfolio-rebalance-card { padding: 1.25rem; }
+  .portfolio-rebalance-card>.section-introduction { margin-bottom: 1.5rem; }
+  .portfolio-rebalance-card>.section-introduction h3 { font-size: 1.2rem; }
+  .workspace-shell .rebalance-workspace { gap: 1.5rem; }
+  .workspace-shell .rebalance-workspace :is(.rebalance-targets-section,.rebalance-action-section) { padding: 1.25rem 0 0; border: 0; border-top: 1px solid var(--border-color); border-radius: 0; }
+  .workspace-shell .rebalance-workspace .rebalance-studio-header { gap: 1rem; margin-bottom: 1.25rem; }
+  .rebalance-step-heading { gap: .65rem; }
+  .rebalance-step-heading p { font-size: .72rem; }
+  .workspace-shell .rebalance-workspace .target-tools-cluster { width: 100%; }
+  .workspace-shell .rebalance-workspace .btn-target-tool { flex: 1 1 auto; padding-inline: .6rem; font-size: .65rem; }
+  .rebalance-allocation-summary { padding: 1rem; }
+  .rebalance-allocation-summary>div { flex-wrap: wrap; gap: .5rem; }
+  .workspace-shell .rebalance-workspace .studio-warning-alert { padding: 1rem; font-size: .7rem; }
+  .workspace-shell .rebalance-workspace .target-matrix-row { padding: 1rem; gap: 1rem; grid-template-columns: minmax(0,1fr) 90px; }
+  .workspace-shell .rebalance-workspace .matrix-col-asset { align-items: flex-start; gap: .7rem; }
+  .workspace-shell .rebalance-workspace .matrix-val-sub { flex-direction: column; font-size: .65rem; }
+  .workspace-shell .rebalance-workspace .matrix-col-drift { padding-right: .25rem; }
+  .workspace-shell .rebalance-workspace .matrix-weight-compare { flex-direction: column; align-items: flex-start; }
+  .workspace-shell .rebalance-workspace .actual-weight-tag { font-size: .65rem; }
+  .workspace-shell .rebalance-workspace .actual-weight-tag strong { margin-left: .2rem; }
+  .workspace-shell .rebalance-workspace .target-input-label>span { font-size: .65rem; }
+  .workspace-shell .rebalance-workspace .deposit-config-card { padding: 1rem; }
+  .workspace-shell .rebalance-workspace .deposit-input-row { flex-direction: column; align-items: stretch; }
+  .workspace-shell .rebalance-workspace .deposit-field-wrapper, .workspace-shell .rebalance-workspace .deposit-cash-input { width: 100%; }
+  .workspace-shell .rebalance-workspace .rebalance-action-section>.rebalance-studio-header>.ui-segments { width: 100%; }
+  .workspace-shell .rebalance-workspace .orders-summary-bar { padding: 1rem; gap: 1.25rem; }
+  .workspace-shell .rebalance-workspace .orders-summary-actions { width: 100%; gap: .5rem; }
+  .workspace-shell .rebalance-workspace .orders-summary-actions>button { flex: 1 1 auto; }
+  .rebalance-plan-totals { gap: 1rem; }
+  .workspace-shell .rebalance-workspace .rebalance-order-item { padding: 1rem; grid-template-columns: minmax(0,1fr); gap: 1rem; }
+  .workspace-shell .rebalance-workspace .order-center-metric { align-items: flex-start; text-align: left; padding-left: 0; }
+  .workspace-shell .rebalance-workspace .order-actions-cluster { grid-column: 1; justify-content: stretch; }
+  .workspace-shell .rebalance-workspace .order-actions-cluster>button { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .workspace-shell .rebalance-workspace, .workspace-shell .rebalance-workspace * { animation: none; transition: none; }
+}

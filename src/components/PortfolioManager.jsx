@@ -20,6 +20,7 @@ export default function PortfolioManager({
   onDeletePortfolio,
   onUpdateBaseCurrency,
   prefilledTrade,
+  onClearPrefilledTrade,
   showNotification,
   onFetchPrice
 }) {
@@ -42,6 +43,7 @@ export default function PortfolioManager({
   // Handle Portfolio Switch
   const handlePortfolioSelect = (e) => {
     const nextId = e.target.value;
+    onClearPrefilledTrade?.();
     setActivePortfolioId(nextId);
     setEditingSelection(null);
   };
@@ -82,6 +84,7 @@ export default function PortfolioManager({
 
   // Start editing existing transaction
   const handleStartEdit = (index, tx) => {
+    onClearPrefilledTrade?.();
     setEditingSelection({ id: tx.id, tx, index });
     setActiveSubTab('trade');
   };
@@ -97,7 +100,7 @@ export default function PortfolioManager({
   const editingTx = editingTxIndex !== null ? activePortfolio.transactions[editingTxIndex] : null;
 
   return (
-    <section className="panel panel-portfolio-left" aria-label="Portfolio Allocations">
+    <section className="panel panel-portfolio-left" aria-label={overview ? "Portfolio overview" : "Portfolio transactions"}>
       <PortfolioHeader
         portfolios={portfolios}
         activePortfolio={activePortfolio}
@@ -110,9 +113,10 @@ export default function PortfolioManager({
         onDeletePortfolio={handleDeletePortfolio}
       />
 
+      {overview && activePortfolio.ledgerError && <p role="alert" className="auth-error">Ledger needs correction: {activePortfolio.ledgerError} Open Activity to correct the audit history.</p>}
       {overview}
 
-      <div className={`portfolio-management-grid ${showAllocation ? '' : 'editor-only'}`}>
+      {!overview && <div className={`portfolio-management-grid ${showAllocation ? '' : 'editor-only'}`}>
         {showAllocation && <AllocationDonut
           activePortfolio={activePortfolio}
           stocks={stocks}
@@ -136,7 +140,7 @@ export default function PortfolioManager({
           </button>
           <button
             type="button"
-            onClick={() => setActiveSubTab('history')}
+            onClick={() => { onClearPrefilledTrade?.(); setActiveSubTab('history'); }}
             className={`portfolio-subtab-btn ${activeSubTab === 'history' ? 'active' : ''}`}
           >
             <i className="fa-solid fa-list-check"></i>
@@ -152,7 +156,8 @@ export default function PortfolioManager({
             stocks={stocks}
             editingTxIndex={editingTxIndex}
             editingTx={editingTx}
-            prefilledTrade={prefilledTrade}
+            prefilledTrade={editingTxIndex === null && prefilledTrade?.portfolioId === activePortfolio.id ? prefilledTrade : null}
+            onPrefillComplete={onClearPrefilledTrade}
             onAddTransaction={onAddTransaction}
             onEditTransaction={onEditTransaction}
             onCancelEdit={handleCancelEdit}
@@ -168,7 +173,7 @@ export default function PortfolioManager({
           />
         )}
       </div>
-      </div>
+      </div>}
     </section>
   );
 }
