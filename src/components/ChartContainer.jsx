@@ -1,7 +1,11 @@
+import { SegmentedControl } from './ui/Controls.jsx';
+import { useAppearance, systemFont } from '../theme/appearanceContext.js';
 import { calculateVolumeData } from '../utils/chartUtils.js';
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { createChart, CrosshairMode, AreaSeries, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 import StockInsights from './StockInsights';
+import ChartLevelControls from './research/ChartLevelControls.jsx';
+import useChartLevels from './research/useChartLevels.js';
 import {
   detectTickerCurrency,
   getCurrencySymbol,
@@ -74,8 +78,10 @@ export default function ChartContainer({
   linesMap,
   setLinesMap,
   onRefresh,
-  isLoading
+  isLoading,
+  workspaceSection = null
 }) {
+  const { palette } = useAppearance();
   const chartContainerRef = useRef(null);
   const chartInstanceRef = useRef(null);
   const seriesRef = useRef(null);
@@ -170,6 +176,9 @@ export default function ChartContainer({
     liveRawValues: [],
     ...stocks[activeTicker]
   };
+
+  const levelController = useChartLevels({ activeTicker, currentPrice: activeStock.price, linesMap, setLinesMap, showLevels, setShowLevels });
+  const { shown: shownLevels, selected: selectedLevel, mode: levelMode } = levelController;
 
   const formattedData = useMemo(() => {
     const rawValues = activeStock.liveRawValues || [];
@@ -299,11 +308,8 @@ export default function ChartContainer({
 
   // Sync mutable refs on each render to prevent stale closures in event listeners
   const formattedDataRef = useRef(formattedData);
-  const linesMapRef = useRef(linesMap);
-  const showLevelsRef = useRef(showLevels);
-  const activeTickerRef = useRef(activeTicker);
+  const levelInteractionRef = useRef(levelController.handleChartPrice);
   const activeStockRef = useRef(activeStock);
-  const setLinesMapRef = useRef(setLinesMap);
   const priceLinesRef = useRef([]);
   const emaSeriesRef = useRef(null);
   const smaSeriesRef = useRef(null);
@@ -311,11 +317,8 @@ export default function ChartContainer({
 
   useEffect(() => {
     formattedDataRef.current = formattedData;
-    linesMapRef.current = linesMap;
-    showLevelsRef.current = showLevels;
-    activeTickerRef.current = activeTicker;
+    levelInteractionRef.current = levelController.handleChartPrice;
     activeStockRef.current = activeStock;
-    setLinesMapRef.current = setLinesMap;
   });
 
   // 1. Chart Creation Effect (runs on ticker, series type, or indicator structure change)
@@ -389,6 +392,9 @@ export default function ChartContainer({
       try {
         const volSeries = chart.addSeries(HistogramSeries, {
           priceFormat: { type: 'volume' },
+          // Volume is a separate measure, not a quote on the stock price axis.
+          lastValueVisible: false,
+          priceLineVisible: false,
           priceScaleId: 'volume_scale',
         });
         chart.priceScale('volume_scale').applyOptions({
@@ -493,24 +499,12 @@ export default function ChartContainer({
       }
     }
 
-    // Chart Click: Add Support / Resistance using Ref values
+    // Chart clicks only add annotations while the explicit drawing tool is active.
     const handleChartClick = (param) => {
-      if (!showLevelsRef.current || !param.point || !seriesRef.current) return;
+      if (!param.point || !seriesRef.current) return;
       const clickedPrice = seriesRef.current.coordinateToPrice(param.point.y);
       if (clickedPrice === null || clickedPrice === undefined) return;
-
-      const roundedPrice = parseFloat(clickedPrice.toFixed(2));
-      const currentTicker = activeTickerRef.current;
-      const existingLines = linesMapRef.current[currentTicker] || [];
-      const isDuplicate = existingLines.some(price => Math.abs(price - roundedPrice) < (activeStockRef.current.price * 0.003));
-
-      if (!isDuplicate && setLinesMapRef.current) {
-        const newLines = [...existingLines, roundedPrice];
-        setLinesMapRef.current((prev) => ({
-          ...prev,
-          [currentTicker]: newLines
-        }));
-      }
+      levelInteractionRef.current(clickedPrice);
     };
     chart.subscribeClick(handleChartClick);
 
@@ -626,6 +620,27 @@ export default function ChartContainer({
     setZoomLevel
   ]);
 
+  // Theme only the existing chart in place so zoom, indicators and annotations survive.
+  useEffect(() => {
+    const chart = chartInstanceRef.current;
+    if (!chart) return;
+    chart.applyOptions({
+      layout: { background: { color: palette.surface }, textColor: palette.muted, fontFamily: systemFont },
+      grid: { vertLines: { color: palette.grid }, horzLines: { color: palette.grid } },
+      rightPriceScale: { borderColor: palette.grid },
+      timeScale: { borderColor: palette.grid },
+      crosshair: { vertLine: { color: palette.accent }, horzLine: { color: palette.accent } },
+    });
+    if (seriesRef.current) {
+      const color = (activeStock.change ?? 0) >= 0 ? palette.positive : palette.negative;
+      seriesRef.current.applyOptions(chartType === 'candle' ? {
+        upColor: palette.positive, downColor: palette.negative,
+        borderUpColor: palette.positive, borderDownColor: palette.negative,
+        wickUpColor: palette.positive, wickDownColor: palette.negative, priceLineColor: palette.muted,
+      } : { lineColor: color, topColor: `${color}35`, bottomColor: `${color}00`, priceLineColor: palette.muted });
+    }
+  }, [palette, activeTicker, activeStock.change, chartType, range, interval, indicators.volume, indicators.ema20, indicators.sma50, setZoomLevel]);
+
   // 2. Data Update Effect (Updates series data without recreating the chart canvas)
   useEffect(() => {
     if (!seriesRef.current || formattedData.length === 0) return;
@@ -665,30 +680,34 @@ export default function ChartContainer({
     });
     priceLinesRef.current = [];
 
-    if (!showLevels) return;
+    if (levelMode === 'off') return;
 
-    const lines = linesMap[activeTicker] || [];
+    const lines = shownLevels;
     const tickerCurr = detectTickerCurrency(activeTicker);
     lines.forEach((linePrice) => {
       const isResistance = linePrice > activeStock.price;
-      const lineColor = isResistance ? '#F43F5E' : '#10B981';
-      const labelTitle = isResistance ? `RES ${formatMoney(linePrice, tickerCurr)}` : `SUP ${formatMoney(linePrice, tickerCurr)}`;
+      const lineColor = isResistance ? palette.negative : palette.positive;
+      const isSelected = linePrice === selectedLevel;
+      const labelTitle = `${isResistance ? 'R' : 'S'} · ${tickerCurr}`;
 
       try {
         const pl = seriesRef.current.createPriceLine({
           price: linePrice,
           color: lineColor,
-          lineWidth: 2,
-          lineStyle: 1,
+          lineWidth: isSelected ? 2 : 1,
+          lineStyle: 2,
           axisLabelVisible: true,
           title: labelTitle,
+          axisLabelColor: lineColor,
+          axisLabelTextColor: palette.surface,
         });
         priceLinesRef.current.push(pl);
       } catch (err) {
         console.warn('createPriceLine skipped:', err);
       }
     });
-  }, [linesMap, activeTicker, showLevels, activeStock.price]);
+  }, [shownLevels, selectedLevel, levelMode, palette, activeTicker, activeStock.price,
+    activeStock.change, chartType, range, interval, indicators.volume, indicators.ema20, indicators.sma50, setZoomLevel]);
 
   // 4. Zoom / Logical Range Effect
   useEffect(() => {
@@ -722,7 +741,7 @@ export default function ChartContainer({
   return (
     <section
       ref={panelRef}
-      className={`panel panel-center ${isFullscreen ? 'fullscreen-mode' : ''}`}
+      className={`panel panel-center ${workspaceSection ? 'research-chart-panel' : ''} ${isFullscreen ? 'fullscreen-mode' : ''}`}
       aria-label="Interactive Charting Terminal"
       style={isFullscreen ? {
         position: 'fixed',
@@ -731,7 +750,7 @@ export default function ChartContainer({
         width: '100vw',
         height: '100vh',
         zIndex: 99999,
-        background: '#060912',
+        background: 'var(--bg-panel)',
         padding: '16px',
         borderRadius: 0,
         boxSizing: 'border-box',
@@ -739,8 +758,8 @@ export default function ChartContainer({
         flexDirection: 'column'
       } : {}}
     >
-      <div className="chart-header">
-        <div className="stock-info-block">
+      <div className="chart-header" hidden={workspaceSection === 'company' && !isFullscreen}>
+        <div className="stock-info-block" hidden={!!workspaceSection && !isFullscreen}>
           <button
             onClick={onRefresh}
             className="btn-refresh"
@@ -789,94 +808,23 @@ export default function ChartContainer({
           )}
         </div>
 
+        {workspaceSection && <div className="research-chart-caption"><div><h3>Price performance</h3><span>{range} change <strong className={`tabular-nums ${displayChange >= 0 ? 'text-green' : 'text-red'}`}>{displayChange >= 0 ? '+' : ''}{displayChange.toFixed(2)}%</strong></span></div><p>Scroll to zoom · Drag to explore</p></div>}
         <div className="chart-controls">
-          <div className="chart-style-selector">
-            <button
-              onClick={() => setChartType('line')}
-              className={`style-btn ${chartType === 'line' ? 'active' : ''}`}
-              title="Line Chart"
-            >
-              <i className="fa-solid fa-chart-line"></i> Line
-            </button>
-            <button
-              onClick={() => setChartType('candle')}
-              className={`style-btn ${chartType === 'candle' ? 'active' : ''}`}
-              title="Candlestick Chart"
-            >
-              <i className="fa-solid fa-chart-simple"></i> Candle
-            </button>
-          </div>
-
-          <div className="indicator-toggle-group">
-            <button
-              onClick={() => toggleIndicator('volume')}
-              className={`indicator-btn ${indicators.volume ? 'active' : ''}`}
-              title="Toggle Volume Histogram"
-            >
-              <span className="indicator-dot vol"></span> VOL
-            </button>
-            <button
-              onClick={() => toggleIndicator('ema20')}
-              className={`indicator-btn ${indicators.ema20 ? 'active' : ''}`}
-              title="Toggle 20 Exponential Moving Average"
-            >
-              <span className="indicator-dot ema"></span> EMA 20
-            </button>
-            <button
-              onClick={() => toggleIndicator('sma50')}
-              className={`indicator-btn ${indicators.sma50 ? 'active' : ''}`}
-              title="Toggle 50 Simple Moving Average"
-            >
-              <span className="indicator-dot sma"></span> SMA 50
-            </button>
-          </div>
-
-          <div className="range-selector">
-            {['1D', '1W', '1M', '1Y', '5Y'].map((r) => (
-              <button
-                key={r}
-                onClick={() => handleRangeChange(r)}
-                className={`range-btn ${range === r ? 'active' : ''}`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-
-          <div className="interval-selector">
-            {['1m', '5m', '15m', '1h', '1d', '1w'].map((i) => {
-              const allowed = RANGE_INTERVALS[range]?.allowed.includes(i);
-              return (
-                <button
-                  key={i}
-                  disabled={!allowed}
-                  onClick={() => handleIntervalChange(i)}
-                  className={`interval-btn ${interval === i ? 'active' : ''}`}
-                >
-                  {i === '1h' ? '1H' : i === '1d' ? '1D' : i === '1w' ? '1W' : i}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="toggle-container sr-toggle-container">
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={showLevels}
-                onChange={(e) => setShowLevels(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
-            <span className="sr-label">
-              S&R Overlay
-            </span>
-          </div>
-
+          <div className="chart-control-field"><span className="ui-control-label">Range</span><SegmentedControl label="Chart range" value={range} onChange={handleRangeChange} options={['1D', '1W', '1M', '1Y', '5Y'].map(value => ({ value, label: value }))} /></div>
+          <div className="chart-control-field"><span className="ui-control-label">Style</span><SegmentedControl label="Chart style" value={chartType} onChange={setChartType} options={[{ value: 'line', label: 'Line' }, { value: 'candle', label: 'Candles' }]} /></div>
+          <details className="research-chart-options" onKeyDown={event => {
+            if (event.key === 'Escape') {
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector('summary')?.focus();
+            }
+          }}><summary>Chart settings <span aria-hidden="true">⌄</span></summary><div className="research-chart-options-body">
+          <div className="chart-control-field"><span className="ui-control-label">Indicators</span><div className="chart-indicator-options">{[{ key: 'volume', label: 'Volume' }, { key: 'ema20', label: 'EMA 20' }, { key: 'sma50', label: 'SMA 50' }].map(item => <label key={item.key} className={`chart-indicator-option ${item.key}`}><input type="checkbox" checked={indicators[item.key]} onChange={() => toggleIndicator(item.key)} /><span>{item.label}</span></label>)}</div></div>
+          <label className="chart-control-field"><span className="ui-control-label">Interval</span><select aria-label="Candle interval" value={interval} onChange={event => handleIntervalChange(event.target.value)}>{['1m', '5m', '15m', '1h', '1d', '1w'].map(value => <option key={value} value={value} disabled={!RANGE_INTERVALS[range]?.allowed.includes(value)}>{value === '1h' ? '1H' : value === '1d' ? '1D' : value === '1w' ? '1W' : value}</option>)}</select></label>
           <div className="zoom-container">
             <i className="fa-solid fa-magnifying-glass zoom-icon"></i>
             <input
               type="range"
+              aria-label="Chart zoom"
               min="20"
               max="100"
               value={zoomLevel}
@@ -887,10 +835,12 @@ export default function ChartContainer({
               {zoomLevel}%
             </span>
           </div>
+          </div></details>
         </div>
+        <ChartLevelControls controller={levelController} ticker={activeTicker} currentPrice={activeStock.price} />
       </div>
 
-      <div className={`chart-container ${isLoading ? 'loading' : ''}`} style={isFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'none', height: '100%', overflow: 'hidden' } : {}}>
+      <div hidden={workspaceSection === 'company' && !isFullscreen} className={`chart-container ${levelController.drawing ? 'chart-is-drawing' : ''} ${isLoading ? 'loading' : ''}`} style={isFullscreen ? { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, maxHeight: 'none', height: '100%', overflow: 'hidden' } : {}}>
         <div className="chart-wrapper" style={{ flex: 1, minHeight: 0, position: 'relative', height: isFullscreen ? '100%' : undefined }}>
           <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }}></div>
 
@@ -933,27 +883,27 @@ export default function ChartContainer({
             </div>
           )}
         </div>
-        {showLevels && (
-          <div className="chart-instructions">
-            <i className="fa-solid fa-circle-info"></i>{' '}
-            {hoverPrice !== null ? (
-              <span style={{ color: hoverPrice > activeStock.price ? 'var(--bearish)' : 'var(--bullish)', fontWeight: 700 }}>
-                Click to add {hoverPrice > activeStock.price ? 'Resistance' : 'Support'} at {formatMoney(hoverPrice, tickerCurrency)}
-              </span>
-            ) : (
-              "Click anywhere on the chart canvas to add a Support or Resistance level"
-            )}
+        {levelController.drawing && (
+          <div className="chart-instructions chart-drawing-instructions">
+            <span>{hoverPrice !== null ? `Add ${hoverPrice > activeStock.price ? 'resistance' : 'support'} at ${formatMoney(hoverPrice, tickerCurrency)}` : 'Tap or click a price to add one level.'}</span>
+            <button type="button" onClick={levelController.cancelDrawing}>Cancel</button>
           </div>
         )}
       </div>
 
+      {workspaceSection === 'chart' && !isFullscreen && sessionStats.high > 0 && sessionStats.low > 0 && (
+        <div className="research-range-summary">
+          <dl><div><dt>Range low</dt><dd className="tabular-nums">{formatMoney(sessionStats.low, tickerCurrency)}</dd></div><div><dt>Range high</dt><dd className="tabular-nums">{formatMoney(sessionStats.high, tickerCurrency)}</dd></div><div><dt>Current position in range</dt><dd className="tabular-nums">{rangePercent.toFixed(0)}%</dd></div></dl>
+          <div className="research-range-track" aria-hidden="true"><span style={{ left: `${rangePercent}%` }} /></div>
+        </div>
+      )}
       {!isFullscreen && (
-        <StockInsights
+        <div className="research-company-content" hidden={workspaceSection === 'chart'}><StockInsights
           key={activeTicker}
           activeTicker={activeTicker}
           currentPrice={activeStock.price}
           historicalData={formattedData}
-        />
+        /></div>
       )}
     </section>
   );

@@ -1,0 +1,71 @@
+/* Viewing annotations and adding a new price are separate, explicit actions. */
+.chart-levels-workspace { width: 100%; min-width: 0; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border-color); }
+.chart-levels-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.chart-levels-display { display: flex; align-items: center; gap: .75rem; }
+.chart-levels-display>span { color: var(--text-secondary); font-size: .73rem; font-weight: 500; }
+.workspace-shell .chart-levels-display .ui-segments>button { min-height: 36px; min-width: 45px; padding: .45rem .7rem; font-size: .7rem; }
+.chart-levels-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.chart-level-button { display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 40px; padding: .55rem .8rem; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-panel); color: var(--text-secondary); font: 500 .72rem/1.4 var(--font-sans); cursor: pointer; }
+.chart-level-button:hover { background: var(--bg-card-hover); }
+.chart-level-button.is-active { color: var(--primary); background: var(--accent-soft); border-color: var(--primary); }
+.chart-level-button:disabled { opacity: .45; cursor: not-allowed; }
+.chart-level-count { color: var(--text-muted); font-size: .65rem; font-variant-numeric: tabular-nums; }
+.chart-levels-caption { color: var(--text-muted); font-size: .65rem; line-height: 1.65; margin: .7rem 0 0; }
+.chart-level-dialog { position: fixed; inset: 0; width: min(460px,calc(100vw - 40px)); max-width: none; max-height: min(760px,85dvh); margin: auto; padding: 0; border: 1px solid var(--border-color); border-radius: 20px; background: var(--bg-panel); color: var(--text-primary); box-shadow: var(--shadow-lg); font-family: var(--font-sans); overflow: auto; overscroll-behavior: contain; }
+.chart-level-dialog::backdrop { background: #07101470; }
+.chart-level-dialog>header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1.5rem; border-bottom: 1px solid var(--border-color); }
+.chart-level-eyebrow { display: block; color: var(--text-muted); font-size: .65rem; letter-spacing: .045em; margin-bottom: .5rem; }
+.chart-level-dialog h3 { margin: 0; color: var(--text-primary); font-size: 1.35rem; line-height: 1.25; font-weight: 600; letter-spacing: -.025em; }
+.chart-level-dialog>header p { margin: .5rem 0 0; color: var(--text-muted); font-size: .73rem; line-height: 1.6; }
+.chart-level-dialog .chart-level-close, .chart-level-dialog .chart-level-remove { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; background: var(--bg-card); color: var(--text-secondary); border: 0; border-radius: 10px; font: 400 1.2rem/1 var(--font-sans); cursor: pointer; }
+.chart-level-dialog .chart-level-close:hover { background: var(--bg-card-hover); }
+.chart-level-dialog-content { padding: 1.25rem 1.5rem; }
+.chart-level-quote { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; font-size: .75rem; }
+.chart-level-quote>span { color: var(--text-muted); }
+.chart-level-quote>strong { font-weight: 550; }
+.chart-level-list { list-style: none; margin: 0; padding: 0; }
+.chart-level-list>li { display: flex; align-items: center; gap: .65rem; border-bottom: 1px solid var(--border-color); padding: .4rem 0; }
+.chart-level-list>li:first-child { border-top: 1px solid var(--border-color); }
+.chart-level-dialog .chart-level-select { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr auto; gap: .5rem; text-align: left; padding: .85rem .65rem; border: 0; border-radius: 9px; background: none; color: var(--text-primary); cursor: pointer; font-family: var(--font-sans); }
+.chart-level-dialog .chart-level-select:hover { background: var(--bg-card); }
+.chart-level-dialog .chart-level-select[aria-pressed='true'] { background: var(--accent-soft); }
+.chart-level-kind { display: flex; align-items: center; gap: .45rem; color: var(--text-secondary); font-size: .7rem; }
+.chart-level-kind>span { display: block; width: 6px; height: 6px; background: currentColor; border-radius: 50%; }
+.support .chart-level-kind { color: var(--bullish); }
+.resistance .chart-level-kind { color: var(--bearish); }
+.chart-level-select>strong { font-size: .8rem; font-weight: 550; }
+.chart-level-select>small { grid-column: 1/-1; color: var(--text-muted); font-size: .65rem; line-height: 1.5; }
+.chart-level-dialog .chart-level-remove { background: none; color: var(--text-muted); }
+.chart-level-dialog .chart-level-remove:hover { background: var(--bearish-bg); color: var(--bearish); }
+.chart-level-empty { padding: 1rem 0 1.5rem; }
+.chart-level-empty>strong { font-size: .85rem; font-weight: 550; }
+.chart-level-empty>p { margin: .5rem 0 0; color: var(--text-muted); font-size: .73rem; line-height: 1.7; }
+.chart-level-price-form { margin-top: 1.5rem; }
+.chart-level-price-form>label { display: block; font-size: .75rem; margin-bottom: .6rem; }
+.chart-level-price-form>label>span { color: var(--text-muted); font-size: .65rem; margin-left: .4rem; }
+.chart-level-price-form>div { display: flex; gap: .6rem; }
+.chart-level-dialog .chart-level-price-form input { min-width: 0; width: 100%; min-height: 44px; padding: .65rem .8rem; border: 1px solid var(--border-color); border-radius: 9px; background: var(--bg-card); color: var(--text-primary); font: 400 .9rem var(--font-sans); }
+.chart-level-price-form button { min-height: 44px; flex-shrink: 0; padding: .65rem .9rem; border: 0; border-radius: 9px; background: var(--primary); color: var(--bg-panel); font: 550 .75rem var(--font-sans); cursor: pointer; }
+.chart-level-price-form>p { color: var(--text-muted); font-size: .65rem; line-height: 1.5; margin: .6rem 0 0; }
+.chart-level-dialog>footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding: 1.25rem 1.5rem 1.5rem; border-top: 1px solid var(--border-color); }
+.chart-level-dialog>footer>p { font-size: .65rem; color: var(--text-muted); line-height: 1.6; max-width: 25ch; margin: 0; }
+.chart-level-dialog :is(button,input):focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.workspace-shell .chart-drawing-instructions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.chart-drawing-instructions>button { min-height: 40px; padding: .5rem .8rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-panel); color: var(--text-primary); font-size: .7rem; }
+.chart-is-drawing .chart-wrapper { cursor: crosshair; }
+@media (max-width:650px) {
+  .chart-levels-toolbar { align-items: stretch; gap: .8rem; }
+  .chart-levels-display { width: 100%; justify-content: space-between; }
+  .workspace-shell .chart-levels-display .ui-segments>button { min-height: 40px; min-width: 50px; }
+  .chart-levels-actions { width: 100%; }
+  .chart-levels-actions>button { flex: 1; min-height: 44px; }
+  .chart-level-dialog { inset: auto 0 0; width: 100%; max-height: 85dvh; border-radius: 20px 20px 0 0; margin: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .chart-level-dialog>header, .chart-level-dialog-content { padding: 1.25rem; }
+  .chart-level-dialog>footer { padding: 1.25rem; }
+  .chart-level-dialog .chart-level-close, .chart-level-dialog .chart-level-remove { min-width: 44px; height: 44px; }
+  .chart-level-dialog .chart-level-select { padding-inline: .35rem; }
+  .chart-level-dialog .chart-level-select>strong { font-size: .75rem; }
+}
+@media (prefers-contrast:more) {
+  .chart-level-dialog, .chart-level-button { border-color: var(--text-muted); }
+}

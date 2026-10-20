@@ -1,3 +1,4 @@
+import { SegmentedControl, ComponentHeading, AssetMark } from '../ui/Controls.jsx';
 import { dividendGross } from '../../utils/portfolioLedger.js';
 import { localDateString, parseTransactionDate } from '../../utils/dateUtils.js';
 import { useState, useEffect, useRef } from 'react';
@@ -13,6 +14,7 @@ export default function TradeOrderForm({
   editingTxIndex,
   editingTx,
   prefilledTrade,
+  onPrefillComplete,
   onAddTransaction,
   onEditTransaction,
   onCancelEdit,
@@ -48,9 +50,10 @@ export default function TradeOrderForm({
 
   // Initial inputs come from the keyed transaction snapshot, without cascading effects.
 
-  // Pre-fill form when user clicks "Fill in Form" from Rebalance Studio
+  // Pre-fill a reviewable order from Holdings or Rebalance Studio.
   useEffect(() => {
-    if (!prefilledTrade) return;
+    if (!prefilledTrade || editingTx || editingTxIndex !== null ||
+      (prefilledTrade.portfolioId !== undefined && prefilledTrade.portfolioId !== activePortfolio.id)) return;
     let active = true;
     Promise.resolve().then(() => {
       if (!active) return;
@@ -59,23 +62,25 @@ export default function TradeOrderForm({
         setSearchQuery(prefilledTrade.ticker);
       }
       if (prefilledTrade.type) setTxType(prefilledTrade.type);
-      if (prefilledTrade.shares) setShares(parseFloat(Number(prefilledTrade.shares).toFixed(4)));
+      if (prefilledTrade.shares) setShares(Number(prefilledTrade.shares));
       if (prefilledTrade.price) setPrice(parseFloat(Number(prefilledTrade.price).toFixed(2)));
       if (prefilledTrade.account) setAccountName(prefilledTrade.account);
     });
     return () => { active = false; };
-  }, [prefilledTrade]);
+  }, [prefilledTrade, editingTx, editingTxIndex, activePortfolio.id]);
 
   // Sync live market price on ticker change (only when NOT editing and not DIVIDEND)
   useEffect(() => {
     let active = true;
-    if (editingTxIndex === null && selectedTicker && stocks?.[selectedTicker]?.price && txType !== 'DIVIDEND') {
+    // A prefilled order is a reviewable draft; incoming quotes must not overwrite its execution price.
+    const hasPrefilledPrice = prefilledTrade?.ticker === selectedTicker && Number(prefilledTrade.price) > 0;
+    if (editingTxIndex === null && !hasPrefilledPrice && selectedTicker && stocks?.[selectedTicker]?.price && txType !== 'DIVIDEND') {
       Promise.resolve().then(() => {
         if (active && editingTxIndex === null) setPrice(stocks[selectedTicker].price);
       });
     }
     return () => { active = false; };
-  }, [selectedTicker, stocks, txType, editingTxIndex]);
+  }, [selectedTicker, stocks, txType, editingTxIndex, prefilledTrade]);
 
   // Dismiss dropdown on outside click
   useEffect(() => {
@@ -303,6 +308,7 @@ export default function TradeOrderForm({
         : await onAddTransaction(activePortfolio.id, finalTxData);
       if (!saved) return;
       if (editingTxIndex !== null) { onCancelEdit?.(); return; }
+      onPrefillComplete?.();
       setShares(10);
       setDividendTotal(0);
       setFees(0);
@@ -323,11 +329,8 @@ export default function TradeOrderForm({
   const net = txType === 'BUY' ? gross + feeVal : Math.max(0, gross - feeVal);
 
   return (
-    <div className="analysis-section portfolio-form-section">
-      <div className="section-subtitle">
-        <span>{editingTxIndex !== null ? 'Edit Transaction Record' : 'Record New Transaction'}</span>
-      </div>
-
+    <div className="analysis-section portfolio-form-section transaction-composer">
+      <ComponentHeading eyebrow={activePortfolio.name} title={editingTxIndex !== null ? 'Edit transaction' : 'Record a transaction'} description="Keep a record of a purchase, sale, or dividend payment." />
       {/* Editing State Banner Notification */}
       {editingTxIndex !== null && (
         <div className="editing-tx-banner">
@@ -347,58 +350,22 @@ export default function TradeOrderForm({
       )}
 
       {/* Order Type Toggle (BUY / SELL / DIVIDEND) */}
-      <div className="tx-type-toggle-group">
-        <button
-          type="button"
-          onClick={() => {
-            setTxType('BUY');
-            if (editingTxIndex === null) {
-              if (selectedTicker && stocks?.[selectedTicker]?.price) {
-                setPrice(stocks[selectedTicker].price);
-              } else if (price < 1) {
-                setPrice(150.00);
-              }
-            }
-          }}
-          className={`tx-type-btn buy ${txType === 'BUY' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-arrow-trend-up"></i> BUY
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTxType('SELL');
-            if (editingTxIndex === null) {
-              if (selectedTicker && stocks?.[selectedTicker]?.price) {
-                setPrice(stocks[selectedTicker].price);
-              } else if (price < 1) {
-                setPrice(150.00);
-              }
-            }
-          }}
-          className={`tx-type-btn sell ${txType === 'SELL' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-arrow-trend-down"></i> SELL
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTxType('DIVIDEND');
-            if (editingTxIndex === null) {
-              setDividendTotal(0.00);
-            }
-          }}
-          className={`tx-type-btn dividend ${txType === 'DIVIDEND' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-hand-holding-dollar"></i> DIVIDEND
-        </button>
-      </div>
-
+      <SegmentedControl label="Transaction type" value={txType} options={[{ value: 'BUY', label: 'Buy', icon: '↗' }, { value: 'SELL', label: 'Sell', icon: '↘' }, { value: 'DIVIDEND', label: 'Dividend', icon: '+' }]} onChange={type => {
+        setTxType(type);
+        if (editingTxIndex === null) {
+          if (type === 'DIVIDEND') setDividendTotal(0.00);
+          else if (selectedTicker && stocks?.[selectedTicker]?.price) setPrice(stocks[selectedTicker].price);
+          else if (price < 1) setPrice(150.00);
+        }
+      }} />
+      <div className="composer-inputs">
+      <label className="ui-field-label" htmlFor="transactionAsset">Asset</label>
       {/* Autocomplete Ticker Search */}
       <div className="portfolio-search-box" ref={portfolioSearchRef}>
         <div className="search-input-container">
           <i className="fa-solid fa-magnifying-glass search-icon"></i>
           <input
+            id="transactionAsset"
             type="text"
             placeholder="Search ticker or company (e.g. AAPL, NVDA, TSLA)..."
             value={searchQuery}
@@ -442,7 +409,7 @@ export default function TradeOrderForm({
               const isSelected = idx === activeSuggestionIndex;
               const sym = stock.ticker || stock.symbol;
               return (
-                <div
+                <button type="button"
                   key={`${sym}-${idx}`}
                   onClick={() => handleSelectStock(stock)}
                   onMouseEnter={() => setActiveSuggestionIndex(idx)}
@@ -459,12 +426,12 @@ export default function TradeOrderForm({
                   {stock.price > 0 && (
                     <span className="price tabular-nums">{formatMoney(stock.price, detectTickerCurrency(sym))}</span>
                   )}
-                </div>
+                </button>
               );
             })}
 
             {/* Custom Add Symbol Row */}
-            <div
+            <button type="button"
               onClick={handleAddCustomSymbol}
               onMouseEnter={() => setActiveSuggestionIndex(searchResults.length)}
               className={`portfolio-search-item custom-add ${activeSuggestionIndex === searchResults.length ? 'active' : ''}`}
@@ -475,7 +442,7 @@ export default function TradeOrderForm({
                 </span>
                 <span className="name">Fetch live quote and log trade</span>
               </div>
-            </div>
+            </button>
           </div>
         )}
       </div>
@@ -484,8 +451,8 @@ export default function TradeOrderForm({
       {selectedTicker && (
         <div id="portfolioStockPreview" className="portfolio-stock-preview">
           <div className="preview-left">
-            <span className="preview-ticker-badge">{selectedTicker}</span>
-            <span className="preview-name">{stocks?.[selectedTicker]?.name || `${selectedTicker} Stock`}</span>
+            <AssetMark ticker={selectedTicker} /><div className="composer-asset-name"><strong>{selectedTicker}</strong>
+            <span className="preview-name">{stocks?.[selectedTicker]?.name || `${selectedTicker} Stock`}</span></div>
           </div>
           <div className="preview-right">
             <span className="preview-price tabular-nums">
@@ -501,7 +468,7 @@ export default function TradeOrderForm({
       )}
 
       {/* Transaction Inputs Grid */}
-      <div className="tx-fields-grid">
+      <fieldset className="composer-fieldset"><legend>Execution details <span>{selectedCurr}</span></legend><div className="tx-fields-grid">
         {txType !== 'DIVIDEND' && (
           <div className="tx-field">
             <label htmlFor="txShares">Shares Quantity</label>
@@ -587,6 +554,7 @@ export default function TradeOrderForm({
         </div>
       </div>
 
+      </fieldset>
       {/* Investment Account Label */}
       <div className="tx-field account-field">
         <label htmlFor="txAccount">Investment Account</label>
@@ -599,20 +567,15 @@ export default function TradeOrderForm({
         />
       </div>
 
-      {/* Live Calculation Estimation Banner */}
-      <div className="tx-estimate-banner">
-        <div className="estimate-row">
-          <span className="estimate-label">{txType === 'DIVIDEND' ? 'Gross Dividend:' : 'Gross Value:'}</span>
-          <span className="estimate-val tabular-nums">{formatMoney(gross, selectedCurr)}</span>
-        </div>
-        <div className="estimate-row total-row">
-          <span className="estimate-label">{txType === 'DIVIDEND' ? 'Net Dividend Income:' : 'Net Settlement Total:'}</span>
-          <span className={`estimate-val total-val tabular-nums ${txType.toLowerCase()}`}>
-            {txType === 'DIVIDEND' ? '+' : ''}{formatMoney(net, selectedCurr)}
-          </span>
-        </div>
       </div>
-
+      {/* Live Calculation Estimation Banner */}
+      <aside className="transaction-receipt" aria-label="Transaction estimate">
+        <span className="ui-eyebrow">{editingTxIndex !== null ? 'Updated record' : 'Transaction estimate'}</span>
+        <h4>{txType === 'DIVIDEND' ? 'Dividend income' : txType === 'BUY' ? 'Purchase summary' : 'Sale summary'}</h4>
+        <dl><div><dt>Asset</dt><dd>{selectedTicker || 'Choose an asset'}</dd></div><div><dt>{txType === 'DIVIDEND' ? 'Gross dividend' : 'Gross value'}</dt><dd className="tabular-nums">{formatMoney(gross, selectedCurr)}</dd></div><div><dt>{txType === 'DIVIDEND' ? 'Tax / fee' : 'Brokerage fees'}</dt><dd className="tabular-nums">{formatMoney(feeVal, selectedCurr)}</dd></div></dl>
+        <div className="receipt-total"><span>{txType === 'DIVIDEND' ? 'Net dividend income' : 'Net settlement total'}</span><strong className="tabular-nums">{txType === 'DIVIDEND' ? '+' : ''}{formatMoney(net, selectedCurr)}</strong><small>{selectedCurr} · {accountName || activePortfolio.name}</small></div>
+        <p className="receipt-note">{txType === 'BUY' ? 'Includes brokerage fees.' : 'After fees and withholding, where applicable.'}</p>
+      </aside>
       {/* Submit Button */}
       <button
         type="button"
@@ -623,7 +586,7 @@ export default function TradeOrderForm({
       >
         <i className={`fa-solid ${editingTxIndex !== null ? 'fa-floppy-disk' : txType === 'BUY' ? 'fa-circle-plus' : txType === 'SELL' ? 'fa-circle-minus' : 'fa-hand-holding-dollar'}`}></i>
         <span>
-          {editingTxIndex !== null
+          {isSaving ? 'Saving…' : editingTxIndex !== null
             ? 'Save Changes'
             : txType === 'BUY'
             ? 'Record Buy Order'

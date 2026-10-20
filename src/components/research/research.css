@@ -1,0 +1,144 @@
+/* Research is a document for one selected company, with a persistent collection beside it. */
+.workspace-research .app-workspace { max-width: none; }
+.workspace-research .workspace-page-heading { margin-bottom: 1.25rem; }
+.workspace-research .workspace-page-heading h1 { font-size: 1.4rem; letter-spacing: -.025em; }
+.workspace-research .workspace-page-heading>div>p { display: none; }
+.research-workspace { display: grid; grid-template-columns: 245px minmax(0,1fr); gap: 2rem; align-items: start; }
+.research-workspace.research-rail { grid-template-columns: 64px minmax(0,1fr); }
+/* Raise the sticky rail itself: its popovers cannot escape its stacking context. */
+.research-watchlist { min-width: 0; position: sticky; top: 90px; z-index: 20; }
+.workspace-shell .research-watchlist :is(.rail-hover-card, .rail-search-popover) { background: var(--bg-panel); color: var(--text-primary); border-color: var(--border-color); box-shadow: var(--shadow-lg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* Contain canvas/loading/hover layers beneath the rail, while fullscreen can rise above it. */
+.workspace-shell .research-chart-panel:not(.fullscreen-mode) { isolation: isolate; }
+.workspace-shell .research-watchlist>.panel-left { width: 100%; height: auto; max-height: calc(100dvh - 110px); overflow: visible; background: none; border: 0; border-radius: 0; }
+.workspace-shell .research-watchlist .stock-list-container { overflow-y: auto; max-height: calc(100dvh - 350px); }
+.workspace-shell .research-watchlist .watchlist-header { padding: 0 0 1rem; }
+.workspace-shell .research-watchlist .panel-title { font-size: .85rem; }
+.workspace-shell .research-watchlist .watch-asset { margin: .2rem 0; border-bottom: 0; }
+.workspace-shell .research-watchlist .watch-asset-select { padding: .9rem .6rem; }
+.research-document { min-width: 0; }
+.research-quote { display: flex; align-items: center; gap: 1.5rem; padding: .5rem 0 1.75rem; }
+.research-company-identity { display: flex; align-items: center; gap: 1rem; min-width: 0; flex: 1; }
+.research-company-identity>.ui-asset-mark { width: 52px; height: 52px; border-radius: 16px; font-size: 1rem; background: var(--accent-soft); color: var(--primary); }
+.research-company-identity>div { min-width: 0; }
+.research-company-identity p { color: var(--text-muted); font-size: .75rem; margin: 0 0 .4rem; }
+.research-company-identity p>span { font-size: .6rem; margin-left: .5rem; padding: .1rem .35rem; border: 1px solid var(--border-color); border-radius: 4px; }
+.research-company-identity h2 { font-size: clamp(1.35rem,2vw,2rem); line-height: 1.2; font-weight: 600; letter-spacing: -.04em; margin: 0; overflow-wrap: anywhere; }
+.research-quote-value { flex-shrink: 0; text-align: right; }
+.research-quote-value>strong { font-size: clamp(1.6rem,2.7vw,2.5rem); line-height: 1.15; letter-spacing: -.045em; font-weight: 550; }
+.research-quote-value>div { display: flex; align-items: center; justify-content: flex-end; gap: .65rem; margin-top: .5rem; }
+.research-quote-value span { font-size: .75rem; font-weight: 550; }
+.research-quote-value small { color: var(--text-muted); font-size: .6rem; }
+.research-refresh { display: inline-flex; gap: .4rem; align-items: center; justify-content: center; height: 40px; padding: .5rem .75rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-panel); color: var(--text-secondary); font-size: .7rem; }
+.research-refresh>span:first-child { font-size: 1.2rem; }
+.research-refresh:disabled { opacity: .5; }
+.research-navigation { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-color); }
+.research-navigation nav { display: flex; gap: 1.75rem; }
+.research-navigation nav>button { position: relative; min-height: 48px; padding: .75rem 0; border: 0; background: none; color: var(--text-muted); font-size: .8rem; font-weight: 550; white-space: nowrap; }
+.research-navigation nav>button[aria-pressed='true'] { color: var(--text-primary); }
+.research-navigation nav>button[aria-pressed='true']::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; border-radius: 2px; background: var(--primary); }
+.research-watchlist-trigger { display: none; }
+.workspace-shell .research-chart-panel { border-radius: 18px; overflow: visible; height: auto; max-height: none; }
+.workspace-shell .research-chart-panel .chart-header { padding: 1.5rem; display: block; }
+.research-chart-caption { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.research-chart-caption h3 { font-size: 1rem; font-weight: 600; letter-spacing: -.02em; margin: 0 0 .3rem; }
+.research-chart-caption span { font-size: .7rem; color: var(--text-muted); }
+.research-chart-caption strong { font-weight: 550; margin-left: .5rem; }
+.research-chart-caption>p { font-size: .65rem; color: var(--text-muted); }
+.workspace-shell .research-chart-panel .chart-controls { padding: 0; gap: 1rem; align-items: center; }
+.workspace-shell .research-chart-panel .chart-controls>.chart-control-field>.ui-control-label { display: none; }
+.research-chart-options { position: relative; margin-left: auto; }
+.research-chart-options>summary { display: flex; align-items: center; justify-content: center; gap: .75rem; min-height: 40px; padding: .5rem .9rem; border: 1px solid var(--border-color); border-radius: 10px; background: var(--bg-panel); font-size: .75rem; list-style: none; cursor: pointer; color: var(--text-secondary); }
+.research-chart-options>summary::-webkit-details-marker { display: none; }
+.research-chart-options>summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.research-chart-options[open]>summary { background: var(--accent-soft); color: var(--primary); }
+.research-chart-options-body { position: absolute; top: calc(100% + .6rem); right: 0; z-index: 15; width: 300px; max-width: calc(100vw - 70px); display: grid; grid-template-columns: 1fr; gap: 1.2rem; padding: 1.25rem; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; box-shadow: var(--shadow-lg); }
+.workspace-shell .research-chart-options-body .chart-control-field>select { width: 100%; background: var(--bg-card); }
+.workspace-shell .research-chart-options-body .zoom-container { margin: 0; justify-content: space-between; width: 100%; }
+.workspace-shell .research-chart-panel .chart-container { background: var(--bg-panel); }
+.workspace-shell .research-chart-panel .chart-instructions { background: var(--bg-card); color: var(--text-muted); border-color: var(--border-color); padding: .75rem 1.25rem; font-size: .7rem; }
+.workspace-shell .research-chart-panel .btn-fullscreen-toggle { background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 9px; box-shadow: var(--shadow-sm); color: var(--text-secondary); min-height: 36px; }
+.workspace-shell .research-company-content .stock-insights-container { border: 0; background: none; margin: 0; }
+.workspace-shell .research-company-content .insights-header { padding: 1.5rem; border-radius: 18px 18px 0 0; }
+.workspace-shell .research-company-content .insights-body { padding: 0 1.5rem 1.5rem; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.25rem; }
+.workspace-shell .research-company-content :is(.range-52w-card,.ui-metric-grid,.company-profile-card,.insights-loading-skeleton,.insights-empty-state) { grid-column: 1/-1; margin: 0; }
+.workspace-shell .research-company-content :is(.company-profile-card,.analyst-targets-card,.technical-health-card) { margin: 0; padding: 1.25rem; min-width: 0; border: 1px solid var(--border-color); background: var(--bg-card); }
+.workspace-shell .research-company-content .tech-indicators-grid { grid-template-columns: minmax(0,1fr); }
+.workspace-shell .research-company-content .profile-description { max-width: 85ch; }
+.workspace-shell .research-analysis-slot>.panel-right { width: 100%; height: auto; max-height: none; min-width: 0; overflow: visible; border-radius: 18px; }
+.workspace-shell .research-analysis-slot .analysis-section { padding: 1.5rem; }
+.workspace-shell .research-analysis-slot .levels-container { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; }
+.workspace-shell .research-analysis-slot .level-group-box { min-width: 0; padding: 1.1rem; }
+.workspace-shell .research-analysis-slot .level-pill { display: flex; justify-content: space-between; min-height: 48px; padding: .6rem .8rem; }
+.workspace-shell .research-analysis-slot .level-pills-list { display: flex; flex-direction: column; gap: .5rem; }
+.workspace-shell .research-analysis-slot .level-pills-scroll { max-height: none; }
+.workspace-shell .research-analysis-slot .best-trade-banner { padding: 1.25rem; }
+.workspace-shell .research-analysis-slot .capital-input { min-height: 44px; border-radius: 8px; }
+@media (max-width:1200px) {
+  .research-workspace { grid-template-columns: 220px minmax(0,1fr); gap: 1.25rem; }
+  .research-quote { flex-wrap: wrap; gap: 1rem; }
+  .research-company-identity { flex-basis: calc(100% - 60px); }
+  .research-quote-value { text-align: left; order: 2; }
+  .research-quote-value>div { justify-content: flex-start; }
+  .research-refresh { margin-left: auto; }
+  .workspace-shell .research-company-content .insights-body { grid-template-columns: minmax(0,1fr); }
+  .workspace-shell .research-analysis-slot .levels-container { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width:900px) {
+  .research-workspace, .research-workspace.research-rail { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; }
+  .research-document { display: contents; }
+  .research-quote { grid-row: 1; }
+  .research-navigation { grid-row: 2; }
+  .research-watchlist, .research-chart-slot, .research-analysis-slot { grid-row: 3; }
+  .research-watchlist { display: none; position: static; }
+  .research-watchlist-trigger { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; padding: .5rem .75rem; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 9px; font-size: .7rem; color: var(--text-secondary); }
+  .research-watchlist-trigger>span { color: var(--text-muted); }
+  .research-navigation { flex-wrap: wrap; gap: .5rem; }
+  .research-navigation nav { gap: 1.5rem; }
+  .research-show-watchlist>.research-watchlist { display: block; margin-bottom: 1.5rem; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 14px; padding: 1rem; }
+  .research-show-watchlist .research-chart-slot, .research-show-watchlist .research-analysis-slot { display: none; }
+  .workspace-shell .research-watchlist>.panel-left { max-height: none; }
+  .workspace-shell .research-watchlist .stock-list-container { max-height: 55dvh; }
+  .workspace-shell .research-watchlist .btn-collapse-watchlist { display: none; }
+}
+@media (max-width:650px) {
+  .research-quote { padding-bottom: 1.25rem; }
+  .research-company-identity>.ui-asset-mark { width: 44px; height: 44px; border-radius: 13px; }
+  .research-company-identity h2 { font-size: 1.4rem; }
+  .research-company-identity { gap: .75rem; }
+  .research-quote-value>strong { font-size: 2rem; }
+  .research-refresh { min-height: 44px; width: 44px; padding: .5rem; }
+  .research-refresh>span:last-child { display: none; }
+  .research-navigation nav { gap: 1.25rem; }
+  .research-navigation nav>button { font-size: .75rem; }
+  .research-watchlist-trigger { margin: .25rem 0 .75rem; }
+  .workspace-shell .research-chart-panel .chart-header { padding: 1rem; }
+  .research-chart-caption { align-items: flex-start; }
+  .research-chart-caption>p { max-width: 90px; font-size: .6rem; text-align: right; }
+  .workspace-shell .research-chart-panel .chart-controls { gap: .75rem; }
+  .workspace-shell .research-chart-panel .chart-controls>.chart-control-field { flex: initial; }
+  .research-chart-options { margin-left: 0; }
+  .research-chart-options-body { right: auto; left: 0; width: 270px; max-width: calc(100vw - 70px); }
+  .workspace-shell .research-company-content .insights-header { padding: 1rem; }
+  .workspace-shell .research-company-content .insights-body { padding: 0 1rem 1rem; }
+  .workspace-shell .research-analysis-slot .analysis-section { padding: 1rem; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .research-workspace *, .research-workspace *::before, .research-workspace *::after { scroll-behavior: auto; }
+}
+.scenario-heading>p { font-size: .7rem; line-height: 1.6; color: var(--text-muted); font-weight: 400; margin: .4rem 0 0; }
+.scenario-capital-label { color: var(--text-muted); font-size: .65rem; position: absolute; bottom: calc(100% + .35rem); left: 0; white-space: nowrap; }
+.workspace-shell .research-analysis-slot .matrix-section>.section-subtitle { align-items: flex-end; gap: 2rem; flex-wrap: wrap; }
+.workspace-shell .research-analysis-slot .capital-input-wrapper { position: relative; margin-top: 1.5rem; }
+.research-range-summary { padding: 1.25rem 1.5rem; border-top: 1px solid var(--border-color); }
+.research-range-summary dl { display: flex; justify-content: space-between; gap: 1rem; margin: 0; }
+.research-range-summary dt { color: var(--text-muted); font-size: .65rem; margin-bottom: .35rem; }
+.research-range-summary dd { margin: 0; font-size: .8rem; font-weight: 550; }
+.research-range-track { position: relative; height: 3px; background: var(--bg-surface-elevated); border-radius: 3px; margin-top: 1rem; }
+.research-range-track>span { position: absolute; top: -3px; height: 9px; width: 9px; border-radius: 50%; background: var(--primary); transform: translateX(-50%); }
+@media (max-width:650px) {
+  .research-range-summary { padding: 1rem; }
+  .research-range-summary dt { font-size: .6rem; }
+  .research-range-summary dd { font-size: .7rem; }
+  .research-range-summary dl>div { flex: 1; }
+}

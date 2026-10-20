@@ -5,6 +5,9 @@ import TradeOrderForm from './portfolio/TradeOrderForm';
 import TransactionLedger from './portfolio/TransactionLedger';
 
 export default function PortfolioManager({
+  initialTab = 'trade',
+  showAllocation = true,
+  overview = null,
   portfolios,
   activePortfolioId,
   setActivePortfolioId,
@@ -17,11 +20,12 @@ export default function PortfolioManager({
   onDeletePortfolio,
   onUpdateBaseCurrency,
   prefilledTrade,
+  onClearPrefilledTrade,
   showNotification,
   onFetchPrice
 }) {
   // Sub-tab selection ('trade' | 'history')
-  const [activeSubTab, setActiveSubTab] = useState('trade');
+  const [activeSubTab, setActiveSubTab] = useState(initialTab);
 
   // Editing state for existing transaction
   const [editingSelection, setEditingSelection] = useState(null);
@@ -39,6 +43,7 @@ export default function PortfolioManager({
   // Handle Portfolio Switch
   const handlePortfolioSelect = (e) => {
     const nextId = e.target.value;
+    onClearPrefilledTrade?.();
     setActivePortfolioId(nextId);
     setEditingSelection(null);
   };
@@ -79,6 +84,7 @@ export default function PortfolioManager({
 
   // Start editing existing transaction
   const handleStartEdit = (index, tx) => {
+    onClearPrefilledTrade?.();
     setEditingSelection({ id: tx.id, tx, index });
     setActiveSubTab('trade');
   };
@@ -94,7 +100,7 @@ export default function PortfolioManager({
   const editingTx = editingTxIndex !== null ? activePortfolio.transactions[editingTxIndex] : null;
 
   return (
-    <section className="panel panel-portfolio-left" aria-label="Portfolio Allocations">
+    <section className="panel panel-portfolio-left" aria-label={overview ? "Portfolio overview" : "Portfolio transactions"}>
       <PortfolioHeader
         portfolios={portfolios}
         activePortfolio={activePortfolio}
@@ -107,59 +113,67 @@ export default function PortfolioManager({
         onDeletePortfolio={handleDeletePortfolio}
       />
 
-      <AllocationDonut
-        activePortfolio={activePortfolio}
-        stocks={stocks}
-        baseCurrency={baseCurrency}
-      />
+      {overview && activePortfolio.ledgerError && <p role="alert" className="auth-error">Ledger needs correction: {activePortfolio.ledgerError} Open Activity to correct the audit history.</p>}
+      {overview}
 
-      {activePortfolio.ledgerError && <p role="alert" className="auth-error">
-        Ledger needs correction: {activePortfolio.ledgerError} Edit Audit History or import a corrected CSV.
-      </p>}
-
-      {/* Sub-Tab Navigation Bar: Record Trade vs Transaction History */}
-      <div className="portfolio-subtab-bar">
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('trade')}
-          className={`portfolio-subtab-btn ${activeSubTab === 'trade' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-pen-to-square"></i>
-          <span>Record Trade</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('history')}
-          className={`portfolio-subtab-btn ${activeSubTab === 'history' ? 'active' : ''}`}
-        >
-          <i className="fa-solid fa-list-check"></i>
-          <span>Audit History</span>
-          <span className="subtab-count-badge tabular-nums">{(activePortfolio?.transactions || []).length}</span>
-        </button>
-      </div>
-
-      {activeSubTab === 'trade' ? (
-        <TradeOrderForm
-          key={`${activePortfolio.id}:${editingTx?.id || (editingTxIndex ?? 'new')}`}
+      {!overview && <div className={`portfolio-management-grid ${showAllocation ? '' : 'editor-only'}`}>
+        {showAllocation && <AllocationDonut
           activePortfolio={activePortfolio}
           stocks={stocks}
-          editingTxIndex={editingTxIndex}
-          editingTx={editingTx}
-          prefilledTrade={prefilledTrade}
-          onAddTransaction={onAddTransaction}
-          onEditTransaction={onEditTransaction}
-          onCancelEdit={handleCancelEdit}
-          showNotification={showNotification}
-          onFetchPrice={onFetchPrice}
-        />
-      ) : (
-        <TransactionLedger
-          key={activePortfolio.id}
-          activePortfolio={activePortfolio}
-          onStartEdit={handleStartEdit}
-          onDeleteTransaction={onDeleteTransaction}
-        />
-      )}
+          baseCurrency={baseCurrency}
+        />}
+        <div className="portfolio-editor">
+
+        {activePortfolio.ledgerError && <p role="alert" className="auth-error">
+          Ledger needs correction: {activePortfolio.ledgerError} Edit Audit History or import a corrected CSV.
+        </p>}
+
+        {/* Sub-Tab Navigation Bar: Record Trade vs Transaction History */}
+        <div className="portfolio-subtab-bar">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('trade')}
+            className={`portfolio-subtab-btn ${activeSubTab === 'trade' ? 'active' : ''}`}
+          >
+            <i className="fa-solid fa-pen-to-square"></i>
+            <span>Record Trade</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { onClearPrefilledTrade?.(); setActiveSubTab('history'); }}
+            className={`portfolio-subtab-btn ${activeSubTab === 'history' ? 'active' : ''}`}
+          >
+            <i className="fa-solid fa-list-check"></i>
+            <span>Audit History</span>
+            <span className="subtab-count-badge tabular-nums">{(activePortfolio?.transactions || []).length}</span>
+          </button>
+        </div>
+
+        {activeSubTab === 'trade' ? (
+          <TradeOrderForm
+            key={`${activePortfolio.id}:${editingTx?.id || (editingTxIndex ?? 'new')}`}
+            activePortfolio={activePortfolio}
+            stocks={stocks}
+            editingTxIndex={editingTxIndex}
+            editingTx={editingTx}
+            prefilledTrade={editingTxIndex === null && prefilledTrade?.portfolioId === activePortfolio.id ? prefilledTrade : null}
+            onPrefillComplete={onClearPrefilledTrade}
+            onAddTransaction={onAddTransaction}
+            onEditTransaction={onEditTransaction}
+            onCancelEdit={handleCancelEdit}
+            showNotification={showNotification}
+            onFetchPrice={onFetchPrice}
+          />
+        ) : (
+          <TransactionLedger
+            key={activePortfolio.id}
+            activePortfolio={activePortfolio}
+            onStartEdit={handleStartEdit}
+            onDeleteTransaction={onDeleteTransaction}
+          />
+        )}
+      </div>
+      </div>}
     </section>
   );
 }

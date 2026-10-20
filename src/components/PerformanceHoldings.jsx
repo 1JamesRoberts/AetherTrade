@@ -1,8 +1,12 @@
+import { SegmentedControl } from './ui/Controls.jsx';
+import HoldingsList from './portfolio/HoldingsList.jsx';
+import { useAppearance, systemFont } from '../theme/appearanceContext.js';
 import { formatPerformanceAxisValue } from '../utils/chartUtils.js';
 import { investedCapital } from '../utils/portfolioLedger.js';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import RebalanceStudio from './RebalanceStudio';
+import AllocationDonut from './portfolio/AllocationDonut';
 import {
   detectTickerCurrency,
   formatMoney,
@@ -26,12 +30,14 @@ export default function PerformanceHoldings({
   onPrefillTrade,
   showNotification
 }) {
+  const { palette } = useAppearance();
   const performanceCanvasRef = useRef(null);
   const performanceChartRef = useRef(null);
   const fileInputRef = useRef(null);
   const [mountTime] = useState(() => Date.now());
 
   // Sorting state for active holdings table
+  const [portfolioSection, setPortfolioSection] = useState('holdings');
   const [sortColumn, setSortColumn] = useState('marketValue');
   const [sortDirection, setSortDirection] = useState('desc');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -135,13 +141,6 @@ export default function PerformanceHoldings({
       setSortColumn(col);
       setSortDirection(col === 'ticker' ? 'asc' : 'desc');
     }
-  };
-
-  const renderSortIcon = (col) => {
-    if (sortColumn !== col) return <i className="fa-solid fa-sort sort-icon-muted"></i>;
-    return sortDirection === 'asc'
-      ? <i className="fa-solid fa-sort-up sort-icon-active"></i>
-      : <i className="fa-solid fa-sort-down sort-icon-active"></i>;
   };
 
   useEffect(() => {
@@ -356,11 +355,11 @@ export default function PerformanceHoldings({
 
     const ctx = performanceCanvasRef.current.getContext('2d');
     const isOverallGain = data.length > 0 && data[data.length - 1] >= 0;
-    const accentColor = isOverallGain ? '#10B981' : '#F43F5E';
+    const accentColor = isOverallGain ? palette.positive : palette.negative;
 
     const gradient = ctx.createLinearGradient(0, 0, 0, 200);
-    gradient.addColorStop(0, isOverallGain ? 'rgba(16, 185, 129, 0.25)' : 'rgba(244, 63, 94, 0.25)');
-    gradient.addColorStop(1, 'rgba(13, 19, 33, 0)');
+    gradient.addColorStop(0, `${accentColor}30`);
+    gradient.addColorStop(1, `${accentColor}00`);
 
     const datasetLabel = chartMode === 'total' ? 'Total P&L' : 'Unrealized P&L';
 
@@ -379,25 +378,27 @@ export default function PerformanceHoldings({
           pointHoverRadius: 6,
           pointHitRadius: 12,
           pointBackgroundColor: accentColor,
-          pointBorderColor: '#ffffff',
+          pointBorderColor: palette.surface,
           pointBorderWidth: 2,
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        // Financial values update immediately, including when reduced motion is enabled.
+        animation: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
             displayColors: false,
-            backgroundColor: '#060912',
-            titleColor: '#06B6D4',
-            bodyColor: '#ffffff',
-            borderColor: 'rgba(255, 255, 255, 0.12)',
+            backgroundColor: palette.tooltip,
+            titleColor: palette.tooltipText,
+            bodyColor: palette.tooltipText,
+            borderColor: palette.grid,
             borderWidth: 1,
-            titleFont: { family: 'Outfit', weight: '700', size: 12 },
-            bodyFont: { family: 'JetBrains Mono', size: 11 },
+            titleFont: { family: systemFont, weight: '700', size: 12 },
+            bodyFont: { family: systemFont, size: 11 },
             padding: 10,
             cornerRadius: 8,
             callbacks: {
@@ -410,17 +411,17 @@ export default function PerformanceHoldings({
           }
         },
         scales: {
-          x: { grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false }, ticks: { color: '#64748B', font: { family: 'JetBrains Mono', size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
+          x: { grid: { color: palette.grid, drawBorder: false }, ticks: { color: palette.muted, font: { family: systemFont, size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } },
           y: {
             display: true,
             position: 'left',
             border: { display: false },
-            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            grid: { color: palette.grid },
             // Use left-aligned labels and a system font to keep text inside the axis gutter.
             afterFit: scale => { scale.width = Math.max(scale.width, 104); },
             ticks: {
               display: true,
-              color: '#94A3B8',
+              color: palette.muted,
               font: { family: 'Arial, sans-serif', size: 12 },
               crossAlign: 'far',
               padding: 8,
@@ -438,7 +439,7 @@ export default function PerformanceHoldings({
         performanceChartRef.current = null;
       }
     };
-  }, [activePortfolio, stocks, chartMode, timeRange, mountTime, baseCurrency, fxRate]);
+  }, [activePortfolio, stocks, chartMode, timeRange, mountTime, baseCurrency, fxRate, palette]);
 
   const handleRefreshPrices = async () => {
     if (isRefreshing) return;
@@ -468,14 +469,11 @@ export default function PerformanceHoldings({
   };
 
   const handleSellAll = (ticker, shares, price) => {
-    onAddTransaction(activePortfolio.id, {
-      // eslint-disable-next-line react-hooks/purity
-      timestamp: Date.now(),
+    onPrefillTrade?.({
       ticker,
       type: 'SELL',
       shares,
       price,
-      fees: 0,
       account: activePortfolio.name
     });
   };
@@ -495,225 +493,56 @@ export default function PerformanceHoldings({
   };
 
   return (
-    <section className="panel panel-portfolio-right" aria-label="Portfolio Performance">
-      <div className="panel-header portfolio-right-header">
-        <h2 className="panel-title">
-          <i className="fa-solid fa-wallet"></i> Performance & Holdings
-        </h2>
-        <div className="portfolio-header-tools">
-          <button type="button" onClick={() => fileInputRef.current.click()} className="btn-tool btn-csv-import" title="Import transactions from CSV">
-            <i className="fa-solid fa-file-import"></i> <span>Import CSV</span>
-          </button>
-          <button type="button" onClick={() => onExportCSV(activePortfolio.id)} className="btn-tool btn-csv-export" title="Export transactions as CSV">
-            <i className="fa-solid fa-file-export"></i> <span>Export CSV</span>
-          </button>
-          <button type="button" onClick={handleReset} className="btn-tool btn-portfolio-reset" id="btnResetPortfolio" title="Reset Portfolio">
-            <i className="fa-solid fa-trash-can"></i> <span>Reset</span>
-          </button>
-          <input ref={fileInputRef} type="file" id="csvFileInput" accept=".csv" onChange={handleFileChange} style={{ display: 'none' }} />
-        </div>
+    <section className="panel panel-portfolio-right portfolio-dashboard" aria-label="Portfolio Performance">
+      <div className="portfolio-overview-heading">
+        <span className="portfolio-eyebrow">ACCOUNT OVERVIEW</span>
+        <details className="portfolio-data-menu" onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary').focus(); } }}>
+          <summary>Manage data <span aria-hidden="true">⌄</span></summary>
+          <div className="portfolio-data-actions">
+            <button type="button" onClick={() => fileInputRef.current.click()}><i className="fa-solid fa-file-import" aria-hidden="true" />Import CSV</button>
+            <button type="button" onClick={() => onExportCSV(activePortfolio.id)}><i className="fa-solid fa-file-export" aria-hidden="true" />Export CSV</button>
+            <button type="button" className="portfolio-destructive" onClick={handleReset} id="btnResetPortfolio"><i className="fa-solid fa-trash-can" aria-hidden="true" />Reset portfolio</button>
+          </div>
+        </details>
+        <input ref={fileInputRef} type="file" id="csvFileInput" accept=".csv" onChange={handleFileChange} hidden />
       </div>
 
-      <div className="analysis-cards-grid portfolio-kpi-grid">
-        <div className="metric-card card-cyan">
-          <div className="metric-card-header"><span className="title">Portfolio Net Worth</span><i className="fa-solid fa-vault text-cyan"></i></div>
-          <div className="metric-val tabular-nums">{formatMoney(totalAssetValue, baseCurrency)}</div>
-          <div className="metric-subtext tabular-nums">Invested Capital: {formatMoney(totalCostBasis, baseCurrency)}</div>
-        </div>
-        <div className={`metric-card ${netProfit >= 0 ? 'card-green' : 'card-red'}`}>
-          <div className="metric-card-header"><span className="title">Unrealized P&L</span><i className={`fa-solid ${netProfit >= 0 ? 'fa-arrow-trend-up text-green' : 'fa-arrow-trend-down text-red'}`}></i></div>
-          <div className={`metric-val tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>
-            {netProfit >= 0 ? '+' : ''}{formatMoney(netProfit, baseCurrency)} ({netProfit >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}%)
-          </div>
-          <div className="metric-subtext">Open positions return on cost</div>
-        </div>
-        <div className={`metric-card ${realizedPL >= 0 ? 'card-green' : 'card-red'}`}>
-          <div className="metric-card-header"><span className="title">Realized P&L</span><i className="fa-solid fa-sack-dollar text-cyan"></i></div>
-          <div className={`metric-val tabular-nums ${realizedPL >= 0 ? 'text-green' : 'text-red'}`}>{realizedPL >= 0 ? '+' : ''}{formatMoney(realizedPL, baseCurrency)}</div>
-          <div className="metric-subtext">Profit/loss closed from asset sales</div>
-        </div>
-        <div className="metric-card card-purple">
-          <div className="metric-card-header"><span className="title">Dividend Income</span><i className="fa-solid fa-hand-holding-dollar text-purple"></i></div>
-          <div className="metric-val tabular-nums text-purple">+{formatMoney(totalDividends, baseCurrency)}</div>
-          <div className="metric-subtext">Cumulative cash payouts received</div>
-        </div>
-        <div className={`metric-card ${totalReturnVal >= 0 ? 'card-green' : 'card-red'}`}>
-          <div className="metric-card-header"><span className="title" title="Total gains divided by all purchase costs, including closed positions. Uses current FX; not annualized or cash-flow adjusted.">Total Return (ROI)</span><i className="fa-solid fa-percent text-cyan"></i></div>
-          <div className={`metric-val tabular-nums ${totalReturnVal >= 0 ? 'text-green' : 'text-red'}`}>{totalReturnVal >= 0 ? '+' : ''}{formatMoney(totalReturnVal, baseCurrency)} ({totalReturnVal >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%)</div>
-          <div className="metric-subtext">Capital gains + dividend payouts</div>
-        </div>
+      <div className="portfolio-balance-sheet">
+        <div className="portfolio-balance"><span className="portfolio-field-label">Portfolio value <span className="portfolio-currency-label">{baseCurrency}</span></span><strong className="tabular-nums">{formatMoney(totalAssetValue, baseCurrency)}</strong><p>Invested capital <span className="tabular-nums">{formatMoney(totalCostBasis, baseCurrency)}</span></p></div>
+        <div className="portfolio-return"><span className="portfolio-field-label">Total return</span><strong className={`tabular-nums ${totalReturnVal >= 0 ? 'text-green' : 'text-red'}`}>{totalReturnVal >= 0 ? '+' : ''}{totalReturnPct.toFixed(2)}%<span aria-hidden="true">{totalReturnVal >= 0 ? ' ↗' : ' ↘'}</span></strong><span className="tabular-nums">{totalReturnVal >= 0 ? '+' : ''}{formatMoney(totalReturnVal, baseCurrency)}</span><small>Capital gains + dividends</small></div>
+        <dl className="portfolio-income-strip">
+          <div><dt><span className="income-indicator open" aria-hidden="true" />Unrealized P&L</dt><dd className={`tabular-nums ${netProfit >= 0 ? 'text-green' : 'text-red'}`}>{netProfit >= 0 ? '+' : ''}{formatMoney(netProfit, baseCurrency)}</dd><dd className="portfolio-income-caption">{netReturnPct >= 0 ? '+' : ''}{netReturnPct.toFixed(2)}% on open positions</dd></div>
+          <div><dt><span className="income-indicator closed" aria-hidden="true" />Realized P&L</dt><dd className={`tabular-nums ${realizedPL >= 0 ? 'text-green' : 'text-red'}`}>{realizedPL >= 0 ? '+' : ''}{formatMoney(realizedPL, baseCurrency)}</dd><dd className="portfolio-income-caption">From closed positions</dd></div>
+          <div><dt><span className="income-indicator dividend" aria-hidden="true" />Dividend income</dt><dd className="tabular-nums">{formatMoney(totalDividends, baseCurrency)}</dd><dd className="portfolio-income-caption">After tax and fees</dd></div>
+        </dl>
+        <details className="portfolio-return-note"><summary>How your return is measured <span aria-hidden="true">⌄</span></summary><p>Total gains divided by all purchase costs, including fees and closed positions. Uses current USD/THB exchange rates. This cumulative return is not annualized or adjusted for cash-flow timing.</p></details>
       </div>
 
-      <div className="analysis-section portfolio-chart-section">
-        <div className="section-subtitle portfolio-chart-subtitle">
-          <div className="chart-mode-cluster">
-            <span>Portfolio Valuation Progression</span>
-            <div className="chart-mode-pill-group">
-              <button type="button" onClick={() => setChartMode('total')} className={`chart-mode-pill ${chartMode === 'total' ? 'active' : ''}`}>Total P&L</button>
-              <button type="button" onClick={() => setChartMode('unrealized')} className={`chart-mode-pill ${chartMode === 'unrealized' ? 'active' : ''}`}>Unrealized P&L</button>
-            </div>
+      <div className="portfolio-visuals-grid">
+        <section className="portfolio-performance-card" aria-label="Performance chart">
+          <header className="portfolio-card-heading"><div><h3>Performance</h3><p>{chartMode === 'total' ? 'Realized gains, open gains, and dividends' : 'Gains and losses on open positions'} · {baseCurrency}</p></div>
+            {(activePortfolio?.transactions || []).length > 0 && <button type="button" onClick={handleRefreshPrices} disabled={isRefreshing} className="portfolio-icon-button" aria-label="Refresh chart prices" title="Refresh chart prices">↻</button>}
+          </header>
+          <div className="portfolio-performance-toolbar">
+            <SegmentedControl label="Performance measure" value={chartMode} onChange={setChartMode} options={[{ value: 'total', label: 'Total P&L' }, { value: 'unrealized', label: 'Unrealized P&L' }]} />
+            <SegmentedControl className="portfolio-range-control" label="Performance time range" value={timeRange} onChange={setTimeRange} options={['1W', '1M', '1Y', '5Y', 'ALL'].map(value => ({ value, label: value === 'ALL' ? 'All' : value }))} />
           </div>
-
-          <div className="chart-right-controls">
-            <div className="time-range-pill-group">
-              {['1W', '1M', '1Y', '5Y', 'ALL'].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setTimeRange(r)}
-                  className={`time-range-pill ${timeRange === r ? 'active' : ''}`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-            {(activePortfolio?.transactions || []).length > 0 && (
-              <button
-                type="button"
-                onClick={handleRefreshPrices}
-                disabled={isRefreshing}
-                className="btn-refresh"
-                title="Refresh chart prices"
-                aria-label="Refresh chart prices"
-              >
-                <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
-              </button>
-            )}
+          <div className="performance-chart-wrapper" id="performanceChartContainer">
+            <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart" role="img" aria-label={`${chartMode === 'total' ? 'Total' : 'Unrealized'} portfolio profit and loss in ${baseCurrency}`} />
+            {(activePortfolio?.transactions || []).length === 0 && <div id="performanceEmptyMsg" className="empty-chart-overlay"><span aria-hidden="true">↗</span><strong>Your story starts here</strong><span>Record a transaction to begin tracking performance.</span></div>}
           </div>
-        </div>
-
-        <div className="performance-chart-wrapper" id="performanceChartContainer">
-          <canvas ref={performanceCanvasRef} id="portfolioPerformanceChart"></canvas>
-          {(activePortfolio?.transactions || []).length === 0 && (
-            <div id="performanceEmptyMsg" className="empty-chart-overlay">
-              <i className="fa-solid fa-chart-line empty-chart-icon"></i> <span>No performance history available yet. Record transactions to plot growth.</span>
-            </div>
-          )}
-        </div>
+          <p className="portfolio-chart-footnote">{chartMode === 'total' ? 'Total P&L includes dividend income.' : 'Unrealized P&L reflects open holdings.'} Values shown in {baseCurrency}.</p>
+        </section>
+        <AllocationDonut activePortfolio={activePortfolio} stocks={stocks} baseCurrency={baseCurrency} />
       </div>
 
-      <div className="analysis-section holdings-table-section">
-        <div className="section-subtitle holdings-header-subtitle">
-          <div className="holdings-title-left">
-            <span>Active Asset Holdings</span>
-            <span className="holdings-count-badge tabular-nums">{rawHoldings.length} {rawHoldings.length === 1 ? 'Holding' : 'Holdings'}</span>
-          </div>
-          {rawHoldings.length > 0 && (
-            <button
-              type="button"
-              onClick={handleRefreshPrices}
-              disabled={isRefreshing}
-              className="btn-refresh"
-              title="Refresh stock prices"
-              aria-label="Refresh stock prices"
-            >
-              <i className={`fa-solid fa-arrows-rotate ${isRefreshing ? 'fa-spin' : ''}`}></i>
-            </button>
-          )}
-        </div>
-        <div className="projection-table-wrapper holdings-table-scroller">
-          {sortedHoldings.length === 0 ? (
-            <div className="empty-table-state" id="emptyPortfolioState">
-              <div className="empty-icon"><i className="fa-solid fa-briefcase"></i></div>
-              <p className="empty-title">Your Portfolio is Empty</p>
-              <p className="empty-desc">Search for a ticker and record a BUY transaction in the left panel to build your portfolio holdings.</p>
-            </div>
-          ) : (
-            <table className="projection-table holdings-table" id="portfolioTable">
-              <thead>
-                <tr>
-                  <th onClick={() => handleSort('ticker')} className="sortable">Asset {renderSortIcon('ticker')}</th>
-                  <th onClick={() => handleSort('shares')} className="sortable">Shares {renderSortIcon('shares')}</th>
-                  <th onClick={() => handleSort('avgCost')} className="sortable">Avg Cost {renderSortIcon('avgCost')}</th>
-                  <th onClick={() => handleSort('currentPrice')} className="sortable">Market Price {renderSortIcon('currentPrice')}</th>
-                  <th onClick={() => handleSort('totalCost')} className="sortable">Total Cost {renderSortIcon('totalCost')}</th>
-                  <th onClick={() => handleSort('marketValue')} className="sortable">Market Value {renderSortIcon('marketValue')}</th>
-                  <th onClick={() => handleSort('pnlVal')} className="sortable">Unrealized P&L {renderSortIcon('pnlVal')}</th>
-                  <th style={{ textAlign: 'center', width: '90px' }}>Weight</th>
-                  <th style={{ width: '80px', textAlign: 'center' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedHoldings.map((h) => {
-                  const weight = totalAssetValue > 0 ? (h.baseMarketValue / totalAssetValue) * 100 : 0;
-                  const tickerDividends = (activePortfolio.dividendsByTicker?.[h.ticker] || activePortfolio.holdings?.[h.ticker]?.totalDividends || 0);
-                  return (
-                    <tr key={h.ticker}>
-                      <td className="cell-asset">
-                        <div className="asset-cell-flex">
-                          <span className="asset-ticker">{h.ticker}</span>
-                          <span className="asset-name">{h.name}</span>
-                          {tickerDividends > 0 && (
-                            <span className="holding-dividend-badge" title={`Cumulative dividend payouts received for ${h.ticker}`}>
-                              <i className="fa-solid fa-hand-holding-dollar"></i> +{formatMoney(tickerDividends, h.currency)} div
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="tabular-nums font-bold">{parseFloat(Number(h.shares || 0).toFixed(6))}</td>
-                      <td className="tabular-nums">{formatMoney(h.avgCost, h.currency)}</td>
-                      <td className="tabular-nums font-bold text-white">{formatMoney(h.currentPrice, h.currency)}</td>
-                      <td className="tabular-nums">{formatMoney(h.totalCost, h.currency)}</td>
-                      <td className="tabular-nums font-bold text-cyan">{formatMoney(h.baseMarketValue, baseCurrency)}</td>
-                      <td className="tabular-nums font-bold">
-                        <span className={h.basePnlVal >= 0 ? 'text-green' : 'text-red'}>{h.basePnlVal >= 0 ? '+' : ''}{formatMoney(h.basePnlVal, baseCurrency)}</span>
-                        <span className={`cell-pct-sub ${h.basePnlVal >= 0 ? 'text-green' : 'text-red'}`}>({h.basePnlVal >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)</span>
-                      </td>
-                      <td className="cell-weight">
-                        {(() => {
-                          const targetPct = parseFloat(activePortfolio.targetAllocations?.[h.ticker]) || 0;
-                          const drift = weight - targetPct;
-                          return (
-                            <div className="table-weight-wrapper">
-                              <div className="weight-val-row">
-                                <span className="weight-num tabular-nums">{weight.toFixed(1)}%</span>
-                                {targetPct > 0 && (
-                                  <span
-                                    className={`table-target-tag tabular-nums ${
-                                      Math.abs(drift) <= 0.5 ? 'balanced' : drift > 0 ? 'overweight' : 'underweight'
-                                    }`}
-                                    title={`Target: ${targetPct.toFixed(1)}% (Drift: ${drift > 0 ? '+' : ''}${drift.toFixed(1)}%)`}
-                                  >
-                                    Tgt {targetPct.toFixed(1)}% ({drift > 0 ? '+' : ''}${drift.toFixed(1)}%)
-                                  </span>
-                                )}
-                              </div>
-                              <div className="weight-track">
-                                <div className="weight-fill" style={{ width: `${Math.min(100, weight)}%` }}></div>
-                                {targetPct > 0 && (
-                                  <div
-                                    className="target-marker-line"
-                                    style={{ left: `${Math.min(100, targetPct)}%` }}
-                                    title={`Target: ${targetPct.toFixed(1)}%`}
-                                  ></div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button type="button" onClick={() => handleSellAll(h.ticker, h.shares, h.currentPrice)} className="btn-sell-all-row" title={`Liquidate all ${h.ticker} shares`}>Sell All</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+      <div className="portfolio-details-heading"><SegmentedControl className="portfolio-section-picker" label="Portfolio details" value={portfolioSection} onChange={setPortfolioSection} options={[{ value: 'holdings', label: <>Holdings <span>{rawHoldings.length}</span></> }, { value: 'rebalance', label: 'Rebalance' }]} /><span className="portfolio-details-caption">{portfolioSection === 'holdings' ? 'The details behind your balance' : 'Bring your investments back to plan'}</span></div>
+      <div hidden={portfolioSection !== 'holdings'}>
+        <HoldingsList holdings={sortedHoldings} activePortfolio={activePortfolio} totalAssetValue={totalAssetValue} baseCurrency={baseCurrency} sortColumn={sortColumn} sortDirection={sortDirection} onSort={handleSort} onSellAll={handleSellAll} onRefresh={handleRefreshPrices} isRefreshing={isRefreshing} />
       </div>
-
-      <div className="analysis-section rebalance-main-section">
-        <RebalanceStudio
-          activePortfolio={activePortfolio}
-          stocks={stocks}
-          onUpdateTargetAllocations={onUpdateTargetAllocations}
-          onExecuteRebalance={onExecuteRebalance}
-          onPrefillTrade={onPrefillTrade}
-          onAddTransaction={onAddTransaction}
-          showNotification={showNotification}
-        />
+      <div hidden={portfolioSection !== 'rebalance'} className="portfolio-rebalance-card">
+        <div className="section-introduction"><h3>Keep your portfolio in balance</h3><p>Set target weights, plan a deposit, or review proposed orders.</p></div>
+        <RebalanceStudio activePortfolio={activePortfolio} stocks={stocks} onUpdateTargetAllocations={onUpdateTargetAllocations} onExecuteRebalance={onExecuteRebalance} onPrefillTrade={onPrefillTrade} onAddTransaction={onAddTransaction} showNotification={showNotification} />
       </div>
     </section>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Watchlist from './components/Watchlist';
+import ResearchWorkspace from './components/research/ResearchWorkspace';
 import ChartContainer from './components/ChartContainer';
 import AnalysisEngine from './components/AnalysisEngine';
 import PortfolioManager from './components/PortfolioManager';
@@ -7,6 +8,7 @@ import PerformanceHoldings from './components/PerformanceHoldings';
 import ToastContainer from './components/ToastContainer';
 import AuthPage from './components/AuthPage';
 import ErrorBoundary from './components/ErrorBoundary';
+import WorkspaceShell from './components/layout/WorkspaceShell';
 import { useStockData } from './hooks/useStockData';
 import { useWatchlist } from './hooks/useWatchlist';
 import { usePortfolio } from './hooks/usePortfolio';
@@ -77,9 +79,9 @@ function Workspace({ user, signOut }) {
   const [view, setView] = useState(() => {
     try {
       const saved = localStorage.getItem('aethertrade_active_view');
-      if (saved === 'terminal' || saved === 'portfolio') return saved;
+      if (['terminal', 'portfolio', 'activity'].includes(saved)) return saved;
     } catch (e) { console.error(e); }
-    return 'terminal';
+    return 'portfolio';
   });
   const [toasts, setToasts] = useState([]);
   const [currentCapital, setCurrentCapital] = useState(10000);
@@ -106,7 +108,8 @@ function Workspace({ user, signOut }) {
   });
   const [showLevels, setShowLevels] = useState(() => {
     try {
-      return localStorage.getItem('aethertrade_show_levels') === 'true';
+      const saved = localStorage.getItem('aethertrade_show_levels');
+      return saved === null ? true : saved === 'true';
     } catch (e) { console.error(e); return false; }
   });
   const [zoomLevel, setZoomLevel] = useState(100);
@@ -119,12 +122,31 @@ function Workspace({ user, signOut }) {
   const [terminalMobileTab, setTerminalMobileTab] = useState(() => {
     try {
       const saved = localStorage.getItem('aethertrade_terminal_mobile_tab');
-      if (saved && ['chart', 'watchlist', 'analysis'].includes(saved)) return saved;
+      if (saved && ['chart', 'company', 'watchlist', 'analysis'].includes(saved)) return saved;
     } catch (e) { console.error(e); }
     return 'chart';
-  }); // 'chart' | 'watchlist' | 'analysis'
+  }); // 'chart' | 'company' | 'watchlist' | 'analysis'
   const [marketStatus, setMarketStatus] = useState(getMarketStatus);
   const [prefilledTrade, setPrefilledTrade] = useState(null);
+  const [activityTab, setActivityTab] = useState('history');
+  const [tradeRequest, setTradeRequest] = useState(0);
+  const navigate = (nextView) => {
+    setPrefilledTrade(null);
+    if (nextView === 'activity') setActivityTab('history');
+    setView(nextView);
+  };
+  const recordTransaction = () => {
+    setPrefilledTrade(null);
+    setActivityTab('trade');
+    setTradeRequest(value => value + 1);
+    setView('activity');
+  };
+  const prefillTransaction = (trade) => {
+    recordTransaction();
+    setPrefilledTrade({ ...trade, portfolioId: activePortfolioId });
+  };
+
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
 
   // Sync workspace UI preferences to localStorage
   useEffect(() => {
@@ -155,61 +177,6 @@ function Workspace({ user, signOut }) {
     localStorage.setItem('aethertrade_terminal_mobile_tab', terminalMobileTab);
   }, [terminalMobileTab]);
 
-  // Desktop Horizontal Split Resizer State between Portfolio Manager & Performance Holdings
-  const [portfolioSidebarWidth, setPortfolioSidebarWidth] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aethertrade_portfolio_sidebar_width');
-      if (saved) {
-        const num = parseInt(saved, 10);
-        if (!isNaN(num) && num >= 280 && num <= 700) return num;
-      }
-    } catch (e) { console.error(e); }
-    return 380;
-  });
-
-  const [isDraggingPortfolioSplit, setIsDraggingPortfolioSplit] = useState(false);
-  const splitDragRef = useRef({ startX: 0, startWidth: 380 });
-
-  // Save portfolioSidebarWidth to localStorage
-  useEffect(() => {
-    localStorage.setItem('aethertrade_portfolio_sidebar_width', String(portfolioSidebarWidth));
-  }, [portfolioSidebarWidth]);
-
-  // Window mouse drag listeners for resizer
-  useEffect(() => {
-    if (!isDraggingPortfolioSplit) return;
-
-    const handleMouseMove = (e) => {
-      const delta = e.clientX - splitDragRef.current.startX;
-      const newWidth = Math.max(300, Math.min(650, splitDragRef.current.startWidth + delta));
-      setPortfolioSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsDraggingPortfolioSplit(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDraggingPortfolioSplit]);
-
-  const handleSplitMouseDown = (e) => {
-    e.preventDefault();
-    setIsDraggingPortfolioSplit(true);
-    splitDragRef.current = {
-      startX: e.clientX,
-      startWidth: portfolioSidebarWidth
-    };
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  };
-
   // Live Market Status Clock
   useEffect(() => {
     const timer = setInterval(() => {
@@ -226,6 +193,9 @@ function Workspace({ user, signOut }) {
         setView('terminal');
       } else if (e.key === 'p' || e.key === 'P' || e.key === '2') {
         setView('portfolio');
+      } else if (e.key === 'a' || e.key === 'A' || e.key === '3') {
+        setActivityTab('history');
+        setView('activity');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -349,98 +319,23 @@ function Workspace({ user, signOut }) {
 
   return (
     <>
-      <div className="glow-sphere glow-sphere-1"></div>
-      <div className="glow-sphere glow-sphere-2"></div>
-
-      <header className="app-header">
-        <div className="header-left">
-          <div className="header-logo" onClick={() => setView('terminal')} title="AetherTrade">
-            <div className="logo-icon"><i className="fa-solid fa-chart-line"></i></div>
-            <div className="logo-text">
-              <span className="logo-brand">AETHER</span>
-              <span className="logo-sub">TRADE</span>
-            </div>
-          </div>
-
-          <div className="market-status-pill" title={`NYSE / NASDAQ Status: ${marketStatus.label}`}>
-            <span className={`pulse-indicator ${marketStatus.statusClass}`}></span>
-            <span className="market-status-label">{marketStatus.label}</span>
-            <span className="market-time-sep">•</span>
-            <span className="market-time tabular-nums">{marketStatus.timeStr}</span>
-          </div>
-        </div>
-
-        <div className="header-center">
-          <nav className="app-nav">
-            <button
-              onClick={() => setView('terminal')}
-              className={`nav-btn ${view === 'terminal' ? 'active' : ''}`}
-              title="Terminal View (Shortcut: T or 1)"
-            >
-              <i className="fa-solid fa-chart-line"></i>
-              <span>Terminal</span>
-              <span className="nav-shortcut">T</span>
-            </button>
-            <button
-              onClick={() => setView('portfolio')}
-              className={`nav-btn ${view === 'portfolio' ? 'active' : ''}`}
-              title="Portfolio View (Shortcut: P or 2)"
-            >
-              <i className="fa-solid fa-briefcase"></i>
-              <span>Portfolio</span>
-              <span className="nav-shortcut">P</span>
-            </button>
-          </nav>
-        </div>
-
-        <div className="header-right">
-          <div className="user-profile-badge" title={`Signed in as ${user.email}`}>
-            <div className="user-avatar">
-              {(user.email || 'U')[0].toUpperCase()}
-            </div>
-            <span className="user-email-text">{user.email}</span>
-          </div>
-          <button className="btn-signout" onClick={signOut} title="Sign out of account">
-            <i className="fa-solid fa-right-from-bracket"></i>
-          </button>
-        </div>
-      </header>
-
-      <main className="app-workspace">
+      <WorkspaceShell view={view} onNavigate={navigate} onRecord={recordTransaction}
+        user={user} signOut={signOut} marketStatus={marketStatus}
+        onLoadReviewData={import.meta.env.MODE === 'review' ? async () => {
+          const sample = await import('../docs/fixtures/redesign-review.csv?raw');
+          await handleImportCSV(sample.default);
+        } : undefined}>
         {view === 'terminal' ? (
-          <div
-            id="viewTerminal"
-            className={`workspace-view active mobile-tab-${terminalMobileTab} ${isWatchlistCollapsed ? 'watchlist-collapsed' : ''}`}
-          >
-            {/* Mobile Workspace Segmented Control (Visible on screens < 900px) */}
-            <div className="terminal-mobile-nav">
-              <button
-                type="button"
-                className={`mobile-tab-btn ${terminalMobileTab === 'chart' ? 'active' : ''}`}
-                onClick={() => setTerminalMobileTab('chart')}
-              >
-                <i className="fa-solid fa-chart-line"></i>
-                <span>Chart ({activeTicker})</span>
-              </button>
-              <button
-                type="button"
-                className={`mobile-tab-btn ${terminalMobileTab === 'watchlist' ? 'active' : ''}`}
-                onClick={() => setTerminalMobileTab('watchlist')}
-              >
-                <i className="fa-solid fa-star"></i>
-                <span>Watchlist ({watchlist.length})</span>
-              </button>
-              <button
-                type="button"
-                className={`mobile-tab-btn ${terminalMobileTab === 'analysis' ? 'active' : ''}`}
-                onClick={() => setTerminalMobileTab('analysis')}
-              >
-                <i className="fa-solid fa-layer-group"></i>
-                <span>Analysis</span>
-              </button>
-            </div>
-
-            <Watchlist
+          <ResearchWorkspace
+            section={terminalMobileTab}
+            onSectionChange={setTerminalMobileTab}
+            ticker={activeTicker}
+            stock={stocks[activeTicker]}
+            count={watchlist.length}
+            collapsed={isWatchlistCollapsed}
+            onRefresh={handleRefresh}
+            loading={isLoading}
+            watchlist={<Watchlist
               watchlist={watchlist}
               activeTicker={activeTicker}
               setActiveTicker={(ticker) => {
@@ -455,8 +350,9 @@ function Workspace({ user, signOut }) {
               onAddTicker={handleAddTicker}
               isCollapsed={isWatchlistCollapsed}
               onToggleCollapse={() => setIsWatchlistCollapsed(!isWatchlistCollapsed)}
-            />
-            <ChartContainer
+            />}
+            chart={<ChartContainer
+              workspaceSection={terminalMobileTab === 'company' ? 'company' : 'chart'}
               activeTicker={activeTicker}
               stocks={stocks}
               range={selectedRange}
@@ -473,8 +369,8 @@ function Workspace({ user, signOut }) {
               setLinesMap={setLinesMap}
               onRefresh={handleRefresh}
               isLoading={isLoading}
-            />
-            <AnalysisEngine
+            />}
+            analysis={<AnalysisEngine
               activeTicker={activeTicker}
               currentPrice={stocks[activeTicker]?.price || 0}
               lines={linesMap[activeTicker] || []}
@@ -485,18 +381,37 @@ function Workspace({ user, signOut }) {
               activeTickerHoldings={activeTickerHoldings}
               activeStockPrice={activeStockPrice}
               liveRawValues={stocks[activeTicker]?.liveRawValues || []}
-            />
-          </div>
+            />}
+          />
         ) : (
           <div
             id="viewPortfolio"
-            className={`workspace-view active ${isDraggingPortfolioSplit ? 'is-resizing' : ''}`}
-            style={{
-              '--portfolio-sidebar-width': `${portfolioSidebarWidth}px`
-            }}
+            className={`workspace-view active ${view === 'activity' ? 'activity-workspace' : ''}`}
           >
             <ErrorBoundary name="Portfolio Manager">
               <PortfolioManager
+                key={`${view}:${activityTab}:${tradeRequest}`}
+                initialTab={view === 'activity' ? activityTab : 'trade'}
+                showAllocation={false}
+                overview={view === 'portfolio' ? (
+                  <ErrorBoundary name="Performance & Holdings">
+                    <PerformanceHoldings
+                      portfolios={portfolios}
+                      activePortfolioId={activePortfolioId}
+                      stocks={stocks}
+                      onAddTransaction={addTransaction}
+                      onResetPortfolio={resetPortfolio}
+                      onImportCSV={handleImportCSV}
+                      onExportCSV={handleExportCSV}
+                      onRefreshPrices={fetchBackgroundPrice}
+                      onFetchPortfolioHistory={fetchPortfolioHistory}
+                      onUpdateTargetAllocations={updateTargetAllocations}
+                      onExecuteRebalance={executeRebalance}
+                      onPrefillTrade={prefillTransaction}
+                      showNotification={addToast}
+                    />
+                  </ErrorBoundary>
+                ) : null}
                 portfolios={portfolios}
                 activePortfolioId={activePortfolioId}
                 setActivePortfolioId={setActivePortfolioId}
@@ -509,42 +424,14 @@ function Workspace({ user, signOut }) {
                 onDeletePortfolio={deletePortfolio}
                 onUpdateBaseCurrency={updateBaseCurrency}
                 prefilledTrade={prefilledTrade}
+                onClearPrefilledTrade={() => setPrefilledTrade(null)}
                 showNotification={addToast}
                 onFetchPrice={fetchBackgroundPrice}
               />
             </ErrorBoundary>
-
-            {/* Desktop Horizontal Split Drag Handle */}
-            <div
-              className={`panel-resizer-horizontal ${isDraggingPortfolioSplit ? 'dragging' : ''}`}
-              onMouseDown={handleSplitMouseDown}
-              onDoubleClick={() => setPortfolioSidebarWidth(380)}
-              title="Drag horizontally to resize panels (Double-click to reset)"
-              aria-label="Drag horizontally to resize panels"
-            >
-              <div className="resizer-handle-pill"></div>
-            </div>
-
-            <ErrorBoundary name="Performance & Holdings">
-              <PerformanceHoldings
-                portfolios={portfolios}
-                activePortfolioId={activePortfolioId}
-                stocks={stocks}
-                onAddTransaction={addTransaction}
-                onResetPortfolio={resetPortfolio}
-                onImportCSV={handleImportCSV}
-                onExportCSV={handleExportCSV}
-                onRefreshPrices={fetchBackgroundPrice}
-                onFetchPortfolioHistory={fetchPortfolioHistory}
-                onUpdateTargetAllocations={updateTargetAllocations}
-                onExecuteRebalance={executeRebalance}
-                onPrefillTrade={setPrefilledTrade}
-                showNotification={addToast}
-              />
-            </ErrorBoundary>
           </div>
         )}
-      </main>
+      </WorkspaceShell>
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>

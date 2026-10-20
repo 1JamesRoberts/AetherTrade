@@ -1,0 +1,268 @@
+/* Component vocabulary: inset controls, grouped fields, quiet rows, clear figures. */
+.workspace-shell .ui-segments { display: inline-flex; gap: 3px; padding: 4px; background: var(--bg-surface-elevated); border: 0; border-radius: 11px; max-width: 100%; }
+.workspace-shell .ui-segments>button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 36px; padding: .45rem .85rem; border: 0; border-radius: 8px; background: none; color: var(--text-secondary); font-size: .75rem; font-weight: 550; white-space: nowrap; transition: background-color 120ms ease, color 120ms ease; }
+.workspace-shell .ui-segments>button[aria-pressed='true'] { background: var(--bg-panel); color: var(--text-primary); box-shadow: 0 1px 4px #00000012; }
+.workspace-shell .ui-segments>button:active { background: var(--bg-card-hover); }
+.workspace-shell .ui-segments>button:disabled { opacity: .4; cursor: not-allowed; }
+.ui-component-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
+.ui-component-heading h3 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.025em; line-height: 1.25; margin: 0; }
+.ui-component-heading p { color: var(--text-muted); font-size: .78rem; line-height: 1.6; margin: .45rem 0 0; }
+.ui-eyebrow { display: block; color: var(--text-muted); font-size: .65rem; letter-spacing: .06em; font-weight: 550; margin-bottom: .5rem; }
+.ui-count { color: var(--text-muted); font-size: .7rem; white-space: nowrap; }
+.ui-asset-mark { display: inline-grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; background: var(--bg-surface-elevated); color: var(--text-secondary); font-size: .75rem; letter-spacing: -.03em; font-weight: 600; }
+.ui-control-label, .ui-field-label { display: block; color: var(--text-muted); font-size: .7rem; font-weight: 500; margin-bottom: .5rem; }
+/* The composer is a grouped form with a receipt, rather than a stack of banners. */
+.workspace-shell .transaction-composer { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(240px,1fr); gap: 1.5rem 2rem; padding: 0; margin: 0; border: 0; }
+.transaction-composer>.ui-component-heading, .transaction-composer>.editing-tx-banner { grid-column: 1/-1; margin: 0; }
+.workspace-shell .transaction-composer>.ui-segments { grid-column: 1/-1; width: fit-content; min-width: 300px; }
+.composer-inputs { grid-column: 1; min-width: 0; }
+.workspace-shell .transaction-composer .portfolio-search-box { margin: 0 0 1rem; padding: 0; }
+.workspace-shell .transaction-composer .portfolio-search-input { min-height: 48px; border-radius: 11px; font-size: .8rem; background: var(--bg-card); }
+.workspace-shell .portfolio-search-dropdown { border-radius: 12px; overflow: auto; }
+.workspace-shell .portfolio-search-item { width: 100%; min-height: 56px; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: var(--bg-panel); text-align: left; padding: .8rem 1rem; color: var(--text-primary); }
+.workspace-shell .portfolio-search-item.active { background: var(--accent-soft); }
+.workspace-shell .transaction-composer .portfolio-stock-preview { padding: 1rem; background: none; border: 1px solid var(--border-color); border-radius: 12px; margin: 0 0 1.5rem; box-shadow: none; gap: .75rem; }
+.composer-asset-name { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+.composer-asset-name>strong { font-size: .85rem; }
+.workspace-shell .transaction-composer .preview-name { font-size: .7rem; color: var(--text-muted); }
+.workspace-shell .transaction-composer .preview-price { font-size: .9rem; font-weight: 550; }
+.workspace-shell .transaction-composer .preview-owned { font-size: .65rem; color: var(--text-muted); background: none; }
+.composer-fieldset { min-width: 0; border: 0; padding: 0; margin: 0 0 1rem; }
+.composer-fieldset>legend { width: 100%; padding: 0 0 .75rem; font-size: .8rem; font-weight: 600; }
+.composer-fieldset>legend>span { float: right; font-size: .65rem; color: var(--text-muted); font-weight: 400; }
+.workspace-shell .transaction-composer .tx-fields-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; padding: 1.2rem; background: var(--bg-card); border-radius: 14px; margin: 0; }
+.workspace-shell .transaction-composer .tx-field { min-width: 0; }
+.workspace-shell .transaction-composer .tx-field>label { color: var(--text-muted); font-size: .7rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.workspace-shell .transaction-composer .tx-field input { height: 48px; min-height: 48px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 9px; color: var(--text-primary); font-size: .9rem; font-weight: 500; box-shadow: none; }
+.workspace-shell .transaction-composer .field-input-wrapper { background: none; border: 0; }
+.workspace-shell .transaction-composer .field-prefix, .workspace-shell .transaction-composer .field-suffix { font-size: .7rem; color: var(--text-muted); }
+.workspace-shell .transaction-composer .account-field { margin: 1.5rem 0 0; }
+.transaction-receipt { grid-column: 2; grid-row: 3; align-self: start; min-width: 0; background: var(--bg-card); border-radius: 16px; padding: 1.5rem; }
+.transaction-composer:has(>.editing-tx-banner) .transaction-receipt { grid-row: 4; }
+.transaction-receipt h4 { font-size: 1rem; font-weight: 600; letter-spacing: -.02em; margin: 0 0 1.5rem; }
+.transaction-receipt dl { margin: 0; }
+.transaction-receipt dl>div { display: flex; justify-content: space-between; gap: 1rem; margin: .8rem 0; font-size: .75rem; }
+.transaction-receipt dt { color: var(--text-muted); }
+.transaction-receipt dd { margin: 0; font-weight: 500; text-align: right; }
+.receipt-total { display: flex; flex-direction: column; gap: .5rem; padding-top: 1.25rem; margin-top: 1.25rem; border-top: 1px solid var(--border-color); }
+.receipt-total>span { font-size: .75rem; }
+.receipt-total>strong { font-size: clamp(1.6rem,2.3vw,2rem); line-height: 1.2; letter-spacing: -.04em; font-weight: 600; overflow-wrap: anywhere; }
+.receipt-total>small, .receipt-note { font-size: .65rem; color: var(--text-muted); }
+.receipt-note { margin: 1.25rem 0 0; }
+.workspace-shell .transaction-composer .btn-record-tx { grid-column: 1/-1; width: fit-content; justify-self: end; min-height: 46px; min-width: 180px; padding: .8rem 1.5rem; border: 0; border-radius: 999px; background: var(--primary); color: var(--bg-panel); box-shadow: none; font-size: .8rem; text-transform: none; letter-spacing: 0; margin: 0; }
+.workspace-shell .transaction-composer .btn-record-tx:hover { background: var(--primary-hover); transform: none; box-shadow: none; }
+.workspace-shell .transaction-composer .btn-record-tx:disabled { opacity: .5; cursor: wait; }
+.workspace-shell .editing-tx-banner { background: var(--warning-bg); border-color: var(--border-color); border-radius: 10px; box-shadow: none; }
+/* Audit summaries show net amounts first; details disclose without losing row identity. */
+.workspace-shell .activity-ledger { padding: 0; border: 0; margin: 0; }
+.workspace-shell .activity-ledger .ledger-filter-toolbar { padding: 0 0 1.5rem; border: 0; background: none; gap: 1rem; }
+.workspace-shell .activity-ledger .ledger-search-box { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; min-height: 44px; }
+.workspace-shell .activity-ledger .ledger-search-input { background: none; font-size: .75rem; }
+.workspace-shell .activity-ledger .sidebar-ledger-viewport { max-height: none; overflow: visible; }
+.workspace-shell .activity-ledger .ledger-list { gap: 0; }
+.workspace-shell .activity-ledger .tx-ledger-item { display: flex; align-items: flex-start; gap: 1rem; padding: 1rem 0; background: none; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; box-shadow: none; }
+.audit-record { flex: 1; min-width: 0; }
+.audit-record>summary { display: flex; align-items: center; gap: .85rem; list-style: none; cursor: pointer; border-radius: 8px; min-height: 44px; }
+.audit-record>summary::-webkit-details-marker { display: none; }
+.audit-record>summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 4px; }
+.audit-type-indicator { flex: 0 0 auto; display: inline-flex; align-items: center; gap: .35rem; min-height: 26px; padding: .2rem .5rem; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-card); font-size: .58rem; font-weight: 650; letter-spacing: .025em; line-height: 1; }
+.audit-type-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: currentColor; }
+.audit-type-indicator.buy { color: var(--bullish); }
+.audit-type-indicator.sell { color: var(--bearish); }
+.audit-type-indicator.dividend { color: var(--dividend); }
+.audit-identity { display: flex; flex-direction: column; gap: .25rem; }
+.audit-identity>strong { font-size: .85rem; font-weight: 600; }
+.audit-identity>span { font-size: .65rem; color: var(--text-muted); }
+.audit-amount { display: flex; flex-direction: column; gap: .2rem; text-align: right; margin-left: auto; }
+.audit-amount>strong { font-size: .85rem; font-weight: 550; }
+.audit-amount>small { font-size: .6rem; color: var(--text-muted); }
+.audit-chevron { color: var(--text-muted); margin: 0 .25rem; }
+.audit-record[open] .audit-chevron { transform: rotate(180deg); }
+.audit-detail { margin: 1rem 0 0 3.2rem; background: var(--bg-card); border-radius: 12px; padding: 1rem; }
+.audit-detail dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; margin: 0; }
+.audit-detail dt { color: var(--text-muted); font-size: .65rem; margin-bottom: .2rem; }
+.audit-detail dd { font-size: .75rem; margin: 0; overflow-wrap: anywhere; }
+.workspace-shell .activity-ledger .ledger-actions-group>button { width: 36px; height: 44px; background: none; border: 0; border-radius: 8px; color: var(--text-muted); }
+.workspace-shell .activity-ledger .ledger-actions-group>button:hover { background: var(--bg-card); color: var(--primary); }
+.workspace-shell .activity-ledger .ledger-actions-group>.btn-tx-delete:hover { color: var(--bearish); }
+/* Target editor: identity, current allocation, and a clearly labeled target field. */
+.workspace-shell .rebalance-studio-container { gap: 2rem; }
+.studio-step { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--primary); font-size: .75rem; }
+.workspace-shell .studio-title { text-transform: none; letter-spacing: -.015em; font-size: 1rem; font-weight: 600; color: var(--text-primary); }
+.workspace-shell .target-matrix-list { padding: 0; gap: 0; max-height: none; }
+.workspace-shell .target-matrix-row { grid-template-columns: minmax(0,1.3fr) minmax(120px,1fr) 110px; gap: 1.5rem; padding: 1.25rem 0; background: none; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; }
+.workspace-shell .target-matrix-row:hover { background: none; border-color: var(--border-color); }
+.workspace-shell .matrix-col-asset { flex-direction: row; gap: .75rem; align-items: center; }
+.target-asset-description { min-width: 0; }
+.workspace-shell .matrix-ticker-group { flex-direction: column; gap: .2rem; }
+.workspace-shell .matrix-ticker { font-size: .85rem; font-weight: 600; }
+.workspace-shell .matrix-name { max-width: 100%; font-size: .65rem; }
+.workspace-shell .matrix-val-sub { font-size: .65rem; margin-top: .3rem; line-height: 1.5; }
+.workspace-shell .actual-weight-tag { font-size: .65rem; }
+.actual-weight-tag strong { color: var(--text-primary); font-weight: 550; margin-left: .4rem; }
+.workspace-shell .matrix-progress-track { margin-top: .5rem; height: 5px; }
+.workspace-shell .matrix-actual-fill { transition: none; }
+.target-input-label { width: 100%; }
+.target-input-label>span { display: block; font-size: .65rem; color: var(--text-muted); margin-bottom: .4rem; }
+.workspace-shell .target-pct-input { min-height: 44px; border-radius: 9px; font-size: .95rem; padding-right: 1.7rem; }
+.workspace-shell .target-suffix { right: .75rem; }
+.workspace-shell .btn-target-tool { min-height: 36px; border-radius: 8px; padding-inline: .7rem; font-size: .7rem; }
+.workspace-shell .rebalance-action-section { padding-top: 1.75rem; border-top: 1px solid var(--border-color); }
+.workspace-shell .deposit-config-card { padding: 1.25rem; border-radius: 14px; gap: 1rem; }
+.deposit-label small { color: var(--text-muted); margin-left: .5rem; font-size: .65rem; }
+.workspace-shell .deposit-cash-input { min-height: 44px; border-radius: 9px; }
+.workspace-shell .deposit-preset-chip { min-height: 36px; padding-inline: .75rem; border-radius: 8px; }
+.workspace-shell .orders-summary-bar { padding: 1.25rem; border-radius: 14px; }
+.workspace-shell .orders-count-badge { font-size: .9rem; font-weight: 600; }
+.workspace-shell .rebalance-orders-list { max-height: none; padding: 0; gap: 0; }
+.workspace-shell .rebalance-order-item { padding: 1.1rem 0; gap: 1rem; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: none; }
+.workspace-shell .order-type-badge { padding: .4rem .5rem; font-size: .6rem; border: 0; border-radius: 6px; }
+.workspace-shell .btn-order-action, .workspace-shell .btn-copy-plan { min-height: 40px; border-radius: 8px; box-shadow: none; }
+.workspace-shell .btn-execute-rebalance { min-height: 44px; border-radius: 999px; font-weight: 550; }
+.workspace-shell .btn-execute-rebalance:hover:not(:disabled) { background: var(--primary-hover); box-shadow: none; transform: none; }
+/* Watchlist rows have one native selection target and a separate remove action. */
+.workspace-shell .watchlist-header { padding: .5rem 0 1rem; background: none; }
+.workspace-shell .watchlist-icon-wrap { display: none; }
+.workspace-shell .watchlist-filters { display: flex; margin: 0 0 1rem; }
+.workspace-shell .watchlist-filters>button { padding-inline: .5rem; font-size: .65rem; }
+.workspace-shell .panel-left .search-box { padding: 0 0 1rem; }
+.workspace-shell .panel-left .search-input-container>input { min-height: 44px; border-radius: 10px; font-size: .7rem; }
+.watch-asset { position: relative; list-style: none; border-bottom: 1px solid var(--border-color); border-radius: 12px; }
+.watch-asset.selected { background: var(--accent-soft); border-color: transparent; }
+.watch-asset-select { width: 100%; display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: .65rem; align-items: center; text-align: left; padding: 1rem .65rem; background: none; border: 0; border-radius: 12px; color: var(--text-primary); }
+.watch-asset-select:hover { background: var(--bg-card-hover); }
+.watch-asset-select .ui-asset-mark { width: 30px; height: 30px; border-radius: 9px; font-size: .65rem; }
+.watch-asset-identity { min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+.watch-asset-identity>strong { font-size: .75rem; font-weight: 600; }
+.watch-asset-identity>small { font-size: .6rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-asset-quote { display: flex; flex-direction: column; align-items: flex-end; gap: .2rem; }
+.watch-asset-quote>strong { font-size: .75rem; font-weight: 550; }
+.watch-asset-quote>span { font-size: .6rem; }
+.watch-asset-trend { grid-column: 2; height: 24px; display: block; }
+.watch-asset-remove { position: absolute; right: .25rem; bottom: .5rem; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--text-muted); font-size: 1rem; }
+.watch-asset-remove:hover { background: var(--bearish-bg); color: var(--bearish); }
+/* Chart controls use labels and a single selection vocabulary. Fixed canvas sizes stay intact. */
+.workspace-shell .chart-header { padding: 1.5rem; gap: 1.5rem; }
+.workspace-shell .chart-controls { align-items: flex-end; gap: 1rem; padding: 1rem 0 0; background: none; border: 0; }
+.chart-control-field { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.workspace-shell .chart-control-field .ui-segments>button { min-height: 32px; padding: .35rem .65rem; font-size: .65rem; }
+.workspace-shell .chart-control-field>select { min-height: 40px; border-radius: 9px; padding: .4rem .75rem; font-size: .75rem; }
+.chart-indicator-options { display: flex; gap: .65rem; min-height: 40px; align-items: center; }
+.chart-indicator-option { min-height: 40px; display: flex; align-items: center; gap: .3rem; font-size: .65rem; color: var(--text-secondary); cursor: pointer; }
+.chart-indicator-option>input { accent-color: var(--primary); width: 15px; height: 15px; }
+.workspace-shell .sr-toggle-container, .workspace-shell .zoom-container { min-height: 40px; }
+.workspace-shell .stock-insights { margin-top: 0; box-shadow: none; }
+.workspace-shell .insights-header { background: none; padding: 1.5rem; }
+.workspace-shell .insights-title { font-size: .95rem; font-weight: 600; letter-spacing: -.02em; }
+.workspace-shell .insights-icon-box, .workspace-shell .chip-icon { display: none; }
+.workspace-shell .fundamentals-grid { gap: 0; border-top: 1px solid var(--border-color); }
+.workspace-shell .fundamental-chip { padding: 1.25rem; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: none; box-shadow: none; transform: none; }
+.workspace-shell .fundamental-chip:hover { background: var(--bg-card); transform: none; box-shadow: none; }
+.workspace-shell .chip-label { font-size: .65rem; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+.workspace-shell .chip-value { font-size: 1.25rem; font-weight: 550; letter-spacing: -.03em; color: var(--text-primary); }
+.workspace-shell .chip-subtext { font-size: .6rem; color: var(--text-muted); }
+.workspace-shell .panel-right>.ui-component-heading { padding: 1.5rem; margin: 0; border-bottom: 1px solid var(--border-color); }
+.workspace-shell .level-group-box { background: var(--bg-card); border-color: var(--border-color); border-radius: 12px; }
+.workspace-shell .level-pill { background: var(--bg-panel); border-color: var(--border-color); border-radius: 9px; box-shadow: none; }
+.workspace-shell .best-trade-banner { background: var(--accent-soft); border-color: var(--border-color); border-radius: 14px; box-shadow: none; }
+.workspace-shell .best-stat .stat-val { color: var(--text-primary); font-size: 1.1rem; letter-spacing: -.02em; }
+.workspace-shell .holding-row { background: var(--bg-card); border-color: var(--border-color); border-radius: 12px; }
+.holding-identity { display: flex; gap: .75rem; align-items: center; }
+.workspace-shell .allocation-breakdown-row { display: grid; grid-template-columns: 1fr auto; gap: .5rem; padding-block: .85rem; }
+.allocation-weight-track { grid-column: 1/-1; height: 3px; background: var(--bg-surface-elevated); border-radius: 3px; overflow: hidden; }
+.allocation-weight-track>span { display: block; height: 100%; border-radius: 3px; }
+@media (max-width:1100px) {
+  .workspace-shell .transaction-composer { grid-template-columns: minmax(0,1fr); }
+  .transaction-composer .transaction-receipt, .transaction-composer:has(>.editing-tx-banner) .transaction-receipt { grid-column: 1; grid-row: auto; }
+}
+@media (max-width:650px) {
+  .ui-component-heading { align-items: flex-start; flex-direction: column; }
+  .ui-component-heading h3 { font-size: 1.15rem; }
+  .workspace-shell .transaction-composer { gap: 1.25rem; }
+  .workspace-shell .transaction-composer>.ui-segments { width: 100%; min-width: 0; }
+  .workspace-shell .ui-segments>button { min-height: 40px; font-size: .7rem; padding-inline: .65rem; }
+  .workspace-shell .transaction-composer .tx-fields-grid { padding: 1rem; gap: .9rem; }
+  .workspace-shell .transaction-composer .tx-field input { font-size: .8rem; }
+  .workspace-shell .transaction-composer .portfolio-stock-preview { flex-wrap: wrap; }
+  .workspace-shell .transaction-composer .btn-record-tx { width: 100%; }
+  .transaction-receipt { padding: 1.25rem; }
+  .workspace-shell .activity-ledger .ledger-filter-toolbar { flex-direction: column; align-items: stretch; }
+  .workspace-shell .activity-ledger .ledger-filter-toolbar>.ui-segments { display: flex; }
+  .workspace-shell .activity-ledger .tx-ledger-item { gap: .3rem; flex-wrap: wrap; }
+  .workspace-shell .activity-ledger .ledger-right { width: 100%; flex-direction: row; justify-content: flex-end; }
+  .audit-record>summary { gap: .6rem; }
+  .audit-type-indicator { gap: .25rem; padding-inline: .35rem; font-size: .52rem; }
+  .audit-record .ui-asset-mark { width: 32px; height: 32px; }
+  .audit-identity>span { font-size: .6rem; }
+  .audit-amount>strong { font-size: .8rem; }
+  .audit-detail { margin-left: 0; }
+  .audit-detail dl { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .workspace-shell .target-matrix-row { grid-template-columns: minmax(0,1fr) 90px; gap: 1rem; }
+  .workspace-shell .matrix-col-asset { grid-column: 1/-1; }
+  .workspace-shell .matrix-col-drift { grid-column: 1; }
+  .workspace-shell .matrix-col-input { grid-column: 2; }
+  .workspace-shell .rebalance-studio-header { align-items: flex-start; gap: 1rem; }
+  .workspace-shell .rebalance-studio-header>.ui-segments { width: 100%; }
+  .workspace-shell .rebalance-order-item { flex-wrap: wrap; }
+  .workspace-shell .rebalance-order-item>.order-actions-cluster { width: 100%; justify-content: flex-end; }
+  .workspace-shell .orders-summary-actions { width: 100%; flex-wrap: wrap; }
+  .workspace-shell .chart-header { padding: 1rem; }
+  .workspace-shell .chart-controls { gap: .85rem; }
+  .workspace-shell .chart-control-field .ui-segments>button { min-height: 40px; padding-inline: .6rem; }
+  .workspace-shell .fundamentals-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .workspace-shell .fundamental-chip { padding: 1rem .75rem; }
+}
+@media (max-width:360px) {
+  .workspace-shell .transaction-composer .tx-fields-grid { grid-template-columns: minmax(0,1fr); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .workspace-shell .ui-segments>button { transition: none; }
+  .workspace-shell .rebalance-studio-container { animation: none; }
+}
+.workspace-shell .insights-icon-badge { display: none; }
+.workspace-shell .btn-insights-toggle { min-width: 44px; min-height: 44px; border-radius: 9px; background: var(--bg-card); border: 0; color: var(--text-secondary); }
+.ui-metric-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 1rem 0; border-top: 1px solid var(--border-color); }
+.ui-metric-grid>div { padding: 1.25rem 1rem; min-width: 0; border-bottom: 1px solid var(--border-color); }
+.ui-metric-grid dt { font-size: .7rem; color: var(--text-muted); margin-bottom: .5rem; }
+.ui-metric-grid dd { margin: 0; font-size: 1.25rem; font-weight: 550; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.ui-metric-grid .ui-metric-hint { font-size: .6rem; color: var(--text-muted); font-weight: 400; letter-spacing: 0; margin-top: .35rem; }
+.workspace-shell .portfolio-actions-cluster { gap: .75rem; }
+.workspace-shell .portfolio-account-select { min-height: 44px; border-radius: 10px; background: var(--bg-panel); font-size: .85rem; padding-left: .9rem; }
+.account-actions { position: relative; z-index: 12; }
+.account-actions>summary { display: grid; place-items: center; min-width: 44px; height: 44px; padding: .5rem; list-style: none; border-radius: 10px; background: var(--bg-panel); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; font-size: .75rem; letter-spacing: .08em; }
+.account-actions>summary::-webkit-details-marker { display: none; }
+.account-actions>summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.account-action-menu { position: absolute; right: 0; top: calc(100% + .5rem); min-width: 190px; padding: .4rem; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-panel); box-shadow: var(--shadow-lg); }
+.workspace-shell .account-action-menu>.btn-portfolio-action { display: flex; align-items: center; gap: .7rem; width: 100%; min-height: 44px; padding: .6rem .75rem; background: none; border: 0; border-radius: 8px; justify-content: flex-start; }
+.workspace-shell .account-action-menu>.btn-portfolio-action:hover { background: var(--bg-card); }
+.account-action-menu .portfolio-action-label { display: inline; font-size: .75rem; }
+.workspace-shell :is(.btn-tool, .btn-auto-levels, .btn-clear-lines, .btn-order-action, .btn-sell-all-row) { background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: none; font-weight: 500; letter-spacing: 0; text-transform: none; min-height: 36px; }
+.workspace-shell :is(.btn-tool, .btn-auto-levels, .btn-clear-lines, .btn-order-action, .btn-sell-all-row):hover { background: var(--bg-card-hover); border-color: var(--border-hover); box-shadow: none; transform: none; }
+.workspace-shell .btn-tool.btn-portfolio-reset { color: var(--bearish); }
+@media (max-width:900px) {
+  .ui-metric-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:650px) {
+  .workspace-shell .portfolio-actions-cluster { display: grid; grid-template-columns: minmax(0,1fr) auto 44px; gap: .5rem; }
+  .workspace-shell .portfolio-select-wrap { grid-column: 1; grid-row: 1; min-width: 0; }
+  .workspace-shell .account-currency { grid-column: 2; grid-row: 1; }
+  .workspace-shell .account-currency>button { padding-inline: .5rem; min-height: 36px; font-size: .65rem; }
+  .account-actions { grid-column: 3; grid-row: 1; }
+  .ui-metric-grid>div { padding: 1rem .75rem; }
+}
+
+.workspace-shell .company-profile-card, .workspace-shell .analyst-targets-card, .workspace-shell .technical-health-card, .workspace-shell .range-52w-card { border-radius: 14px; background: var(--bg-card); box-shadow: none; }
+.workspace-shell :is(.profile-title, .analyst-title, .tech-title) { font-size: .9rem; font-weight: 600; letter-spacing: -.015em; text-transform: none; }
+.workspace-shell .tech-indicator-item { background: var(--bg-panel); border-radius: 11px; box-shadow: none; }
+.workspace-shell .indicator-main-val { font-size: 1.35rem; font-weight: 550; letter-spacing: -.03em; }
+.workspace-shell .profile-description { font-size: .8rem; line-height: 1.75; color: var(--text-secondary); }
+.workspace-shell .insights-header { cursor: default; }
+@media (prefers-reduced-motion:reduce) {
+  .workspace-shell .btn-record-tx:active, .workspace-shell .btn-execute-rebalance:active { transform: none; }
+}
+.workspace-shell .search-autocomplete-dropdown, .workspace-shell .rail-dropdown { background: var(--bg-panel); border-color: var(--border-color); border-radius: 12px; box-shadow: var(--shadow-lg); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.workspace-shell .autocomplete-item { min-height: 48px; border: 0; border-radius: 8px; }
+.workspace-shell .autocomplete-item:hover, .workspace-shell .autocomplete-item.active { background: var(--accent-soft); }
+.workspace-shell .autocomplete-symbol { font-weight: 600; letter-spacing: 0; }
+.workspace-shell .autocomplete-tag { background: var(--bg-card); color: var(--text-muted); border-color: var(--border-color); font-weight: 500; }
+.workspace-shell .chart-controls { width: 100%; }

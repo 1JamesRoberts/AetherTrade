@@ -1,3 +1,4 @@
+import { useAppearance, systemFont } from '../../theme/appearanceContext.js';
 import { useEffect, useRef, useMemo } from 'react';
 import { Chart, registerables } from 'chart.js';
 import {
@@ -8,20 +9,10 @@ import {
 
 Chart.register(...registerables);
 
-const ALLOCATION_COLORS = [
-  '#06B6D4', // Cyan
-  '#10B981', // Emerald
-  '#3B82F6', // Blue
-  '#8B5CF6', // Purple
-  '#F59E0B', // Amber
-  '#EC4899', // Pink
-  '#14B8A6', // Teal
-  '#6366F1', // Indigo
-  '#F97316', // Orange
-  '#84CC16', // Lime
-];
+const ALLOCATION_COLORS = ['#0d8074', '#587eab', '#bd9c69', '#8c81a6', '#7e9b76', '#af7c89', '#6f9fa5', '#8b8fae', '#c28c67', '#9b9b64'];
 
 export default function AllocationDonut({ activePortfolio, stocks, baseCurrency = 'USD' }) {
+  const { palette } = useAppearance();
   const allocationCanvasRef = useRef(null);
   const allocationChartRef = useRef(null);
 
@@ -75,8 +66,8 @@ export default function AllocationDonut({ activePortfolio, stocks, baseCurrency 
         labels: holdingsList.map(h => h.ticker),
         datasets: [{
           data: holdingsList.map(h => parseFloat(Number(h.baseMarketValue || 0).toFixed(2))),
-          backgroundColor: ALLOCATION_COLORS.slice(0, holdingsList.length),
-          borderColor: 'rgba(13, 19, 33, 0.95)',
+          backgroundColor: holdingsList.map((_, index) => ALLOCATION_COLORS[index % ALLOCATION_COLORS.length]),
+          borderColor: palette.surface,
           borderWidth: 3,
           hoverOffset: 6
         }]
@@ -84,16 +75,18 @@ export default function AllocationDonut({ activePortfolio, stocks, baseCurrency 
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        // Financial values update immediately, including when reduced motion is enabled.
+        animation: false,
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#060912',
-            titleColor: '#06B6D4',
-            bodyColor: '#ffffff',
-            borderColor: 'rgba(255, 255, 255, 0.12)',
+            backgroundColor: palette.tooltip,
+            titleColor: palette.tooltipText,
+            bodyColor: palette.tooltipText,
+            borderColor: palette.grid,
             borderWidth: 1,
-            titleFont: { family: 'Outfit', weight: '700', size: 12 },
-            bodyFont: { family: 'JetBrains Mono', size: 11 },
+            titleFont: { family: systemFont, weight: '700', size: 12 },
+            bodyFont: { family: systemFont, size: 11 },
             padding: 10,
             cornerRadius: 8,
             displayColors: false,
@@ -116,62 +109,26 @@ export default function AllocationDonut({ activePortfolio, stocks, baseCurrency 
         allocationChartRef.current = null;
       }
     };
-  }, [holdingsList, totalAssetValue, baseCurrency]);
+  }, [holdingsList, totalAssetValue, baseCurrency, palette]);
 
   return (
-    <div className="analysis-section allocation-section">
-      <div className="section-subtitle">
-        <span>Asset Allocation</span>
-        <span className="allocation-count-badge tabular-nums">
-          {holdingsList.length} {holdingsList.length === 1 ? 'Asset' : 'Assets'}
-        </span>
-      </div>
-
-      {holdingsList.length > 0 && totalAssetValue > 0 ? (
-        <>
-          <div className="donut-chart-container">
-            <canvas ref={allocationCanvasRef}></canvas>
-            <div className="donut-center-info">
-              <span className="donut-center-label">Total Value</span>
-              <span className="donut-center-value tabular-nums">
-                {formatMoney(totalAssetValue, baseCurrency)}
-              </span>
-              <span className="donut-center-sub">{holdingsList.length} Active Holdings</span>
-            </div>
-          </div>
-
-          {/* Allocation Legend List */}
-          <div className="allocation-legend-list">
-            {holdingsList.map((item, idx) => {
-              const weight = totalAssetValue > 0 ? (item.baseMarketValue / totalAssetValue) * 100 : 0;
-              const color = ALLOCATION_COLORS[idx % ALLOCATION_COLORS.length];
-              return (
-                <div key={item.ticker} className="allocation-legend-item">
-                  <div className="legend-left">
-                    <span className="legend-color-dot" style={{ backgroundColor: color }}></span>
-                    <span className="legend-ticker">{item.ticker}</span>
-                    <span className="legend-shares tabular-nums">{parseFloat(item.shares.toFixed(4))} sh</span>
-                  </div>
-                  <div className="legend-right">
-                    <span className="legend-value tabular-nums">
-                      {formatMoney(item.baseMarketValue, baseCurrency)}
-                    </span>
-                    <span className="legend-weight-pill tabular-nums">
-                      {weight.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <div className="empty-allocation-card">
-          <i className="fa-solid fa-chart-pie empty-donut-icon"></i>
-          <span className="empty-title">No Active Holdings</span>
-          <span className="empty-desc">Record your first BUY transaction below to build your asset allocation.</span>
+    <section className="analysis-section allocation-section" aria-label="Asset allocation">
+      <header className="portfolio-card-heading"><div><h3>Allocation</h3><p>Where your portfolio is invested</p></div><span className="allocation-currency">{baseCurrency}</span></header>
+      {holdingsList.length > 0 && totalAssetValue > 0 ? <>
+        <div className="allocation-composition">
+          <div className="donut-chart-container"><canvas ref={allocationCanvasRef} role="img" aria-label="Asset weights by market value; breakdown follows below" /><div className="donut-center-info"><span className="donut-center-value tabular-nums">{holdingsList.length}</span><span className="donut-center-label">{holdingsList.length === 1 ? 'Holding' : 'Holdings'}</span></div></div>
+          <div className="allocation-legend-list">{holdingsList.map((item, idx) => {
+            const weight = totalAssetValue > 0 ? item.baseMarketValue / totalAssetValue * 100 : 0;
+            const color = ALLOCATION_COLORS[idx % ALLOCATION_COLORS.length];
+            return <div key={item.ticker} className="allocation-breakdown">
+              <span className="allocation-swatch" style={{ background: color }} aria-hidden="true" />
+              <div className="allocation-asset"><strong>{item.ticker}</strong><span className="tabular-nums">{parseFloat(item.shares.toFixed(4))} shares</span></div>
+              <div className="allocation-amount tabular-nums"><strong>{weight.toFixed(1)}%</strong><span>{formatMoney(item.baseMarketValue, baseCurrency)}</span></div>
+            </div>;
+          })}</div>
         </div>
-      )}
-    </div>
+        <p className="allocation-caption">Weights based on current market value.</p>
+      </> : <div className="portfolio-empty-state allocation-empty"><span aria-hidden="true">◌</span><h4>Room to grow</h4><p>Your allocation appears here after your first purchase.</p></div>}
+    </section>
   );
 }
